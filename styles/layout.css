@@ -1,0 +1,1760 @@
+﻿.app {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: 100vh;
+}
+
+.app.sidebar-collapsed {
+  grid-template-columns: 0 1fr;
+}
+
+.app.sidebar-collapsed .sidebar {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  transform: translateX(-20px);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  background: #fff;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--spacing-5) var(--spacing-3) var(--spacing-4);
+  gap: var(--spacing-5);
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  height: 28px;
+}
+
+.sidebar__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.sidebar__title {
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.sidebar__brand-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.sidebar__brand-text {
+  height: 22px;
+}
+
+.sidebar__profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: #f0f4ff;
+  border-radius: var(--radius-md);
+  padding: var(--spacing-3);
+  gap: var(--spacing-3);
+}
+
+.sidebar__profile-avatar {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #fff;
+  overflow: hidden;
+}
+
+.sidebar__profile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar__profile-name {
+  font-weight: 700;
+}
+
+.sidebar__profile-role {
+  color: var(--color-secondary);
+  font-size: 10px;
+
+}
+
+.sidebar__nav {
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.sidebar__group {
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.sidebar__group-toggle {
+  cursor: pointer;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.sidebar__group-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.sidebar__group-title {
+  font-size: 15px;
+}
+
+.sidebar__group-caret {
+  margin-left: auto;
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+.sidebar__group-list {
+  display: grid;
+  gap: var(--spacing-2);
+  padding-left: 36px;
+}
+
+.sidebar__nav-item {
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.sidebar__nav-item img {
+  width: 18px;
+}
+
+.sidebar__nav-item--sub {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.sidebar__nav-item--active {
+  background: var(--color-hover);
+  color: var(--color-primary);
+}
+
+.sidebar__nav-item--sub.sidebar__nav-item--active {
+  background: transparent;
+}
+
+.sidebar__footer {
+  margin-top: auto;
+  font-size: 10px;
+  color: var(--color-muted);
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.sidebar__footer-links {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  padding: var(--spacing-2) var(--spacing-6);
+}
+
+.reservation-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: var(--spacing-4);
+  align-items: start;
+  --reservation-row-label-width: 90px;
+  --reservation-row-gap: var(--spacing-3);
+}
+
+.reservation-form__left,
+.reservation-form__right {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.reservation-progress {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 4px var(--spacing-3);
+}
+
+.reservation-progress__line {
+  flex: 1;
+  height: 2px;
+  border-radius: 999px;
+  background: #d7dbe2;
+}
+
+.reservation-progress__step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #a3abb8;
+  letter-spacing: -0.02em;
+}
+
+.reservation-progress__badge {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #e3e7ee;
+  color: #8a93a3;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 3px solid #f2f4f8;
+  box-shadow: 0 6px 14px rgba(20, 31, 52, 0.08);
+}
+
+.reservation-progress__badge-text,
+.reservation-progress__badge-check {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.reservation-progress__badge-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.reservation-progress__badge-check {
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+}
+
+.reservation-progress__step.is-active .reservation-progress__badge-text {
+  opacity: 1;
+}
+
+.reservation-progress__step.is-active .reservation-progress__badge-check {
+  opacity: 0;
+}
+
+.reservation-progress__step.is-complete .reservation-progress__badge-text {
+  opacity: 0;
+}
+
+.reservation-progress__step.is-complete .reservation-progress__badge-check {
+  opacity: 1;
+}
+
+.reservation-progress__label {
+  letter-spacing: -0.02em;
+}
+
+.reservation-progress__step.is-active {
+  color: #1c63e5;
+}
+
+.reservation-progress__step.is-complete {
+  opacity: 0.55;
+}
+
+.reservation-progress__step.is-active .reservation-progress__badge {
+  background: #1c63e5;
+  color: #fff;
+  border-color: rgba(28, 99, 229, 0.18);
+  box-shadow: 0 10px 18px rgba(28, 99, 229, 0.28);
+}
+
+.reservation-progress__step.is-complete .reservation-progress__badge {
+  background: #1c63e5;
+  color: #fff;
+  border-color: rgba(28, 99, 229, 0.18);
+}
+
+.reservation-step {
+  display: grid;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: #fff;
+}
+
+.reservation-step.is-disabled {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.reservation-step--fee.is-disabled .reservation-fee-card {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.reservation-step__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.reservation-fee-list {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-secondary);
+}
+
+.reservation-fee-panel {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.reservation-fee-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  overflow: hidden;
+}
+
+.reservation-fee-card.is-overbooked {
+  border-color: #f08a8a;
+  background: #fff2f2;
+}
+
+.reservation-fee-card.is-disabled {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.reservation-fee-card__summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) var(--spacing-5);
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.reservation-fee-card__summary::-webkit-details-marker {
+  display: none;
+}
+
+.reservation-fee-card__amount {
+  margin-left: auto;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reservation-fee-card__amount-arrow {
+  color: var(--color-secondary);
+  font-weight: 600;
+}
+
+.reservation-fee-card__amount.is-empty .reservation-fee-card__amount-arrow {
+  display: none;
+}
+
+.reservation-fee-card__chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+.reservation-fee-card[open] .reservation-fee-card__chevron {
+  transform: rotate(180deg);
+}
+
+.reservation-fee-card__body {
+  border-top: 1px solid var(--color-border);
+  padding: var(--spacing-4) var(--spacing-5);
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.reservation-fee-section {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: var(--spacing-3);
+  align-items: start;
+}
+
+.reservation-fee-section.is-disabled {
+  opacity: 0.45;
+}
+
+.reservation-fee-section__label {
+  font-weight: 700;
+  color: var(--color-secondary);
+  padding-top: 4px;
+}
+
+.reservation-fee-section__body {
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.reservation-fee-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--spacing-1);
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.reservation-fee-card__amount.is-low {
+  color: var(--color-holiday);
+}
+
+.reservation-memo-card {
+  margin-top: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  padding: var(--spacing-4);
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.reservation-memo-card__title {
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.reservation-memo-card__body {
+  display: grid;
+}
+
+.reservation-pickdrop-ticket-list {
+  display: grid;
+  gap: var(--spacing-2);
+}
+
+.reservation-fee-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.reservation-fee-line__label {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.reservation-fee-line__calc {
+  color: var(--color-secondary);
+}
+
+@media (max-width: 720px) {
+  .reservation-fee-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1024px) {
+  .reservation-progress {
+    gap: 12px;
+    padding: 0 var(--spacing-2);
+  }
+
+  .reservation-progress__step {
+    font-size: 14px;
+  }
+
+  .reservation-progress__badge {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: var(--spacing-2) 0;
+  background: var(--color-surface);
+}
+
+.topbar__left {
+  display: flex;
+  align-items: center;
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-1);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page-filters {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.page-filters__label {
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.page-filters__group {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.filter-panel-wrap {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 10px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-toggle__caret {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--color-secondary);
+  border-bottom: 2px solid var(--color-secondary);
+  transform: rotate(45deg);
+  margin-left: 4px;
+  transition: transform 0.2s ease;
+}
+
+.filter-toggle__badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filter-toggle[aria-expanded="true"] .filter-toggle__caret {
+  transform: rotate(-135deg);
+}
+
+.filter-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  padding: var(--spacing-4);
+}
+
+.filter-panel__row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-select {
+  min-width: 160px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-select::after {
+  content: "";
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  background: url("../assets/iconDropdown.svg") center/contain no-repeat;
+}
+
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  padding: var(--spacing-2);
+  display: grid;
+  gap: 6px;
+  z-index: 50;
+}
+
+.filter-reset {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-secondary);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filter-reset img {
+  width: 14px;
+  height: 14px;
+}
+
+.page-filters__chips {
+  display: flex;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+}
+
+.page-filters__chips .filter-chip {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.ticket-header__title h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.ticket-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ticket-tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-secondary);
+  border-bottom: 4px solid transparent;
+  cursor: pointer;
+}
+
+.ticket-tab.is-active {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.ticket-card {
+  margin-top: 0;
+}
+
+.ticket-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.ticket-card__title {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.ticket-table {
+  margin-top: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  overflow: hidden;
+}
+
+.ticket-table__header {
+  display: grid;
+  grid-template-columns: 0.9fr 2.2fr 0.8fr 0.9fr 1.1fr 0.9fr 0.8fr;
+  background: #f3f5f8;
+  padding: var(--spacing-4);
+  gap: var(--spacing-3);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ticket-table__body {
+  font-size: 13px;
+  display: grid;
+}
+
+.ticket-table__row {
+  display: grid;
+  grid-template-columns: 0.9fr 2.2fr 0.8fr 0.9fr 1.1fr 0.9fr 0.8fr;
+  align-items: center;
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+  gap: var(--spacing-3);
+}
+
+.ticket-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-4);
+}
+
+.ticket-pagination__page,
+.ticket-pagination__arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  font-weight: 700;
+  color: var(--color-secondary);
+  cursor: pointer;
+}
+
+.ticket-pagination__page.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.ticket-pagination__arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.class-registration__header {
+  align-items: flex-start;
+  gap: var(--spacing-4);
+}
+
+.class-registration__title {
+  display: grid;
+  gap: 6px;
+}
+
+.class-registration__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.class-registration__title h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.class-registration__title p {
+  margin: 0;
+  color: var(--color-secondary);
+  font-size: 13px;
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--spacing-4);
+  padding-bottom: calc(var(--spacing-6) + 72px);
+}
+
+.settings-card-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-4);
+}
+
+.settings-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-5);
+  box-shadow: var(--shadow-card);
+  border: 1px solid #eef0f4;
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.daycare-pricing-card {
+  margin-top: var(--spacing-4);
+}
+
+.settings-card__header {
+  display: flex;
+  gap: var(--spacing-3);
+  align-items: flex-start;
+}
+
+.settings-card__header .toggle-row--compact {
+  margin-left: auto;
+}
+
+.settings-card__header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.settings-card__header p {
+  margin: 6px 0 0;
+  color: var(--color-secondary);
+  font-size: 13px;
+}
+
+.settings-card__icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #eef4ff;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.settings-card__body {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.policy-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: nowrap;
+}
+
+.policy-options {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.policy-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  color: var(--color-secondary);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.policy-option--same {
+  padding-right: var(--spacing-3);
+}
+
+.policy-option.is-active {
+  color: var(--color-primary);
+}
+
+.policy-option.is-muted {
+  color: var(--color-disabled);
+}
+
+.policy-option.is-muted .policy-text--before {
+  opacity: 0.45;
+}
+
+.policy-option input[type="radio"] {
+  margin: 0;
+}
+
+
+.policy-days-group {
+  width: 110px;
+}
+
+.policy-text {
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.policy-row .form-field__control.policy-time-input,
+.form-field__control.policy-open-time {
+  width: fit-content;
+}
+
+.policy-open-row .form-field__control.policy-open-control {
+  width: 96px;
+}
+
+.policy-row .form-field__control {
+  flex: 0 0 auto;
+}
+
+.policy-text {
+  white-space: nowrap;
+}
+
+.policy-open-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+  row-gap: var(--spacing-2);
+}
+
+.policy-open-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-wrap: nowrap;
+}
+
+.policy-open-row .policy-open-group {
+  flex-wrap: wrap;
+}
+
+.policy-open-row .policy-text {
+  white-space: normal;
+}
+
+.settings-card__body.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.policy-open-row .form-field__chips {
+  flex: 0 0 auto;
+  gap: var(--spacing-2);
+  min-width: fit-content;
+}
+
+.policy-open-unit.form-field__control {
+  max-width: fit-content;
+}
+
+.policy-option .form-field__control[disabled] {
+  opacity: 0.6;
+  background: var(--color-disabled);
+  color: var(--color-secondary);
+}
+
+.toggle-list {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+.dayoff-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.dayoff-toolbar__current {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dayoff-calendar {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-border);
+}
+
+.dayoff-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.dayoff-calendar__day-names {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #fff;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dayoff-calendar__day-names span {
+  padding: 10px 0;
+  border-left: 1px solid var(--color-border);
+}
+
+.dayoff-calendar__day-names span:first-child {
+  border-left: none;
+}
+
+.dayoff-calendar__cell {
+  background: #fff;
+  border: none;
+  padding: 12px;
+  min-height: 48px;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.dayoff-calendar__cell--muted {
+  background: #fafbfd;
+  color: var(--color-muted);
+  cursor: default;
+}
+
+.dayoff-calendar__cell--past {
+  cursor: not-allowed;
+}
+
+.dayoff-calendar__cell--off .dayoff-calendar__date {
+  color: var(--color-text);
+}
+
+.dayoff-calendar__tag-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  flex: 1;
+}
+
+.dayoff-calendar__tag {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-holiday);
+}
+
+.dayoff-calendar__remove {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid #d7dbe2;
+  color: #666;
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+}
+
+.dayoff-calendar__remove img {
+  width: 10px;
+  height: 10px;
+  display: block;
+}
+
+.dayoff-calendar__remove:hover {
+  border-color: var(--color-holiday);
+  color: var(--color-holiday);
+  background: #fff5f5;
+}
+
+.dayoff-calendar__cell--past .dayoff-calendar__tag {
+  opacity: 0.4;
+}
+
+.dayoff-calendar__cell--past .dayoff-calendar__remove {
+  display: none;
+}
+
+.dayoff-calendar__cell--past .dayoff-calendar__date {
+  opacity: 0.35;
+}
+
+.dayoff-calendar__date {
+  margin-right: auto;
+}
+
+.settings-save {
+  position: fixed;
+  left: 200px;
+  right: 0;
+  bottom: 0;
+  z-index: 80;
+  display: none;
+  justify-content: flex-end;
+  padding: 16px 32px;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.app.sidebar-collapsed .settings-save {
+  left: 0;
+}
+
+.settings-save--visible {
+  display: flex;
+}
+
+.settings-save .primary-button {
+  padding: 12px 22px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.reservation-card,
+.list-card {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  padding: var(--spacing-5);
+}
+
+.reservation-card__header,
+.list-card__header {
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-4);
+  flex-wrap: wrap;
+}
+
+.reservation-card__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+}
+
+.reservation-card__current {
+  font-size: 18px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calendar {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-bottom: var(--spacing-4);
+}
+
+.calendar__day-names {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  background: #fff;
+  grid-column: 1 / -1;
+}
+
+.calendar__day-names span {
+  background: transparent;
+  border-left: 1px solid var(--color-border);
+  padding: var(--spacing-2) 0;
+}
+
+.calendar__day-names span:first-child {
+  border-left: none;
+}
+
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: var(--color-border);
+  gap: 1px;
+}
+
+.calendar__cell {
+  position: relative;
+  padding: var(--spacing-2);
+  background: #fff;
+  font-size: 13px;
+  min-height: 48px;
+  color: var(--color-text);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.calendar__cell--today {
+  color: var(--color-primary);
+  font-weight: 800;
+}
+
+.calendar__cell--selected {
+  background-color: #f6f9ff !important;
+}
+.calendar__cell--muted {
+  color: var(--color-muted);
+  background: #fafbfd;
+}
+
+.calendar__reservation-count {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: inline-block;
+  font-size: 12px;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.calendar__dayoff {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-holiday);
+  line-height: 1.2;
+}
+
+.calendar__dayoff-count {
+  font-weight: 600;
+}
+
+.calendar__holiday {
+  margin-top: 0;
+  margin-left: auto;
+  color: var(--color-holiday);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.calendar__holiday span {
+  color: var(--color-primary);
+}
+
+.list-card-date {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.list-card-date__off {
+  margin-left: var(--spacing-2);
+  color: var(--color-holiday);
+  font-weight: 700;
+}
+
+.list-card__title {
+  margin-top: 4px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.list-card__actions {
+  display: flex;
+  gap: var(--spacing-3);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.list-card__meta {
+  display: grid;
+  gap: 6px;
+}
+
+.list-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  flex-wrap: wrap;
+}
+
+.list-table {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  overflow: hidden;
+}
+
+.list-table__header {
+  display: grid;
+  grid-template-columns: var(--list-table-columns, 0.5fr 0.9fr 0.9fr 1fr 1fr 1.4fr);
+  background: #f3f5f8;
+  padding: var(--spacing-4);
+  gap: var(--spacing-3);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.list-table--class {
+  --list-table-columns: 1fr 1fr 0.6fr 1.1fr 1.1fr 0.7fr 0.9fr;
+}
+
+.list-table--reservation {
+  --list-table-columns: 0.5fr 0.9fr 0.9fr 1fr 1fr 1.4fr 0.4fr;
+}
+
+.list-table--room {
+  --list-table-columns: 1.4fr 0.7fr 1fr;
+}
+
+.list-table--pricing-form .list-table__header,
+.list-table--pricing-form .list-table__row {
+  display: flex;
+  white-space: nowrap;
+}
+
+.list-table--pricing-form {
+  overflow: visible;
+  --pricing-col-1-min: 240px;
+  --pricing-col-2-min: 420px;
+  --pricing-col-3-min: 160px;
+  --pricing-col-4-min: 100px;
+  --pricing-col-5-min: 260px;
+  --pricing-col-6-min: 96px;
+}
+
+.list-table--pricing-form .list-table__header > span,
+.list-table--pricing-form .list-table__row > span {
+  min-width: 0;
+  display: block;
+  white-space: nowrap;
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(1),
+.list-table--pricing-form .list-table__row > span:nth-child(1) {
+  flex: 0 0 var(--pricing-col-1-min);
+  width: var(--pricing-col-1-min);
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(2),
+.list-table--pricing-form .list-table__row > span:nth-child(2) {
+  flex: 0 0 var(--pricing-col-2-min);
+  width: var(--pricing-col-2-min);
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(3),
+.list-table--pricing-form .list-table__row > span:nth-child(3) {
+  flex: 0 0 var(--pricing-col-3-min);
+  width: var(--pricing-col-3-min);
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(4),
+.list-table--pricing-form .list-table__row > span:nth-child(4) {
+  flex: 0 0 var(--pricing-col-4-min);
+  width: var(--pricing-col-4-min);
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(5),
+.list-table--pricing-form .list-table__row > span:nth-child(5) {
+  flex: 0 0 var(--pricing-col-5-min);
+  width: var(--pricing-col-5-min);
+}
+
+.list-table--pricing-form .list-table__header > span:nth-child(6),
+.list-table--pricing-form .list-table__row > span:nth-child(6) {
+  flex: 0 0 var(--pricing-col-6-min);
+  width: var(--pricing-col-6-min);
+}
+
+.list-table--pricing-form .list-table__row {
+  border-top: none;
+}
+
+.list-table--pricing-form .list-table__body {
+  overflow: visible;
+}
+
+.list-table--pricing-form .pricing-vat-toggle {
+  justify-content: center;
+  width: 100%;
+}
+
+.list-table--pricing-form .pricing-class-cell {
+  position: relative;
+}
+
+.list-table--pricing-form .pricing-class-field .form-field__control {
+  cursor: pointer;
+}
+
+.list-table--pricing-form .pricing-class-popup {
+  position: absolute;
+  top: calc(100% + var(--spacing-2));
+  left: 0;
+  z-index: 30;
+  min-width: 260px;
+  max-width: 320px;
+  padding: var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  display: none;
+  gap: var(--spacing-2);
+}
+
+.list-table--pricing-form .pricing-class-cell:focus-within .pricing-class-popup {
+  display: grid;
+}
+
+.list-table--pricing-form .pricing-row-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.list-table--pricing-form [data-pricing-label="title"],
+.list-table--pricing-form [data-pricing-label="distance"],
+.list-table--pricing-form [data-pricing-field="title"],
+.list-table--pricing-form [data-pricing-field="distance"] {
+  display: none;
+}
+
+.list-table--pricing-form[data-pricing-service="pickdrop"] {
+  --pricing-col-1-min: 240px;
+  --pricing-col-2-min: 260px;
+}
+
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-label="weight"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-label="weekday"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-field="weight"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-field="weekday"] {
+  display: none;
+}
+
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-label="title"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-label="distance"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-field="title"],
+.list-table--pricing-form[data-pricing-service="pickdrop"] [data-pricing-field="distance"] {
+  display: block;
+}
+
+.list-table--pricing-form .list-table__footer {
+  border-top: none;
+  padding: var(--spacing-4);
+}
+
+.list-table--pricing-form .list-table__footer .button-secondary {
+  width: 100%;
+  justify-content: center;
+}
+
+.list-table--pricing {
+  --list-table-columns:
+    minmax(240px, 240px)
+    minmax(420px, 420px)
+    minmax(220px, 220px)
+    minmax(160px, 160px)
+    minmax(100px, 100px)
+    minmax(260px, 260px)
+    minmax(96px, 96px);
+}
+
+.list-table--pricing .list-table__header,
+.list-table--pricing .list-table__row {
+  grid-template-columns: var(--list-table-columns);
+}
+
+.list-table--pricing .list-table__header,
+.list-table--pricing .list-table__row {
+  white-space: nowrap;
+}
+
+.list-card--scroll .list-table--pricing {
+  min-width: 1500px;
+}
+
+.list-card--scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.list-card--scroll .list-table--pricing-form {
+  max-width: fit-content;
+}
+
+.pricing-weekday-chips {
+  flex-wrap: nowrap;
+  width: max-content;
+  overflow-x: auto;
+}
+
+.pricing-weight-range,
+.pricing-distance-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.pricing-weight-range {
+  width: var(--pricing-col-1-min);
+}
+
+.pricing-distance-range {
+  width: var(--pricing-col-2-min);
+}
+
+.pricing-weight-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pricing-weight-field .form-field__control {
+  min-width: 100px;
+}
+
+.pricing-weight-tilde {
+  color: var(--color-secondary);
+  font-weight: 600;
+}
+
+.list-table__body {
+  font-size: 13px;
+  display: grid;
+}
+
+.list-table__row {
+  display: grid;
+  grid-template-columns: var(--list-table-columns, 0.5fr 0.9fr 0.9fr 1fr 1fr 1.4fr);
+  align-items: center;
+  padding: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+  gap: var(--spacing-3);
+}
+
+.list-table__row--canceled .list-table__check-cell,
+.list-table__check-cell.is-hidden {
+  visibility: hidden;
+}
+
+.list-table__check-cell {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.list-table__more-cell,
+.list-table__more-header {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+}
+
+.reservation-more-button {
+  color: var(--color-secondary);
+}
+
+.reservation-more-button:hover {
+  color: var(--color-primary);
+}
+
+.reservation-more-button img {
+  width: 16px;
+  height: 16px;
+}
+
+.list-table__status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 84px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.list-table__status--primary {
+  color: var(--color-primary);
+}
+
+.list-table__status--warning {
+  color: var(--color-warning);
+}
+
+.list-table__status--success {
+  color: var(--color-success);
+}
+
+.list-table__status--danger {
+  color: var(--color-holiday);
+}
+
+.list-table__memo {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-table__tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.list-table__tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f2f4f8;
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 12px;
+  border: none;
+  cursor: default;
+}
+
+.list-table__tag--service {
+  background: #e7f2ff;
+  color: var(--color-primary);
+}
+
+.list-table__tag--pickup {
+  background: #eaf7ff;
+  color: var(--color-primary);
+}
+
+.list-table__tag--dropoff {
+  background: #fff4ea;
+  color: #d26a00;
+}
+
+.list-table__tag--over {
+  background: #ffecec;
+  color: var(--color-holiday);
+}
+
+.list-table__tag--inactive {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+
+.list-table__tag--empty {
+  background: transparent;
+  cursor: default;
+}
+
+.text-accent {
+  color: var(--color-holiday);
+}
+
+.text-primary {
+  color: var(--color-primary);
+}
+
+.search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  min-width: 260px;
+}
+
+.search input {
+  background: transparent;
+  border: none;
+  width: 100%;
+}
+
+.icon-button {
+  background: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-button--secondary {
+  background: transparent;
+}
+
+@media (max-width: 1080px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: relative;
+    height: auto;
+    border-right: none;
+  }
+
+  .main {
+    padding: var(--spacing-4);
+  }
+
+  .calendar__grid {
+    grid-auto-rows: 56px;
+  }
+
+  .settings-card-row {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,520 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 이용권</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <img class="sidebar__brand-icon" src="../../assets/logoImg.svg" alt="다이얼독 비즈">
+        <img class="sidebar__brand-text" src="../../assets/logoText.svg" alt="다이얼독 비즈 텍스트">
+      </div>
+      <div class="sidebar__profile">
+        <div class="sidebar__profile-avatar" aria-hidden="true">
+          <img src="../../assets/defaultProfile.svg" alt="">
+        </div>
+        <div class="sidebar__profile-text">
+          <span class="sidebar__profile-name">다이얼독</span>
+          <span class="sidebar__profile-role">애견유치원</span>
+        </div>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_Graph.svg" alt="" aria-hidden="true">
+          <span>대시보드</span>
+        </a>
+        <a class="sidebar__nav-item" href="../../public/index.html">
+          <img src="../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
+          <span>유치원</span>
+        </a>
+        <a class="sidebar__nav-item" href="hotels.html">
+          <img src="../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+          <span>호텔링</span>
+        </a>
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_report.svg" alt="" aria-hidden="true">
+          <span>알림장</span>
+        </a>
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_member.svg" alt="" aria-hidden="true">
+          <span>회원</span>
+        </a>
+        <a class="sidebar__nav-item sidebar__nav-item--active" href="tickets.html">
+          <img src="../../assets/menuIcon_ticket_on.svg" alt="" aria-hidden="true">
+          <span>이용권</span>
+        </a>
+        <a class="sidebar__nav-item" href="pricing.html">
+          <span>요금표</span>
+        </a>
+      </nav>
+      <div class="sidebar__footer">
+        <div class="sidebar__footer-links">
+          <a href="#">개인정보 처리방침</a>
+          <a href="#">이용약관</a>
+          <a href="#">문의</a>
+        </div>
+        <p class="sidebar__footer-copy">© 2025 Kickcrab. All rights reserved.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar__left">
+          <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
+            <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
+          </button>
+        </div>
+        <div class="topbar__actions">
+          <a class="icon-button" aria-label="설정" href="settings/school/operations.html">
+            <img src="../../assets/menuIcon_setting.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="알림" href="#">
+            <img src="../../assets/menuIcon_notification.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="프로필" href="#">
+            <img src="../../assets/menuIcon_profile.svg" alt="" aria-hidden="true">
+          </a>
+        </div>
+      </header>
+
+      <section class="page-header ticket-header">
+        <div class="ticket-header__title">
+          <h1>이용권</h1>
+        </div>
+        <div class="page-actions">
+          <button class="primary-button" type="button" data-ticket-create-open>이용권 등록</button>
+        </div>
+      </section>
+
+      <div class="ticket-tabs" role="tablist" aria-label="이용권 탭">
+        <button class="ticket-tab is-active" type="button" role="tab" aria-selected="true">이용권 목록</button>
+        <button class="ticket-tab" type="button" role="tab" aria-selected="false">이용권 지급 내역</button>
+      </div>
+
+      <section class="list-card ticket-card">
+        <div class="ticket-card__header">
+          <div class="ticket-card__title">전체 이용권 (<span data-ticket-count>0</span>개)</div>
+        </div>
+        <div class="ticket-table" role="table" aria-label="이용권 목록">
+          <div class="ticket-table__header" role="row">
+            <span role="columnheader">유형</span>
+            <span role="columnheader">이용권</span>
+            <span role="columnheader">총횟수</span>
+            <span role="columnheader">유효기간</span>
+            <span role="columnheader">등원 요일</span>
+            <span role="columnheader">금액</span>
+            <span role="columnheader">이용권 지급</span>
+          </div>
+          <div class="ticket-table__body" data-ticket-rows></div>
+        </div>
+        <div class="ticket-pagination" data-ticket-pagination aria-label="페이지네이션"></div>
+      </section>
+    </main>
+  </div>
+  <div class="modal" data-ticket-create-modal aria-hidden="true">
+    <div class="modal__overlay" data-ticket-create-overlay></div>
+    <div class="modal__dialog ticket-modal" role="dialog" aria-modal="true" aria-labelledby="ticket-create-title">
+      <div class="modal__header">
+        <h2 id="ticket-create-title">이용권 등록</h2>
+        <button class="icon-button modal__close" type="button" data-ticket-create-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body">
+        <form class="ticket-form" data-ticket-create-form>
+          <div class="ticket-form__row">
+            <span class="ticket-form__label">유형</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-create" value="kindergarten" data-ticket-type>
+                  <span>유치원</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-create" value="daycare" data-ticket-type>
+                  <span>데이케어</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-create" value="hoteling" data-ticket-type>
+                  <span>호텔링</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-create" value="pickdrop" data-ticket-type>
+                  <span>픽드랍</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row" data-ticket-pickdrop-row hidden>
+            <span class="ticket-form__label">픽드랍 유형</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-pickdrop-type-create" value="편도" data-ticket-pickdrop-type checked>
+                  <span>편도</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-pickdrop-type-create" value="왕복" data-ticket-pickdrop-type>
+                  <span>왕복</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-create-name">이용권 이름 <span class="text-accent">*</span></label>
+            <input class="form-field__control" id="ticket-create-name" type="text" placeholder="이용권 이름 입력" data-ticket-name required>
+          </div>
+          <div class="ticket-form__row" data-ticket-weekday-row>
+            <span class="ticket-form__label">등원 요일</span>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-weekday-group">
+                <label class="filter-chip">
+                  <input type="checkbox" value="mon" data-ticket-weekday>
+                  <span>월</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="tue" data-ticket-weekday>
+                  <span>화</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="wed" data-ticket-weekday>
+                  <span>수</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="thu" data-ticket-weekday>
+                  <span>목</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="fri" data-ticket-weekday>
+                  <span>금</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="sat" data-ticket-weekday>
+                  <span>토</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="sun" data-ticket-weekday>
+                  <span>일</span>
+                </label>
+              </div>
+              <p class="ticket-weekday-hint">유치원 영업일 설정에 맞춰 자동으로 예약됩니다</p>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label">유효기간 / 만료일 <span class="text-accent">*</span></label>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-form__field ticket-form__field--split">
+                <input class="form-field__control" type="number" min="1" placeholder="0" data-ticket-validity required>
+                <select class="form-field__control ticket-select" data-ticket-unit required>
+                  <option value="일">일</option>
+                  <option value="주">주</option>
+                  <option value="개월" selected>개월</option>
+                  <option value="년">년</option>
+                </select>
+              </div>
+              <label class="checkbox-inline ticket-unlimited">
+                <input type="checkbox" data-ticket-unlimited>
+                <span>유효기간이 없어요. (무제한)</span>
+              </label>
+            </div>
+          </div>
+          <div class="ticket-form__row ticket-form__row--sub">
+            <span class="ticket-form__label">유효기간 개시일</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-create" value="first-attendance" data-ticket-start-policy checked>
+                  <span>첫 등원일</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-create" value="first-reservation" data-ticket-start-policy>
+                  <span>첫 예약일</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-create" value="issue-date" data-ticket-start-policy>
+                  <span>지급일</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row ticket-form__row--sub">
+            <span class="ticket-form__label">예약 가능 날짜</span>
+            <div class="ticket-form__field" data-ticket-reservation-field>
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-reservation-rule-create" value="expiry" data-ticket-reservation-rule checked>
+                  <span>만료일로 제한</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-reservation-rule-create" value="none" data-ticket-reservation-rule>
+                  <span>제한 없음</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <span class="ticket-form__label" data-ticket-class-label>예약 가능한 클래스</span>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-class-toolbar">
+                <span class="class-ticket-count" data-ticket-class-count>0개</span>
+                <button class="button-secondary button-secondary--small select-all-button" type="button" data-ticket-class-select-all>전체 선택</button>
+              </div>
+              <p class="reservation-ticket-placeholder" data-ticket-class-empty hidden>예약할 수 있는 클래스가 없습니다.</p>
+              <div class="class-ticket-list" data-ticket-class-list></div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-create-quantity">총 횟수 <span class="text-accent">*</span></label>
+            <div class="ticket-input-group">
+              <input class="form-field__control" id="ticket-create-quantity" type="number" min="1" max="999" placeholder="최대 999" data-ticket-quantity required>
+              <span class="ticket-input-suffix" data-ticket-quantity-suffix>회</span>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-create-price">금액 <span class="text-accent">*</span></label>
+            <div class="ticket-input-group">
+              <input class="form-field__control" id="ticket-create-price" type="text" inputmode="numeric" placeholder="0" data-ticket-price required>
+              <span class="ticket-input-suffix">원</span>
+            </div>
+          </div>
+          <div class="ticket-modal__actions">
+            <button class="primary-button ticket-modal__submit" type="button" data-ticket-create-submit disabled>등록</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal" data-ticket-edit-modal aria-hidden="true">
+    <div class="modal__overlay" data-ticket-edit-overlay></div>
+    <div class="modal__dialog ticket-modal" role="dialog" aria-modal="true" aria-labelledby="ticket-edit-title">
+      <div class="modal__header">
+        <h2 id="ticket-edit-title">이용권 상세</h2>
+        <button class="icon-button modal__close" type="button" data-ticket-edit-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body">
+        <form class="ticket-form" data-ticket-edit-form>
+          <div class="ticket-form__row">
+            <span class="ticket-form__label">유형</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-edit" value="kindergarten" data-ticket-type>
+                  <span>유치원</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-edit" value="daycare" data-ticket-type>
+                  <span>데이케어</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-edit" value="hoteling" data-ticket-type>
+                  <span>호텔링</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-type-edit" value="pickdrop" data-ticket-type>
+                  <span>픽드랍</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row" data-ticket-pickdrop-row hidden>
+            <span class="ticket-form__label">픽드랍 유형</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-pickdrop-type-edit" value="편도" data-ticket-pickdrop-type checked>
+                  <span>편도</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-pickdrop-type-edit" value="왕복" data-ticket-pickdrop-type>
+                  <span>왕복</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-edit-name">이용권 이름 <span class="text-accent">*</span></label>
+            <input class="form-field__control" id="ticket-edit-name" type="text" placeholder="이용권 이름 입력" data-ticket-name required>
+          </div>
+          <div class="ticket-form__row" data-ticket-weekday-row>
+            <span class="ticket-form__label">등원 요일</span>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-weekday-group">
+                <label class="filter-chip">
+                  <input type="checkbox" value="mon" data-ticket-weekday>
+                  <span>월</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="tue" data-ticket-weekday>
+                  <span>화</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="wed" data-ticket-weekday>
+                  <span>수</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="thu" data-ticket-weekday>
+                  <span>목</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="fri" data-ticket-weekday>
+                  <span>금</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="sat" data-ticket-weekday>
+                  <span>토</span>
+                </label>
+                <label class="filter-chip">
+                  <input type="checkbox" value="sun" data-ticket-weekday>
+                  <span>일</span>
+                </label>
+              </div>
+              <p class="ticket-weekday-hint">유치원 영업일 설정에 맞춰 자동으로 예약됩니다</p>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label">유효기간 / 만료일 <span class="text-accent">*</span></label>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-form__field ticket-form__field--split">
+                <input class="form-field__control" type="number" min="1" placeholder="0" data-ticket-validity required>
+                <select class="form-field__control ticket-select" data-ticket-unit required>
+                  <option value="일">일</option>
+                  <option value="주">주</option>
+                  <option value="개월" selected>개월</option>
+                  <option value="년">년</option>
+                </select>
+              </div>
+              <label class="checkbox-inline ticket-unlimited">
+                <input type="checkbox" data-ticket-unlimited>
+                <span>유효기간이 없어요. (무제한)</span>
+              </label>
+            </div>
+          </div>
+          <div class="ticket-form__row ticket-form__row--sub">
+            <span class="ticket-form__label">유효기간 개시일</span>
+            <div class="ticket-form__field">
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-edit" value="first-attendance" data-ticket-start-policy checked>
+                  <span>첫 등원일</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-edit" value="first-reservation" data-ticket-start-policy>
+                  <span>첫 예약일</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-start-policy-edit" value="issue-date" data-ticket-start-policy>
+                  <span>지급일</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row ticket-form__row--sub">
+            <span class="ticket-form__label">예약 가능 날짜</span>
+            <div class="ticket-form__field" data-ticket-reservation-field>
+              <div class="ticket-radio-group">
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-reservation-rule-edit" value="expiry" data-ticket-reservation-rule checked>
+                  <span>만료일로 제한</span>
+                </label>
+                <label class="ticket-radio">
+                  <input type="radio" name="ticket-reservation-rule-edit" value="none" data-ticket-reservation-rule>
+                  <span>제한 없음</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <span class="ticket-form__label" data-ticket-class-label>예약 가능한 클래스</span>
+            <div class="ticket-form__field ticket-form__field--stack">
+              <div class="ticket-class-toolbar">
+                <span class="class-ticket-count" data-ticket-class-count>0개</span>
+                <button class="button-secondary button-secondary--small select-all-button" type="button" data-ticket-class-select-all>전체 선택</button>
+              </div>
+              <p class="reservation-ticket-placeholder" data-ticket-class-empty hidden>예약할 수 있는 클래스가 없습니다.</p>
+              <div class="class-ticket-list" data-ticket-class-list></div>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-edit-quantity">총 횟수 <span class="text-accent">*</span></label>
+            <div class="ticket-input-group">
+              <input class="form-field__control" id="ticket-edit-quantity" type="number" min="1" max="999" placeholder="최대 999" data-ticket-quantity required>
+              <span class="ticket-input-suffix" data-ticket-quantity-suffix>회</span>
+            </div>
+          </div>
+          <div class="ticket-form__row">
+            <label class="ticket-form__label" for="ticket-edit-price">금액 <span class="text-accent">*</span></label>
+            <div class="ticket-input-group">
+              <input class="form-field__control" id="ticket-edit-price" type="text" inputmode="numeric" placeholder="0" data-ticket-price required>
+              <span class="ticket-input-suffix">원</span>
+            </div>
+          </div>
+          <div class="ticket-modal__actions">
+            <button class="button-secondary button-secondary--danger" type="button" data-ticket-edit-delete>이용권 삭제</button>
+            <button class="primary-button" type="button" data-ticket-edit-submit>수정</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="modal" data-ticket-issue-modal aria-hidden="true">
+    <div class="modal__overlay" data-ticket-issue-overlay></div>
+    <div class="modal__dialog ticket-issue-modal" role="dialog" aria-modal="true" aria-labelledby="ticket-issue-title">
+      <div class="modal__header">
+        <h2 id="ticket-issue-title">이용권 지급</h2>
+        <button class="icon-button modal__close" type="button" data-ticket-issue-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body ticket-issue">
+        <div class="ticket-issue__summary">
+          <h3 class="ticket-issue__label">이용권</h3>
+          <div class="ticket-issue__summary-text">
+            <div class="ticket-issue__name-row">
+              <span class="ticket-issue__badge" data-ticket-issue-type>-</span>
+              <span class="ticket-issue__name" data-ticket-issue-name>-</span>
+            </div>
+            <span class="ticket-issue__meta" data-ticket-issue-meta>총횟수: - / 유효기간: -</span>
+          </div>
+        </div>
+        <div class="ticket-issue__toolbar">
+          <h3>회원 목록</h3>
+          <label class="search ticket-issue__search">
+            <img src="../../assets/searchIcon.svg" alt="" aria-hidden="true">
+            <input type="search" placeholder="반려견 / 보호자 검색" data-ticket-issue-search>
+          </label>
+        </div>
+          <div class="ticket-issue-table" role="table" aria-label="회원 목록">
+          <div class="ticket-issue-table__header" role="row">
+            <span role="columnheader">
+              <input type="checkbox" data-ticket-issue-select-all aria-label="전체 선택">
+            </span>
+            <span role="columnheader">반려견</span>
+            <span role="columnheader">품종</span>
+            <span role="columnheader">보호자</span>
+            <span role="columnheader">예약 가능</span>
+            <span role="columnheader">수량</span>
+          </div>
+          <div class="ticket-issue-table__body" data-ticket-issue-rows></div>
+        </div>
+        <div class="ticket-issue__actions">
+          <button class="button-secondary ticket-issue__reserve" type="button" data-ticket-issue-reserve disabled>예약까지 진행</button>
+          <button class="primary-button ticket-issue__submit" type="button" data-ticket-issue-submit disabled>지급</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./tickets.js"></script>
+</body>
+</html>
+
+
+
+

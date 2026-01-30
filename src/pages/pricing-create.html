@@ -1,0 +1,201 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 요금 등록</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <img class="sidebar__brand-icon" src="../../assets/logoImg.svg" alt="다이얼독 비즈">
+        <img class="sidebar__brand-text" src="../../assets/logoText.svg" alt="다이얼독 비즈 텍스트">
+      </div>
+      <div class="sidebar__profile">
+        <div class="sidebar__profile-avatar" aria-hidden="true">
+          <img src="../../assets/defaultProfile.svg" alt="">
+        </div>
+        <div class="sidebar__profile-text">
+          <span class="sidebar__profile-name">다이얼독</span>
+          <span class="sidebar__profile-role">애견유치원</span>
+        </div>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <a class="sidebar__nav-item" href="../../public/index.html">
+          <img src="../../assets/menuIcon_Graph.svg" alt="" aria-hidden="true">
+          <span>대시보드</span>
+        </a>
+        <a class="sidebar__nav-item" href="../../public/index.html">
+          <img src="../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
+          <span>유치원</span>
+        </a>
+        <a class="sidebar__nav-item" href="hotels.html">
+          <img src="../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+          <span>호텔링</span>
+        </a>
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_report.svg" alt="" aria-hidden="true">
+          <span>알림장</span>
+        </a>
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_member.svg" alt="" aria-hidden="true">
+          <span>회원</span>
+        </a>
+        <a class="sidebar__nav-item" href="tickets.html">
+          <img src="../../assets/menuIcon_ticket.svg" alt="" aria-hidden="true">
+          <span>이용권</span>
+        </a>
+        <a class="sidebar__nav-item sidebar__nav-item--active" href="pricing.html">
+          <span>요금표</span>
+        </a>
+      </nav>
+      <div class="sidebar__footer">
+        <div class="sidebar__footer-links">
+          <a href="#">개인정보 처리방침</a>
+          <a href="#">이용약관</a>
+          <a href="#">문의</a>
+        </div>
+        <p class="sidebar__footer-copy">© 2025 Kickcrab. All rights reserved.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar__left">
+          <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
+            <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
+          </button>
+        </div>
+        <div class="topbar__actions">
+          <a class="icon-button" aria-label="설정" href="settings/school/operations.html">
+            <img src="../../assets/menuIcon_setting.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="알림" href="#">
+            <img src="../../assets/menuIcon_notification.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="프로필" href="#">
+            <img src="../../assets/menuIcon_profile.svg" alt="" aria-hidden="true">
+          </a>
+        </div>
+      </header>
+
+      <section class="page-header class-registration__header">
+        <div class="class-registration__title">
+          <div class="class-registration__title-row">
+            <a class="icon-button icon-button--secondary" aria-label="요금표로 돌아가기" href="pricing.html">
+              <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
+            </a>
+            <h1>요금 등록</h1>
+          </div>
+          <p>요금표에 등록할 항목을 입력하세요.</p>
+        </div>
+        <div class="page-actions">
+          <button class="primary-button" type="button" data-pricing-submit>저장</button>
+        </div>
+      </section>
+      <section class="list-card class-registration__card list-card--scroll">
+        <div class="list-table list-table--pricing-form" role="table" aria-label="요금 등록">
+          <div class="list-table__header" role="row">
+            <span role="columnheader">체중(kg)</span>
+            <span role="columnheader">요일</span>
+            <span role="columnheader">과금 기준</span>
+            <span role="columnheader">금액</span>
+            <span role="columnheader">VAT 별도</span>
+            <span role="columnheader">상품 연동</span>
+            <span role="columnheader"></span>
+          </div>
+          <div class="list-table__body" data-pricing-form-rows>
+            <div class="list-table__row" role="row">
+              <span role="cell">
+                <div class="pricing-weight-range">
+                  <div class="pricing-weight-field">
+                    <div class="ticket-input-group">
+                      <input class="form-field__control" type="number" min="0" placeholder="0" data-pricing-weight-min>
+                      <span class="ticket-input-suffix">이상</span>
+                    </div>
+                  </div>
+                  <span class="pricing-weight-tilde">~</span>
+                  <div class="pricing-weight-field">
+                    <div class="ticket-input-group">
+                      <input class="form-field__control" type="number" min="0" placeholder="0" data-pricing-weight-max>
+                      <span class="ticket-input-suffix">미만</span>
+                    </div>
+                  </div>
+                </div>
+              </span>
+              <span role="cell">
+                <div class="form-field__chips pricing-weekday-chips">
+                  <button class="filter-chip" type="button">월</button>
+                  <button class="filter-chip" type="button">화</button>
+                  <button class="filter-chip" type="button">수</button>
+                  <button class="filter-chip" type="button">목</button>
+                  <button class="filter-chip" type="button">금</button>
+                  <button class="filter-chip" type="button">토</button>
+                  <button class="filter-chip" type="button">일</button>
+                  <button class="filter-chip" type="button">공휴일</button>
+                </div>
+              </span>
+              <span role="cell">
+                <div class="form-field--inline">
+                  <input class="form-field__control" type="text" placeholder="예: 30" data-pricing-deduction-value data-default-value="24" value="24">
+                  <select class="form-field__control ticket-select" aria-label="과금 기준 단위" data-pricing-deduction-unit data-default-select="시간">
+                    <option value="회">회</option>
+                    <option value="분">분</option>
+                    <option value="시간" selected>시간</option>
+                    <option value="일">일</option>
+                    <option value="주">주</option>
+                    <option value="월">월</option>
+                    <option value="년">년</option>
+                  </select>
+                </div>
+              </span>
+              <span role="cell">
+                <div class="ticket-input-group">
+                  <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-pricing-price>
+                  <span class="ticket-input-suffix">원</span>
+                </div>
+              </span>
+              <span role="cell">
+                <label class="toggle-row pricing-vat-toggle">
+                  <input type="checkbox" aria-label="VAT 별도" data-pricing-vat>
+                  <span class="toggle-switch" aria-hidden="true"></span>
+                </label>
+              </span>
+              <span role="cell" class="pricing-class-cell">
+                <div class="pricing-class-field">
+                  <input class="form-field__control" type="text" placeholder="클래스 선택" readonly data-pricing-class-input aria-haspopup="dialog">
+                </div>
+                <div class="pricing-class-popup" data-pricing-class-popup>
+                  <div class="class-ticket-actions">
+                    <span class="class-ticket-count" data-pricing-class-count>0개</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-pricing-class-select-all>전체 선택</button>
+                  </div>
+                  <p class="reservation-ticket-placeholder" data-pricing-class-empty hidden>연동할 클래스가 없습니다.</p>
+                  <div class="class-ticket-list" data-pricing-class-list></div>
+                </div>
+              </span>
+              <span role="cell" class="pricing-delete-cell">
+                <button class="icon-button icon-button--secondary" type="button" aria-label="더보기" data-pricing-detail-open>
+                  <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+                </button>
+              </span>
+            </div>
+          </div>
+          <div class="list-table__footer">
+            <button class="button-neutral" type="button" data-pricing-add-row>추가</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="./pricing.js"></script>
+</body>
+</html>
+
+
+
+

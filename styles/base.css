@@ -1,0 +1,62 @@
+:root {
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-border: #e6e8ed;
+  --color-primary: #1e78f0;
+  --color-secondary: #81889a;
+  --color-text: #333333;
+  --color-muted: #9aa3b5;
+  --color-disabled: #D7D7D9;
+  --color-holiday: #ED6060;
+  --color-warning: #FEC600;
+  --color-success: #00AA81;
+  --color-hover: #E0ECFF;
+  --radius-base: 6px;
+  --radius-lg: 24px;
+  --radius-md: var(--radius-base);
+  --radius-sm: var(--radius-base);
+  --list-table-columns: auto 5fr 3fr 3fr 3fr 10fr;
+  --shadow-card: 0 20px 40px rgba(0, 0, 0, 0.06);
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  accent-color: var(--color-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Noto Sans KR", "Segoe UI", sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input {
+  font-family: inherit;
+  border: none;
+  outline: none;
+}
+
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+[hidden] {
+  display: none !important;
+}

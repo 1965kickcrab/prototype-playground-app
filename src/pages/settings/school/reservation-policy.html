@@ -1,0 +1,228 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 예약 정책</title>
+  <link rel="stylesheet" href="../../../../styles/base.css">
+  <link rel="stylesheet" href="../../../../styles/layout.css">
+  <link rel="stylesheet" href="../../../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <a class="icon-button icon-button--secondary" aria-label="뒤로 가기" href="../../../../public/index.html">
+          <img src="../../../../assets/iconBack.svg" alt="" aria-hidden="true">
+        </a>
+        <span class="sidebar__title">환경 설정</span>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__nav-item--active sidebar__group-toggle" type="button" aria-expanded="true">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_daycare_on.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">유치원</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub sidebar__nav-item--active" href="reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="class.html">
+              <span>클래스 설정</span>
+            </a>
+          </div>
+        </div>
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__group-toggle" type="button" aria-expanded="false">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">호텔링</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold_fold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/room.html">
+              <span>호실 설정</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main" data-policy-page>
+        <section class="settings-section">
+          <div class="settings-card-row">
+            <div class="settings-card">
+              <div class="settings-card__header">
+                <div class="settings-card__icon">
+                  <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+                </div>
+                <div>
+                  <h2>예약 정책</h2>
+                </div>
+              </div>
+              <div class="settings-card__body" data-policy-section="reservation">
+                <div class="policy-row" data-policy-row>
+                  <div class="policy-options">
+                    <label class="policy-option policy-option--same">
+                      <input type="radio" name="policy-type-reservation" value="same-day" data-policy-type>
+                      <span>당일</span>
+                    </label>
+                    <label class="policy-option policy-option--days" data-policy-days-group>
+                      <input type="radio" name="policy-type-reservation" value="days" data-policy-type>
+                      <div class="ticket-input-group policy-days-group">
+                        <input class="form-field__control" type="number" min="1" placeholder="0" data-policy-days>
+                        <span class="ticket-input-suffix">일</span>
+                      </div>
+                      <span class="policy-text policy-text--before">전</span>
+                    </label>
+                  </div>
+                  <input class="form-field__control policy-time-input" type="time" data-policy-time>
+                  <span class="policy-text">까지</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-card__header">
+                <div class="settings-card__icon">
+                  <img src="../../../../assets/iconDayoff.svg" alt="" aria-hidden="true">
+                </div>
+                <div>
+                  <h2>예약 취소 정책</h2>
+                </div>
+              </div>
+              <div class="settings-card__body" data-policy-section="cancellation">
+                <div class="policy-row" data-policy-row>
+                  <div class="policy-options">
+                    <label class="policy-option policy-option--same">
+                      <input type="radio" name="policy-type-cancellation" value="same-day" data-policy-type>
+                      <span>당일</span>
+                    </label>
+                    <label class="policy-option policy-option--days" data-policy-days-group>
+                      <input type="radio" name="policy-type-cancellation" value="days" data-policy-type>
+                      <div class="ticket-input-group policy-days-group">
+                        <input class="form-field__control" type="number" min="1" placeholder="0" data-policy-days>
+                        <span class="ticket-input-suffix">일</span>
+                      </div>
+                      <span class="policy-text policy-text--before">전</span>
+                    </label>
+                  </div>
+                  <input class="form-field__control policy-time-input" type="time" data-policy-time>
+                  <span class="policy-text">까지</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <div class="settings-card__icon">
+                <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+              </div>
+              <div>
+                <h2>예약 오픈 설정</h2>
+                <p>특정 요일 기준으로 공개할 예약 기간을 설정하세요.</p>
+              </div>
+              <label class="toggle-row toggle-row--compact">
+                <input type="checkbox" aria-label="예약 오픈 설정 토글" data-policy-open-toggle>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+            </div>
+            <div class="settings-card__body" data-policy-open-body>
+              <div class="policy-open-row">
+                <div class="policy-open-group">
+                  <span class="policy-text">오픈 마지막 주</span>
+                  <div class="form-field__chips">
+                    <button class="filter-chip" type="button" data-policy-open-day="mon">월</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="tue">화</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="wed">수</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="thu">목</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="fri">금</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="sat">토</button>
+                    <button class="filter-chip" type="button" data-policy-open-day="sun">일</button>
+                  </div>
+                  <input class="form-field__control policy-open-time policy-open-control" type="time" value="00:00">
+                  <span class="policy-text">에</span>
+                </div>
+                <div class="policy-open-group">
+                  <span class="policy-text">다음</span>
+                  <div class="ticket-form__field ticket-form__field--split policy-open-length">
+                    <input class="form-field__control policy-open-control" type="number" min="1" placeholder="0" value="4">
+                    <select class="form-field__control policy-open-unit policy-open-control">
+                      <option value="day">일</option>
+                      <option value="week" selected>주</option>
+                      <option value="month">개월</option>
+                    </select>
+                  </div>
+                  <span class="policy-text">일정을 공개</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <div class="settings-card__icon">
+                <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+              </div>
+              <div>
+                <h2>다견 가정 예약</h2>
+                <p>다견 가정의 예약 정책을 선택하세요.</p>
+              </div>
+            </div>
+            <div class="settings-card__body">
+              <label class="form-field form-field--full multi-dog-field">
+                <span class="form-field__label">초과 예약</span>
+                <div class="ticket-radio-group">
+                  <label class="ticket-radio">
+                    <input type="radio" name="multi-dog-overbook" value="allow">
+                    <span>허용</span>
+                  </label>
+                  <label class="ticket-radio">
+                    <input type="radio" name="multi-dog-overbook" value="deny" checked>
+                    <span>허용하지 않음</span>
+                  </label>
+                </div>
+              </label>
+              <label class="form-field form-field--full multi-dog-field">
+                <span class="form-field__label">이용권 공유</span>
+                <div class="ticket-radio-group">
+                  <label class="ticket-radio">
+                    <input type="radio" name="multi-dog-ticket-share" value="allow">
+                    <span>허용</span>
+                  </label>
+                  <label class="ticket-radio">
+                    <input type="radio" name="multi-dog-ticket-share" value="deny" checked>
+                    <span>허용하지 않음</span>
+                  </label>
+                </div>
+              </label>
+            </div>
+          </div>
+        </section>
+      <div class="settings-save">
+        <button class="primary-button" type="button" data-policy-save>저장</button>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="../reservation-policy.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+

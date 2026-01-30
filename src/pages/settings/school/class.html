@@ -1,0 +1,291 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 반 등록</title>
+  <link rel="stylesheet" href="../../../../styles/base.css">
+  <link rel="stylesheet" href="../../../../styles/layout.css">
+  <link rel="stylesheet" href="../../../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <a class="icon-button icon-button--secondary" aria-label="뒤로 가기" href="../../../../public/index.html">
+          <img src="../../../../assets/iconBack.svg" alt="" aria-hidden="true">
+        </a>
+        <span class="sidebar__title">환경 설정</span>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__nav-item--active sidebar__group-toggle" type="button" aria-expanded="true">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_daycare_on.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">유치원</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub sidebar__nav-item--active" href="class.html">
+              <span>클래스 설정</span>
+            </a>
+          </div>
+        </div>
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__group-toggle" type="button" aria-expanded="false">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">호텔링</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold_fold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../hotel/room.html">
+              <span>호실 설정</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <section class="page-header class-registration__header">
+        <div class="class-registration__title">
+          <h1>반 목록</h1>
+          <p>운영 중인 반을 관리하세요.</p>
+        </div>
+        <div class="page-actions">
+          <button class="primary-button" type="button" data-class-modal-open>반 등록</button>
+        </div>
+      </section>
+      <section class="list-card class-registration__card">
+        <div class="list-table list-table--class" role="table" aria-label="반 목록">
+          <div class="list-table__header" role="row">
+            <span role="columnheader">반 이름</span>
+            <span role="columnheader">담당 선생님</span>
+            <span role="columnheader">정원</span>
+            <span role="columnheader">운영 요일</span>
+            <span role="columnheader">운영 시간</span>
+            <span role="columnheader">소속 회원</span>
+            <span role="columnheader">예약 가능한 이용권</span>
+          </div>
+          <div class="list-table__body" data-class-rows></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="modal" data-class-modal aria-hidden="true">
+    <div class="modal__overlay" data-class-modal-overlay></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="class-modal-title">
+      <div class="modal__header">
+        <h2 id="class-modal-title">반 등록</h2>
+        <button class="icon-button modal__close" type="button" data-class-modal-close aria-label="닫기">
+          <img src="../../../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+        <div class="modal__body">
+          <div class="modal-tabs" role="tablist" aria-label="반 등록 탭">
+            <button class="modal-tab is-active" type="button" role="tab" aria-selected="true" data-class-tab="basic">기본 정보</button>
+            <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
+          </div>
+          <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
+            <div class="form-grid">
+              <label class="form-field">
+                <span class="form-field__label">반 이름</span>
+                <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
+              </label>
+              <label class="form-field">
+                <span class="form-field__label">담당 선생님</span>
+                <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
+              </label>
+              <div class="form-field">
+                <span class="form-field__label">운영 요일</span>
+                <div class="form-field__chips">
+                  <button class="filter-chip is-selected" type="button" data-class-day="mon">월</button>
+                  <button class="filter-chip is-selected" type="button" data-class-day="tue">화</button>
+                  <button class="filter-chip is-selected" type="button" data-class-day="wed">수</button>
+                  <button class="filter-chip is-selected" type="button" data-class-day="thu">목</button>
+                  <button class="filter-chip is-selected" type="button" data-class-day="fri">금</button>
+                  <button class="filter-chip" type="button" data-class-day="sat">토</button>
+                  <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                </div>
+                <label class="checkbox-inline">
+                  <input type="checkbox" data-class-public-holiday>
+                  <span>공휴일 휴무</span>
+                </label>
+              </div>
+              <div class="form-field form-field--full form-field--time-row">
+                <label class="form-field">
+                  <span class="form-field__label">시작 시간</span>
+                  <input class="form-field__control" type="time" value="09:00" data-class-start>
+                </label>
+                <label class="form-field">
+                  <span class="form-field__label">종료 시간</span>
+                  <input class="form-field__control" type="time" value="18:00" data-class-end>
+                </label>
+              </div>
+              <label class="form-field form-field--full">
+                <span class="form-field__label">반 설명</span>
+                <textarea class="form-field__control" rows="3" placeholder="반 특징을 입력해주세요." data-class-description></textarea>
+              </label>
+            </div>
+          </div>
+          <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
+            <div class="form-grid">
+              <label class="form-field">
+                <span class="form-field__label form-field__label--inline">
+                  <span>정원</span>
+                  <span class="tooltip-icon" role="img" aria-label="회원 앱에서 예약 가능한 최대 인원" data-tooltip="회원 앱에서 예약 가능한 최대 인원">i</span>
+                </span>
+                <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
+              </label>
+              <div class="form-field form-field--full" data-class-members-section>
+                <span class="form-field__label form-field__label--row">
+                  <span class="class-member-label">
+                    <span>소속 회원</span>
+                    <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
+                  </span>
+                  <span class="class-member-actions">
+                    <span class="class-member-count" data-class-member-count>0마리</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
+                  </span>
+                </span>
+                <div class="class-member-list" data-class-members></div>
+              </div>
+              <div class="form-field form-field--full" data-class-tickets-section>
+                <span class="form-field__label form-field__label--row">
+                  <span>예약 가능한 이용권</span>
+                  <span class="class-ticket-actions">
+                    <span class="class-ticket-count" data-class-ticket-count>0개</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                  </span>
+                </span>
+                <div class="class-ticket-list" data-class-tickets></div>
+              </div>
+            </div>
+          </div>
+          <div class="reservation-submit modal-actions">
+            <button class="primary-button" type="button" data-class-submit>등록</button>
+          </div>
+        </div>
+    </div>
+  </div>
+  <div class="modal" data-class-detail-modal aria-hidden="true">
+    <div class="modal__overlay" data-class-detail-overlay></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="class-detail-title">
+      <div class="modal__header">
+        <h2 id="class-detail-title">반 상세</h2>
+        <button class="icon-button modal__close" type="button" data-class-detail-close aria-label="닫기">
+          <img src="../../../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+        <div class="modal__body">
+          <div class="modal-tabs" role="tablist" aria-label="반 상세 탭">
+            <button class="modal-tab is-active" type="button" role="tab" aria-selected="true" data-class-tab="basic">기본 정보</button>
+            <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
+          </div>
+          <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
+            <div class="form-grid">
+              <label class="form-field">
+                <span class="form-field__label">반 이름</span>
+                <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
+              </label>
+              <label class="form-field">
+                <span class="form-field__label">담당 선생님</span>
+                <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
+              </label>
+              <div class="form-field">
+                <span class="form-field__label">운영 요일</span>
+                <div class="form-field__chips">
+                  <button class="filter-chip" type="button" data-class-day="mon">월</button>
+                  <button class="filter-chip" type="button" data-class-day="tue">화</button>
+                  <button class="filter-chip" type="button" data-class-day="wed">수</button>
+                  <button class="filter-chip" type="button" data-class-day="thu">목</button>
+                  <button class="filter-chip" type="button" data-class-day="fri">금</button>
+                  <button class="filter-chip" type="button" data-class-day="sat">토</button>
+                  <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                </div>
+                <label class="checkbox-inline">
+                  <input type="checkbox" data-class-public-holiday>
+                  <span>공휴일 휴무</span>
+                </label>
+              </div>
+              <div class="form-field form-field--full form-field--time-row">
+                <label class="form-field">
+                  <span class="form-field__label">시작 시간</span>
+                  <input class="form-field__control" type="time" value="09:00" data-class-start>
+                </label>
+                <label class="form-field">
+                  <span class="form-field__label">종료 시간</span>
+                  <input class="form-field__control" type="time" value="18:00" data-class-end>
+                </label>
+              </div>
+              <label class="form-field form-field--full">
+                <span class="form-field__label">반 설명</span>
+                <textarea class="form-field__control" rows="3" placeholder="반 특징을 입력해주세요." data-class-description></textarea>
+              </label>
+            </div>
+          </div>
+          <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
+            <div class="form-grid">
+              <label class="form-field">
+                <span class="form-field__label form-field__label--inline">
+                  <span>정원</span>
+                  <span class="tooltip-icon" role="img" aria-label="회원 앱에서 예약 가능한 최대 인원" data-tooltip="회원 앱에서 예약 가능한 최대 인원">i</span>
+                </span>
+                <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
+              </label>
+              <div class="form-field form-field--full" data-class-members-section>
+                <span class="form-field__label form-field__label--row">
+                  <span class="class-member-label">
+                    <span>소속 회원</span>
+                    <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
+                  </span>
+                  <span class="class-member-actions">
+                    <span class="class-member-count" data-class-member-count>0마리</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
+                  </span>
+                </span>
+                <div class="class-member-list" data-class-members></div>
+              </div>
+              <div class="form-field form-field--full" data-class-tickets-section>
+                <span class="form-field__label form-field__label--row">
+                  <span>예약 가능한 이용권</span>
+                  <span class="class-ticket-actions">
+                    <span class="class-ticket-count" data-class-ticket-count>0개</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                  </span>
+                </span>
+                <div class="class-ticket-list" data-class-tickets></div>
+              </div>
+            </div>
+          </div>
+          <div class="reservation-submit modal-actions">
+            <button class="button-secondary button-secondary--danger" type="button" data-class-delete>삭제</button>
+            <button class="primary-button" type="button" data-class-update>수정</button>
+          </div>
+        </div>
+    </div>
+  </div>
+  <script type="module" src="../class-settings.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,124 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 호텔링 환경 설정</title>
+  <link rel="stylesheet" href="../../../../styles/base.css">
+  <link rel="stylesheet" href="../../../../styles/layout.css">
+  <link rel="stylesheet" href="../../../../styles/components.css">
+</head>
+<body data-settings-scope="hotel">
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__header">
+        <a class="icon-button icon-button--secondary" aria-label="뒤로 가기" href="../../../../public/index.html">
+          <img src="../../../../assets/iconBack.svg" alt="" aria-hidden="true">
+        </a>
+        <span class="sidebar__title">환경 설정</span>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__group-toggle" type="button" aria-expanded="false">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">유치원</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold_fold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../school/operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../school/reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="../school/class.html">
+              <span>클래스 설정</span>
+            </a>
+          </div>
+        </div>
+        <div class="sidebar__group" data-sidebar-group>
+          <button class="sidebar__nav-item sidebar__nav-item--active sidebar__group-toggle" type="button" aria-expanded="true">
+            <img class="sidebar__group-icon" src="../../../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+            <span class="sidebar__group-title">호텔링</span>
+            <img class="sidebar__group-caret" src="../../../../assets/menuFold.svg" alt="" aria-hidden="true" data-sidebar-caret data-open-src="../../../../assets/menuFold.svg" data-closed-src="../../../../assets/menuFold_fold.svg">
+          </button>
+          <div class="sidebar__group-list">
+            <a class="sidebar__nav-item sidebar__nav-item--sub sidebar__nav-item--active" href="operations.html">
+              <span>영업 &amp; 휴무</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="reservation-policy.html">
+              <span>예약 정책</span>
+            </a>
+            <a class="sidebar__nav-item sidebar__nav-item--sub" href="room.html">
+              <span>호실 설정</span>
+            </a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <section class="settings-section">
+        <div class="settings-card">
+          <div class="settings-card__header">
+            <div class="settings-card__icon">
+              <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+            </div>
+            <div>
+              <h2>정기 영업 설정</h2>
+              <p>휴무일에 예정된 예약은 모두 취소되고, 회원의 이용권 횟수는 원복됩니다.</p>
+            </div>
+          </div>
+          <div class="settings-card__body">
+            <div class="toggle-list" data-weekday-toggles></div>
+            <label class="checkbox-row">
+              <input type="checkbox" data-public-holiday>
+              <span class="checkbox-row__box" aria-hidden="true"></span>
+              <span class="checkbox-row__label">공휴일 휴무</span>
+              <span class="checkbox-row__hint">임시 공휴일을 포함한 공휴일은 쉬어요.</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-card__header">
+            <div class="settings-card__icon">
+              <img src="../../../../assets/iconDayoff.svg" alt="" aria-hidden="true">
+            </div>
+            <div>
+              <h2>임시 휴무일 설정</h2>
+              <p>과거 날짜는 설정을 변경할 수 없습니다.</p>
+            </div>
+          </div>
+          <div class="settings-card__body">
+            <div class="dayoff-toolbar">
+              <button class="month-button month-button--prev" type="button" aria-label="이전 월" data-dayoff-prev>
+                <img class="month-button__icon" src="../../../../assets/iconChevronLeft.svg" alt="" aria-hidden="true">
+              </button>
+              <div class="dayoff-toolbar__current" data-dayoff-current>0000년 0월</div>
+              <button class="month-button month-button--next" type="button" aria-label="다음 월" data-dayoff-next>
+                <img class="month-button__icon" src="../../../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+              </button>
+            </div>
+            <div class="dayoff-calendar" data-dayoff-calendar></div>
+          </div>
+        </div>
+      </section>
+      <div class="settings-save">
+        <button class="primary-button" type="button" data-operations-save>저장</button>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="../operations.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+

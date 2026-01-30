@@ -1,0 +1,135 @@
+function createCell(content, className) {
+  const cell = document.createElement("span");
+  cell.setAttribute("role", "cell");
+  if (className) {
+    cell.className = className;
+  }
+  if (typeof content === "string") {
+    cell.textContent = content;
+  } else if (content) {
+    cell.appendChild(content);
+  }
+  return cell;
+}
+
+function createCheckbox(isChecked, label) {
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = isChecked;
+  input.dataset.issueSelect = "true";
+  input.setAttribute("aria-label", label);
+  return input;
+}
+
+function getAvailabilityUnit(ticketType) {
+  return ticketType === "hoteling" ? "박" : "회";
+}
+
+function createAvailability(availability, ticketType) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "ticket-issue-table__availability";
+  const { overage, remaining } = availability || {};
+  const unit = getAvailabilityUnit(ticketType);
+
+  const appendValue = (valueText) => {
+    const value = document.createElement("span");
+    value.className = "ticket-issue-table__availability-value";
+    value.textContent = valueText;
+    wrapper.appendChild(value);
+
+    if (valueText !== "-") {
+      const unitEl = document.createElement("span");
+      unitEl.className = "ticket-issue-table__availability-unit";
+      unitEl.textContent = unit;
+      wrapper.appendChild(unitEl);
+    }
+  };
+
+  if (overage > 0) {
+    wrapper.classList.add("is-low");
+    const label = document.createElement("span");
+    label.className = "ticket-issue-table__availability-label";
+    label.textContent = "초과 예약";
+    wrapper.appendChild(label);
+    appendValue(String(overage));
+    return wrapper;
+  }
+
+  if (Number.isFinite(remaining) && remaining >= 0) {
+    if (remaining <= 2) {
+      wrapper.classList.add("is-low");
+    }
+    appendValue(String(remaining));
+  }
+
+  if (!overage && !Number.isFinite(remaining)) {
+    appendValue("-");
+  }
+
+  return wrapper;
+}
+
+function createQuantityControl(quantity, isSelected) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "ticket-issue-quantity";
+  if (!isSelected) {
+    wrapper.classList.add("is-disabled");
+  }
+
+  const minus = document.createElement("button");
+  minus.type = "button";
+  minus.className = "ticket-issue-quantity__button";
+  minus.textContent = "-";
+  minus.dataset.issueQuantity = "decrease";
+  minus.disabled = !isSelected || quantity <= 1;
+
+  const value = document.createElement("span");
+  value.className = "ticket-issue-quantity__value";
+  value.dataset.issueQuantityValue = "true";
+  value.textContent = String(isSelected ? quantity : 1);
+
+  const plus = document.createElement("button");
+  plus.type = "button";
+  plus.className = "ticket-issue-quantity__button";
+  plus.textContent = "+";
+  plus.dataset.issueQuantity = "increase";
+  plus.disabled = !isSelected;
+
+  wrapper.appendChild(minus);
+  wrapper.appendChild(value);
+  wrapper.appendChild(plus);
+
+  return wrapper;
+}
+
+export function renderIssueRows(container, members, selections, availabilityMap, ticketType) {
+  container.innerHTML = "";
+  const fragment = document.createDocumentFragment();
+
+  members.forEach((member) => {
+    const row = document.createElement("div");
+    row.className = "ticket-issue-table__row";
+    row.setAttribute("role", "row");
+    row.dataset.memberId = member.id;
+
+    const isSelected = selections.has(member.id);
+    if (isSelected) {
+      row.classList.add("is-selected");
+    }
+
+    const quantity = selections.get(member.id) || 1;
+
+    row.appendChild(createCell(createCheckbox(isSelected, `${member.dogName} 선택`)));
+    row.appendChild(createCell(member.dogName || "-"));
+    row.appendChild(createCell(member.breed || "-"));
+    row.appendChild(createCell(member.owner || "-"));
+    row.appendChild(
+      createCell(createAvailability(availabilityMap.get(member.id), ticketType))
+    );
+    row.appendChild(createCell(createQuantityControl(quantity, isSelected)));
+
+    fragment.appendChild(row);
+  });
+
+  container.appendChild(fragment);
+}

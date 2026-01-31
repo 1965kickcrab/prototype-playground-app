@@ -28,7 +28,7 @@ function getAvailabilityUnit(ticketType) {
 function createAvailability(availability, ticketType) {
   const wrapper = document.createElement("span");
   wrapper.className = "ticket-issue-table__availability";
-  const { overage, remaining } = availability || {};
+  const { totalReservable } = availability || {};
   const unit = getAvailabilityUnit(ticketType);
 
   const appendValue = (valueText) => {
@@ -45,24 +45,12 @@ function createAvailability(availability, ticketType) {
     }
   };
 
-  if (overage > 0) {
-    wrapper.classList.add("is-low");
-    const label = document.createElement("span");
-    label.className = "ticket-issue-table__availability-label";
-    label.textContent = "초과 예약";
-    wrapper.appendChild(label);
-    appendValue(String(overage));
-    return wrapper;
-  }
-
-  if (Number.isFinite(remaining) && remaining >= 0) {
-    if (remaining <= 2) {
+  if (Number.isFinite(totalReservable)) {
+    if (totalReservable <= 2) {
       wrapper.classList.add("is-low");
     }
-    appendValue(String(remaining));
-  }
-
-  if (!overage && !Number.isFinite(remaining)) {
+    appendValue(String(totalReservable));
+  } else {
     appendValue("-");
   }
 

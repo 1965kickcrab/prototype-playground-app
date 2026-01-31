@@ -2123,6 +2123,7 @@ export function setupReservationModal(state, storage) {
     const hasAnyDropoff = reservationDates.some((entry) => entry.pickdrop?.dropoff);
     const reservationItem = {
       id: createId(),
+      type: primaryServiceType,
       class: serviceName,
       service: serviceName,
       baseStatusKey: "PLANNED",
@@ -2389,8 +2390,12 @@ export function setupReservationModal(state, storage) {
   });
 
   const persistReservations = (items) => {
-    if (storage && typeof storage.addReservations === "function") {
-      return storage.addReservations(items);
+    if (storage && typeof storage.addReservation === "function") {
+      let newReservations;
+      items.forEach(item => {
+        newReservations = storage.addReservation(item);
+      });
+      return newReservations;
     }
     return [...(state.reservations || []), ...items];
   };

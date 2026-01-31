@@ -186,20 +186,24 @@ export function initTicketIssueModal({ modal }) {
     }
     syncMembers();
     const filteredMembers = getFilteredMembers();
-    const availabilityMap = new Map(
-      filteredMembers.map((member) => {
-        const quantity = state.selections.get(member.id) || 1;
-        const availability = computeIssueAvailability(
-          member,
-          state.ticket?.quantity,
-          quantity,
-          state.selections.has(member.id),
-          state.ticket?.type
-        );
-        return [member.id, availability];
-      })
-    );
-    renderIssueRows(
+          const availabilityMap = new Map(
+            filteredMembers.map((member) => {
+              const quantity = state.selections.get(member.id) || 1;
+              const type = state.ticket?.type || "kindergarten";
+              const availability = computeIssueAvailability(
+                member,
+                state.ticket?.quantity,
+                quantity,
+                state.selections.has(member.id),
+                type
+              );
+              const totalReservable = member.totalReservableCountByType?.[type];
+              availability.totalReservable = Number.isFinite(totalReservable)
+                ? totalReservable
+                : null;
+              return [member.id, availability];
+            })
+          );    renderIssueRows(
       rowsContainer,
       filteredMembers,
       state.selections,

@@ -1,6 +1,6 @@
 ﻿import {
   getHotelingDateKey,
-  HOTELING_STATUS,
+  STATUS,
 } from "../services/hoteling-reservation-service.js";
 import { getTimeZone } from "../utils/timezone.js";
 
@@ -22,7 +22,7 @@ export function collectHotelingReservationFormData(root, modalState) {
 
   return {
     room: roomInput?.value || "",
-    status: HOTELING_STATUS.PLANNED,
+    status: STATUS.PLANNED,
     checkinDate,
     checkoutDate,
     checkinTime,

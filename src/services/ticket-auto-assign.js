@@ -1,8 +1,7 @@
 import { readStorageArray, writeStorageValue } from "../storage/storage-utils.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 
-const DAYCARE_RESERVATIONS_KEY = "daycare-reservations:reservations";
-const HOTELING_RESERVATIONS_KEY = "hoteling-reservations:reservations";
 const MEMBERS_KEY = "memberList";
 
 // Helper to find a member by dogName and owner, as memberId is not on the reservation object
@@ -18,10 +17,11 @@ export function autoApplyIssuedTicketsToReservations(issues) {
     return;
   }
 
+  const reservationStorage = initReservationStorage();
+
   // 1. Read all necessary data from storage
-  let daycareReservations = readStorageArray(DAYCARE_RESERVATIONS_KEY);
-  let hotelingReservations = readStorageArray(HOTELING_RESERVATIONS_KEY);
-  let members = readStorageArray(MEMBERS_KEY);
+  const reservations = reservationStorage.loadReservations();
+  const members = readStorageArray(MEMBERS_KEY);
 
   // 2. Group new issues by memberId
   const issuesByMember = new Map();
@@ -39,39 +39,17 @@ export function autoApplyIssuedTicketsToReservations(issues) {
     const member = members.find((m) => m.id === memberId);
     if (!member) continue;
 
-    // 4. Find all unassigned reservation dates for this member
+    // 4. Find all unassigned reservation dates for this member from the unified list
     const unassignedDates = [];
-
-    // School reservations
-    for (const reservation of daycareReservations) {
+    for (const reservation of reservations) {
       const memberForReservation = findMember(members, reservation);
       if (memberForReservation?.id !== memberId) continue;
 
-      for (const [dateIndex, dateEntry] of reservation.dates.entries()) {
+      for (const dateEntry of reservation.dates) {
         if (!dateEntry.ticketUsage) {
           unassignedDates.push({
             reservation,
             dateEntry,
-            dateIndex,
-            type: "daycare",
-          });
-        }
-      }
-    }
-
-    // Hoteling reservations
-    for (const reservation of hotelingReservations) {
-        const memberForReservation = findMember(members, reservation);
-        if (memberForReservation?.id !== memberId) continue;
-
-      for (const [dateIndex, dateEntry] of reservation.dates.entries()) {
-        // Hoteling reservations use 'stay' or other kinds, match any for simplicity
-        if (!dateEntry.ticketUsage) {
-          unassignedDates.push({
-            reservation,
-            dateEntry,
-            dateIndex,
-            type: "hoteling",
           });
         }
       }
@@ -97,18 +75,21 @@ export function autoApplyIssuedTicketsToReservations(issues) {
 
       for (const unassigned of unassignedDates) {
         if (availableUses <= 0) break;
-        if (unassigned.dateEntry.ticketUsage) continue; // Already filled by another ticket in this run
+        if (unassigned.dateEntry.ticketUsage) continue; // Already filled by another ticket
 
+        const { reservation, dateEntry } = unassigned;
         let ticketApplied = false;
-        if (ticketType === 'hoteling' && unassigned.type === 'hoteling') {
+
+        // Check if the ticket type matches the reservation type/service
+        if (ticketType === 'hoteling' && reservation.type === 'hoteling') {
             ticketApplied = true;
-        } else if (unassigned.type === 'daycare' && unassigned.dateEntry.service === ticketType) {
+        } else if (reservation.type === 'daycare' && reservation.service === ticketType) {
             ticketApplied = true;
         }
 
         if (ticketApplied) {
             // Apply the ticket
-            unassigned.dateEntry.ticketUsage = {
+            dateEntry.ticketUsage = {
                 ticketId: issuedTicket.id,
                 sequence: (memberTicket.usedCount || 0) + assignedInThisRun + 1,
             };
@@ -120,9 +101,8 @@ export function autoApplyIssuedTicketsToReservations(issues) {
     }
   }
 
-  // 7. Write modified reservations back to storage
-  writeStorageValue(DAYCARE_RESERVATIONS_KEY, daycareReservations);
-  writeStorageValue(HOTELING_RESERVATIONS_KEY, hotelingReservations);
+  // 7. Write modified reservations back to the single unified storage
+  reservationStorage.saveReservations(reservations);
   
   // 8. Recalculate all counts based on the new state
   recalculateTicketCounts();

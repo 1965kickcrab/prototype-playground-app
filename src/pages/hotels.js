@@ -10,11 +10,9 @@ import { showToast } from "../components/toast.js";
 import { syncFilterChip } from "../utils/dom.js";
 import { syncReservationFeeTotal } from "../utils/reservation-fee-total.js";
 import { renderSelectableChips, setSelectedChip } from "../components/selection-chips.js";
-import { initHotelingStorage } from "../storage/hoteling-storage.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
-import { initStorage } from "../storage/storage.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import {
   ensureMemberDefaults,
@@ -32,7 +30,7 @@ import {
   getNextHotelingCheckinKey,
   getHotelingTicketOptions,
   getHotelingRoomIdsForTickets,
-  HOTELING_STATUS,
+  STATUS,
   isHotelingDateDisabled,
   getHotelingNightKeys,
 } from "../services/hoteling-reservation-service.js";
@@ -51,15 +49,21 @@ import { initState } from "../services/state.js";
 import { setupReservationModal } from "./reservation.js";
 import { getDatePartsFromKey } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
+import { createId } from "../utils/id.js";
+import { initReservationStorage, migrateToUnifiedReservations } from "/src/storage/reservation-storage.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  migrateToUnifiedReservations();
+  
   const timeZone = getTimeZone();
-  const hotelingStorage = initHotelingStorage();
+  const reservationStorage = initReservationStorage();
   const roomStorage = initHotelRoomStorage();
   const ticketStorage = initTicketStorage();
   const pricingStorage = initPricingStorage();
-  const reservationStorage = initStorage();
   const classStorage = initClassStorage();
+
+  const allReservations = reservationStorage.loadReservations();
+
   const rooms = roomStorage.ensureDefaults();
   const getTotalRoomCapacity = (items) =>
     (Array.isArray(items) ? items : []).reduce((sum, room) => {
@@ -243,18 +247,8 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   };
 
-  const reservationModalController = setupReservationModal(
-    initState(reservationStorage.loadReservations(), {
-      selectedServices,
-      defaultService,
-      serviceOptions: classNames,
-      selectedTeachers: {},
-      classTeachers,
-    }),
-    reservationStorage
-  );
   const reservationState = {
-    reservations: hotelingStorage.loadReservations(),
+    reservations: allReservations.filter(r => r.type === 'hoteling'),
     selectedDateKey: "",
   };
   let calendarStats = getHotelingCalendarStats(reservationState.reservations);
@@ -436,41 +430,47 @@ document.addEventListener("DOMContentLoaded", () => {
     cancelModal.classList.remove("is-open");
   };
 
-  const getHotelingStatusKey = (status) => {
-    if (status === HOTELING_STATUS.CHECKIN) {
-      return "CHECKIN";
+  const cancelSelectedReservations = () => {
+    const idsToCancel = new Set(getSelectedReservationIds());
+    if (idsToCancel.size === 0) {
+      return;
     }
-    if (status === HOTELING_STATUS.CHECKOUT) {
-      return "CHECKOUT";
-    }
-    if (status === HOTELING_STATUS.CANCELED) {
-      return "CANCELED";
-    }
-    return "PLANNED";
-  };
 
-  const getPickdropCountForReservation = (reservation) => {
-    if (!reservation) {
-      return 0;
-    }
-    const entries = Array.isArray(reservation.dates) ? reservation.dates : [];
-    const hasPickup = entries.some((entry) => entry?.pickdrop?.pickup)
-      || Boolean(reservation.hasPickup);
-    const hasDropoff = entries.some((entry) => entry?.pickdrop?.dropoff)
-      || Boolean(reservation.hasDropoff);
-    const hasCheckin = Boolean(reservation.checkinDate);
-    const hasCheckout = Boolean(reservation.checkoutDate);
-    if (hasPickup && hasDropoff) {
-      return hasCheckin || hasCheckout ? 1 : 0;
-    }
-    let count = 0;
-    if (hasPickup && hasCheckin) {
-      count += 1;
-    }
-    if (hasDropoff && hasCheckout) {
-      count += 1;
-    }
-    return count;
+    const usageByMember = new Map();
+
+    allReservations.forEach(reservation => {
+      if (!idsToCancel.has(reservation.id)) {
+        return;
+      }
+      
+      // Update status on each date entry
+      reservation.dates.forEach(entry => {
+        entry.status = reservationStorage.STATUS.CANCELED;
+      });
+
+      const memberId = getMemberIdFromReservation(reservation);
+      if (memberId) {
+        const usageMap = buildTicketUsageCountMap(reservation.dates);
+        if (usageMap.size > 0) {
+          const memberUsage = usageByMember.get(memberId) || new Map();
+          mergeTicketUsageCountMap(memberUsage, usageMap);
+          usageByMember.set(memberId, memberUsage);
+        }
+      }
+    });
+    
+    // Save the whole updated list
+    reservationStorage.saveReservations(allReservations);
+    
+    // Update local state and re-render
+    reservationState.reservations = allReservations.filter(r => r.type === 'hoteling');
+
+    usageByMember.forEach((usageMap, memberId) => {
+      rollbackReservationMemberTickets(memberId, usageMap);
+    });
+
+    refreshCalendarStats();
+    renderListForKey(reservationState.selectedDateKey);
   };
 
   const getMemberIdFromReservation = (reservation) => {
@@ -486,72 +486,6 @@ document.addEventListener("DOMContentLoaded", () => {
       && (!breed || member.breed === breed)
     );
     return match?.id || "";
-  };
-
-  const cancelSelectedReservations = () => {
-    const ids = getSelectedReservationIds();
-    if (ids.length === 0) {
-      return;
-    }
-    const idSet = new Set(ids);
-    const usageByMember = new Map();
-    const nextReservations = reservationState.reservations.map((item) => {
-      if (!idSet.has(item.id)) {
-        return item;
-      }
-      if (item.status === HOTELING_STATUS.CANCELED) {
-        return item;
-      }
-      const beforeStatusKey = getHotelingStatusKey(item.status);
-      const nights = getNightCount(
-        getDateFromKey(item.checkinDate),
-        getDateFromKey(item.checkoutDate)
-      );
-      const pickdropCount = getPickdropCountForReservation(item);
-      const memberId = getMemberIdFromReservation(item);
-      if (memberId) {
-        if (beforeStatusKey !== "CANCELED" && Number(nights) > 0) {
-          applyReservationStatusChange(
-            memberId,
-            beforeStatusKey,
-            "CANCELED",
-            nights,
-            "hoteling"
-          );
-        }
-        if (beforeStatusKey !== "CANCELED" && pickdropCount > 0) {
-          applyReservationStatusChange(
-            memberId,
-            beforeStatusKey,
-            "CANCELED",
-            pickdropCount,
-            "pickdrop"
-          );
-        }
-        const usageMap = buildTicketUsageCountMap(item.dates);
-        if (usageMap.size > 0) {
-          const memberUsage = usageByMember.get(memberId) || new Map();
-          mergeTicketUsageCountMap(memberUsage, usageMap);
-          usageByMember.set(memberId, memberUsage);
-        }
-        const pickdropUsage = buildTicketUsageMapFromEntries(item.pickdropTicketUsage);
-        if (pickdropUsage.size > 0) {
-          const memberUsage = usageByMember.get(memberId) || new Map();
-          mergeTicketUsageCountMap(memberUsage, pickdropUsage);
-          usageByMember.set(memberId, memberUsage);
-        }
-      }
-      return {
-        ...item,
-        status: HOTELING_STATUS.CANCELED,
-      };
-    });
-    reservationState.reservations = hotelingStorage.saveReservations(nextReservations);
-    usageByMember.forEach((usageMap, memberId) => {
-      rollbackReservationMemberTickets(memberId, usageMap);
-    });
-    refreshCalendarStats();
-    renderListForKey(reservationState.selectedDateKey);
   };
 
   const closeDetailModal = () => {
@@ -705,11 +639,11 @@ document.addEventListener("DOMContentLoaded", () => {
         "hoteling-detail__status--checkout",
         "hoteling-detail__status--canceled"
       );
-      if (reservation.status === HOTELING_STATUS.CHECKIN) {
+      if (reservation.status === STATUS.CHECKIN) {
         detailStatusEl.classList.add("hoteling-detail__status--checkin");
-      } else if (reservation.status === HOTELING_STATUS.CHECKOUT) {
+      } else if (reservation.status === STATUS.CHECKOUT) {
         detailStatusEl.classList.add("hoteling-detail__status--checkout");
-      } else if (reservation.status === HOTELING_STATUS.CANCELED) {
+      } else if (reservation.status === STATUS.CANCELED) {
         detailStatusEl.classList.add("hoteling-detail__status--canceled");
       } else {
         detailStatusEl.classList.add("hoteling-detail__status--planned");
@@ -809,7 +743,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ? detailMemoEl.value.trim()
         : "",
     };
-    reservationState.reservations = hotelingStorage.updateReservation(
+    reservationState.reservations = reservationStorage.updateReservation(
       detailState.reservationId,
       (item) => {
         const nextDates = buildHotelingDateEntries(
@@ -1839,138 +1773,63 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (reservationModal) {
-    reservationModal.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      if (!target.closest(".hoteling-modal__submit")) {
-        return;
-      }
-      const isPickdrop = Boolean(target.closest("[data-hoteling-pickdrop-start]"));
-      if (isPickdrop && !modalState.selectedMember?.id) {
-        return;
-      }
-      if (isPickdrop) {
+    if (reservationModal) {
+      reservationModal.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (!target.closest(".hoteling-modal__submit")) return;
+
+        const formData = collectHotelingReservationFormData(reservationModal, modalState);
+        const { checkinDate, checkoutDate, checkinTime, checkoutTime } = formData;
+        if (!formData.room || !checkinDate || !checkoutDate) {
+            return;
+        }
+
+        // Build the new unified reservation object
+        const newReservation = {
+            id: createId(), // Assuming createId is available or imported
+            type: 'hoteling',
+            dogName: formData.dogName,
+            owner: formData.owner,
+            breed: formData.breed,
+            room: formData.room,
+            memo: formData.memo,
+            dates: buildHotelingDateEntries(checkinDate, checkoutDate, checkinTime, checkoutTime),
+        };
+
+        const nights = getNightCount(modalState.checkin, modalState.checkout) || 0;
+        
+        // Logic for applying tickets remains similar, but will be applied to the new object
+        let dateTicketUsageMap = null;
+        if (modalState.selectedMember?.id && modalState.ticketSelections.length > 0 && nights > 0) {
+            const optionMap = new Map(modalState.ticketOptions.map(o => [o.id, o]));
+            const allocationResult = allocateTicketUsage(modalState.ticketSelections, optionMap, nights);
+            const nightKeys = getNightKeys();
+            dateTicketUsageMap = buildDateTicketUsageMap(nightKeys, modalState.ticketSelections, allocationResult.allocations, optionMap);
+
+            newReservation.dates.forEach(entry => {
+                if (dateTicketUsageMap.has(entry.date)) {
+                    entry.ticketUsage = dateTicketUsageMap.get(entry.date);
+                }
+            });
+        }
+        
+        reservationStorage.addReservation(newReservation);
+        allReservations.push(newReservation);
+        reservationState.reservations = allReservations.filter(r => r.type === 'hoteling');
+
+        // Recalculate counts which is now handled by applyReservationToMemberTickets
+        const usageMap = buildTicketUsageCountMap(newReservation.dates);
+        if (modalState.selectedMember?.id && usageMap.size > 0) {
+            applyReservationToMemberTickets(modalState.selectedMember.id, usageMap);
+        }
+
+        if (reservationState.selectedDateKey) {
+            renderListForKey(reservationState.selectedDateKey);
+        }
+        resetModalState();
         closeModal();
-        reservationModalController?.openPickdropModal?.(
-          modalState.selectedMember?.id,
-          { context: "hoteling" }
-        );
-        return;
-      }
-      const formData = collectHotelingReservationFormData(
-        reservationModal,
-        modalState
-      );
-      if (!formData.room || !formData.checkinDate || !formData.checkoutDate) {
-        return;
-      }
-      const nights = getNightCount(modalState.checkin, modalState.checkout) || 0;
-      let usageMap = null;
-      let dateTicketUsageMap = null;
-      let pickdropUsageEntries = [];
-      if (modalState.selectedMember?.id && modalState.ticketSelections.length > 0) {
-        const optionMap = new Map(
-          modalState.ticketOptions.map((option) => [option.id, option])
-        );
-        const allocationResult = allocateTicketUsage(
-          modalState.ticketSelections,
-          optionMap,
-          nights
-        );
-        const nightKeys = getNightKeys();
-        dateTicketUsageMap = buildDateTicketUsageMap(
-          nightKeys,
-          modalState.ticketSelections,
-          allocationResult.allocations,
-          optionMap
-        );
-        const nextMap = new Map();
-        allocationResult.allocations.forEach((allocation, ticketId) => {
-          const used = Number(allocation?.used) || 0;
-          if (used > 0) {
-            nextMap.set(ticketId, used);
-          }
-        });
-        if (nextMap.size > 0) {
-          usageMap = nextMap;
-        }
-      }
-      const pickdropCount = getPickdropDateCount();
-      if (modalState.selectedMember?.id && pickdropCount > 0
-        && modalState.pickdropTicketSelections.length > 0) {
-        const pickdropMap = new Map(
-          modalState.pickdropTicketOptions.map((option) => [option.id, option])
-        );
-        const pickdropAllocation = allocateTicketUsage(
-          modalState.pickdropTicketSelections,
-          pickdropMap,
-          pickdropCount
-        );
-        const pickdropUsageMap = new Map();
-        pickdropAllocation.allocations.forEach((allocation, ticketId) => {
-          const used = Number(allocation?.used) || 0;
-          if (used > 0) {
-            pickdropUsageMap.set(ticketId, used);
-          }
-        });
-        if (pickdropUsageMap.size > 0) {
-          pickdropUsageEntries = buildTicketUsageEntries(pickdropUsageMap);
-          if (!usageMap) {
-            usageMap = new Map();
-          }
-          mergeTicketUsageCountMap(usageMap, pickdropUsageMap);
-        }
-      }
-      if (dateTicketUsageMap) {
-        const dates = buildHotelingDateEntries(formData.checkinDate, formData.checkoutDate);
-        formData.dates = dates.map((entry) => ({
-          ...entry,
-          ticketUsage: dateTicketUsageMap.get(entry.date) || null,
-          pickdrop: {
-            pickup: entry.kind === "checkin"
-              && modalState.pickdrops.has("pickup"),
-            dropoff: entry.kind === "checkout"
-              && modalState.pickdrops.has("dropoff"),
-          },
-        }));
-      } else {
-        const dates = buildHotelingDateEntries(formData.checkinDate, formData.checkoutDate);
-        formData.dates = dates.map((entry) => ({
-          ...entry,
-          pickdrop: {
-            pickup: entry.kind === "checkin"
-              && modalState.pickdrops.has("pickup"),
-            dropoff: entry.kind === "checkout"
-              && modalState.pickdrops.has("dropoff"),
-          },
-        }));
-      }
-      if (pickdropUsageEntries.length > 0) {
-        formData.pickdropTicketUsage = pickdropUsageEntries;
-      }
-      formData.hasPickup = modalState.pickdrops.has("pickup");
-      formData.hasDropoff = modalState.pickdrops.has("dropoff");
-      const nextReservations = hotelingStorage.addReservations([formData]);
-      reservationState.reservations = nextReservations;
-      refreshCalendarStats();
-      if (modalState.selectedMember?.id && nights > 0) {
-        applyReservationToMember(modalState.selectedMember.id, nights, "hoteling");
-      }
-      if (modalState.selectedMember?.id && pickdropCount > 0) {
-        applyReservationToMember(modalState.selectedMember.id, pickdropCount, "pickdrop");
-      }
-      if (modalState.selectedMember?.id && usageMap) {
-        applyReservationToMemberTickets(modalState.selectedMember.id, usageMap);
-      }
-      if (reservationState.selectedDateKey) {
-        renderListForKey(reservationState.selectedDateKey);
-      }
-      resetModalState();
-      closeModal();
-      showToast("예약이 등록되었습니다.");
-    });
-  }
+        showToast("예약이 등록되었습니다.");
+      });
+    }
 });

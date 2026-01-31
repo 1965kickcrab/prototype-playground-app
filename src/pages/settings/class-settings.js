@@ -1,5 +1,5 @@
 ﻿import { initClassStorage } from "../../storage/class-storage.js";
-import { initStorage } from "../../storage/storage.js";
+import { initReservationStorage } from "/src/storage/reservation-storage.js";
 import { initOperationsStorage } from "../../storage/operations-storage.js";
 import { initHotelOperationsStorage } from "../../storage/hotel-operations-storage.js";
 import { initHotelRoomStorage } from "../../storage/hotel-room-storage.js";
@@ -295,7 +295,7 @@ function setupClassDetailModal(
 const initClassSettingsPage = () => {
   const isHotelScope = document.body?.dataset?.settingsScope === "hotel";
   const storage = isHotelScope ? initHotelRoomStorage() : initClassStorage();
-  const reservationStorage = isHotelScope ? null : initStorage();
+  const reservationStorage = isHotelScope ? null : initReservationStorage();
   const operationsStorage = isHotelScope ? initHotelOperationsStorage() : initOperationsStorage();
   const ticketStorage = initTicketStorage();
   let classes = setupClassList(storage, isHotelScope);

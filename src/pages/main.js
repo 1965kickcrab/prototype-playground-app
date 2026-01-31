@@ -1,5 +1,5 @@
 ﻿import { initState } from "../services/state.js";
-import { initStorage } from "../storage/storage.js";
+import { initReservationStorage, migrateToUnifiedReservations } from "/src/storage/reservation-storage.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
 import { ensureMemberDefaults } from "../storage/ticket-issue-members.js";
@@ -10,7 +10,9 @@ import { setupFilterPanel } from "../components/filter-panel.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
 
 document.addEventListener("DOMContentLoaded", () => {
-  const storage = initStorage();
+  migrateToUnifiedReservations();
+  
+  const storage = initReservationStorage();
   const classStorage = initClassStorage();
   const hotelRoomStorage = initHotelRoomStorage();
   const classes = classStorage.ensureDefaults();
@@ -34,7 +36,7 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedServices[name] = true;
   });
   const selectedTeachers = {};
-  const existingReservations = storage.loadReservations();
+  const existingReservations = storage.loadReservations().filter(r => r.type === 'kindergarten');
   const state = initState(existingReservations, {
     selectedServices,
     defaultService,

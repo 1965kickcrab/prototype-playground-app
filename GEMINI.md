@@ -1,9 +1,9 @@
-# AGENTS.md
+# GEMINI.md
 
-## school Reservation Prototype
+## School Reservation Prototype
 
 ### 1. Project Scope
-- Project: school Reservation Prototype
+- Project: School Reservation Prototype
 - Goal: Build a prototype where reservations, tickets, and policy settings operate in a tightly integrated and consistent flow.
 - User: Daycare administrators and managers
 
@@ -83,25 +83,14 @@ my-project/
 - Default behavior: If no timezone is specified, assume **Asia/Seoul (UTC+9)**.
 
 ### 8. Agent Behavior Rules (Must Obey)
-- **Scope**: Only requested features. No refactors or new libraries without instruction.
-- **TODO Workflow**:
-  - Write in English.
-  - Write tasks to `TODO.md` before execution if decisions or sequencing exist.  
-  - Execute only listed tasks.  
-  - New step found → STOP and update `TODO.md`.
-- **TODO Structure**:  
-  - Do not change headers. Modify items only.  
-  - On completion: remove items from **Active Tasks**, add to **Completed**.  
-  - No duplication across sections.
-- **Current Focus**:  
-  - Exactly **one active task** at all times.  
-  - Update immediately on focus change or completion.
-- **Completed & History**:  
-  - **Completed = latest 5 items only**.  
-  - Older items → `history/HISTORY.md` (append-only).  
-  - Sync to `CHANGELOG.md`; rules → `history/DECISIONS.md`.
-- **Size Limits**:  
-  - Keep `TODO.md` and `HISTORY.md` ≤ 200 lines; archive older entries.
+- **No Unrequested Features**: Do not implement features not explicitly requested.
+- **No Speculative Refactors**: Do not perform refactors unless specifically instructed.
+- **No New Libraries**: Use only the existing tech stack (Vanilla JS/CSS/HTML).
+- **TODO-First Workflow**: Before starting any code changes, the agent MUST update `TODO.md` to reflect the current focus and tasks.
+- **Do not add new headers**: Never create or duplicate headers('#') in `TODO.md`. If `## Backlog` or `## Completed` already exists, only add list items under them.
+- **Continuous Sync**: Upon completion, mark tasks in `TODO.md` and immediately sync changes with `history/HISTORY.md` and `CHANGELOG.md`.
+- **Decision Logging**: If a change introduces a new rule or logic pattern, it MUST be recorded in `history/DECISIONS.md` as a new `DR-###`.
+- **Context Maintenance**: Keep `TODO.md` and `HISTORY.md` lean (≤200 lines) by archiving older logs to the `history/archive/` directory.
 
 ### 9. History System (Agent-Optimized)
 - The agent-loaded history file is `history/HISTORY.md` ONLY. Keep it short (≤200 lines).

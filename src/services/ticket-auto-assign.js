@@ -1,15 +1,80 @@
-import { readStorageArray, writeStorageValue } from "../storage/storage-utils.js";
+/**
+ * ticket-auto-assign.js
+ * - Auto-apply newly issued tickets to existing reservations
+ * - Fill unassigned reservation dates chronologically
+ * Side effects: updates reservations + recalculates ticket counts
+ */
+import { readStorageArray } from "../storage/storage-utils.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
+import { getEntryTicketUsages } from "./ticket-usage-service.js";
 
 const MEMBERS_KEY = "memberList";
 
-// Helper to find a member by dogName and owner, as memberId is not on the reservation object
+function readMemberId(member) {
+  return String(member?.id ?? member?.memberId ?? "");
+}
+
+function readMemberDogName(member) {
+  return String(member?.dogName ?? member?.petName ?? member?.name ?? "").trim();
+}
+
+function readMemberOwner(member) {
+  return String(
+    member?.owner
+      ?? member?.guardian
+      ?? member?.guardianName
+      ?? member?.ownerName
+      ?? ""
+  ).trim();
+}
+
+function readMemberBreed(member) {
+  return String(member?.breed ?? member?.petBreed ?? "").trim();
+}
+
+function isSameMemberByProfile(member, reservation) {
+  if (!member || !reservation) {
+    return false;
+  }
+
+  const memberDogName = readMemberDogName(member);
+  const memberOwner = readMemberOwner(member);
+  const memberBreed = readMemberBreed(member);
+  const reservationDogName = String(reservation?.dogName ?? "").trim();
+  const reservationOwner = String(reservation?.owner ?? "").trim();
+  const reservationBreed = String(reservation?.breed ?? "").trim();
+
+  if (!memberDogName || !memberOwner) {
+    return false;
+  }
+
+  if (memberDogName !== reservationDogName || memberOwner !== reservationOwner) {
+    return false;
+  }
+
+  if (!reservationBreed || !memberBreed) {
+    return true;
+  }
+
+  return memberBreed === reservationBreed;
+}
+
+// Helper to find a member by profile, as memberId is not on the reservation object.
 function findMember(members, reservation) {
-  return members.find(
-    (m) =>
-      m.dogName === reservation.dogName && m.owner === reservation.owner
-  );
+  return members.find((member) => isSameMemberByProfile(member, reservation));
+}
+
+function isTicketApplicableToDate(ticketType, reservation) {
+  if (ticketType === "hoteling") {
+    return reservation.type === "hoteling";
+  }
+
+  if (ticketType === "school" || ticketType === "daycare") {
+    return reservation.type === ticketType;
+  }
+
+  return reservation.type === ticketType;
 }
 
 export function autoApplyIssuedTicketsToReservations(issues) {
@@ -36,17 +101,18 @@ export function autoApplyIssuedTicketsToReservations(issues) {
 
   // 3. Process each member who received new tickets
   for (const [memberId, memberIssues] of issuesByMember.entries()) {
-    const member = members.find((m) => m.id === memberId);
+    const member = members.find((m) => readMemberId(m) === memberId);
     if (!member) continue;
 
     // 4. Find all unassigned reservation dates for this member from the unified list
     const unassignedDates = [];
     for (const reservation of reservations) {
       const memberForReservation = findMember(members, reservation);
-      if (memberForReservation?.id !== memberId) continue;
+      if (readMemberId(memberForReservation) !== memberId) continue;
 
-      for (const dateEntry of reservation.dates) {
-        if (!dateEntry.ticketUsage) {
+      const dates = Array.isArray(reservation?.dates) ? reservation.dates : [];
+      for (const dateEntry of dates) {
+        if (getEntryTicketUsages(dateEntry).length === 0) {
           unassignedDates.push({
             reservation,
             dateEntry,
@@ -57,53 +123,49 @@ export function autoApplyIssuedTicketsToReservations(issues) {
 
     // 5. Sort unassigned dates chronologically
     unassignedDates.sort((a, b) =>
-      a.dateEntry.date.localeCompare(b.dateEntry.date)
+      String(a?.dateEntry?.date ?? "").localeCompare(String(b?.dateEntry?.date ?? ""))
     );
 
     if (unassignedDates.length === 0) continue;
 
     // 6. Iterate through new tickets and apply them to unassigned dates
     for (const issuedTicket of memberIssues) {
-      let availableUses = issuedTicket.reservableCount;
+      let availableUses = Number(issuedTicket?.reservableCount) || 0;
       if (availableUses <= 0) continue;
 
       const ticketType = issuedTicket.type;
-      const memberTicket = member.tickets.find(t => t.id === issuedTicket.id);
+      const memberTickets = Array.isArray(member?.tickets) ? member.tickets : [];
+      const memberTicket = memberTickets.find(
+        (ticket) => String(ticket?.id ?? "") === String(issuedTicket?.id ?? "")
+      );
       if (!memberTicket) continue;
 
       let assignedInThisRun = 0;
 
       for (const unassigned of unassignedDates) {
         if (availableUses <= 0) break;
-        if (unassigned.dateEntry.ticketUsage) continue; // Already filled by another ticket
+        if (getEntryTicketUsages(unassigned.dateEntry).length > 0) continue; // Already filled by another ticket
 
         const { reservation, dateEntry } = unassigned;
-        let ticketApplied = false;
-
-        // Check if the ticket type matches the reservation type/service
-        if (ticketType === 'hoteling' && reservation.type === 'hoteling') {
-            ticketApplied = true;
-        } else if (reservation.type === 'daycare' && reservation.service === ticketType) {
-            ticketApplied = true;
+        if (!isTicketApplicableToDate(ticketType, reservation)) {
+          continue;
         }
 
-        if (ticketApplied) {
-            // Apply the ticket
-            dateEntry.ticketUsage = {
-                ticketId: issuedTicket.id,
-                sequence: (memberTicket.usedCount || 0) + assignedInThisRun + 1,
-            };
-            
-            assignedInThisRun++;
-            availableUses--;
-        }
+        // Apply the ticket
+        dateEntry.ticketUsages = [{
+          ticketId: issuedTicket.id,
+          sequence: (memberTicket.usedCount || 0) + assignedInThisRun + 1,
+        }];
+
+        assignedInThisRun += 1;
+        availableUses -= 1;
       }
     }
   }
 
   // 7. Write modified reservations back to the single unified storage
   reservationStorage.saveReservations(reservations);
-  
+
   // 8. Recalculate all counts based on the new state
   recalculateTicketCounts();
 }

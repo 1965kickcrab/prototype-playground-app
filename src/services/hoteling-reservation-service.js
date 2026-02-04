@@ -1,3 +1,9 @@
+/**
+ * hoteling-reservation-service.js
+ * - Build and query hoteling reservation date entries
+ * - Provide calendar stats, disabled-date rules, and night calculations
+ * Scope: pure domain logic (no storage, no UI)
+ */
 import { getDateKeyFromParts, getDatePartsFromKey, getZonedParts, sortDateKeys } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { getIssuedTicketOptions } from "./ticket-reservation-service.js";
@@ -68,19 +74,69 @@ export function buildHotelingDateEntries(checkinDate, checkoutDate, checkinTime,
 
     if (dateKeys.length === 1) {
         const key = dateKeys[0];
-        entries.push({ date: key, kind: 'checkin', time: checkinTime, status: STATUS.PLANNED });
-        entries.push({ date: key, kind: 'checkout', time: checkoutTime, status: STATUS.PLANNED });
+        entries.push({
+            date: key,
+            kind: 'checkin',
+            checkinTime: checkinTime || null,
+            checkoutTime: null,
+            time: checkinTime || null,
+            status: STATUS.PLANNED,
+            pickup: false,
+            dropoff: false,
+            ticketUsages: [],
+        });
+        entries.push({
+            date: key,
+            kind: 'checkout',
+            checkinTime: null,
+            checkoutTime: checkoutTime || null,
+            time: checkoutTime || null,
+            status: STATUS.PLANNED,
+            pickup: false,
+            dropoff: false,
+            ticketUsages: [],
+        });
         return entries;
     }
 
     dateKeys.forEach((dateKey, index) => {
         const status = STATUS.PLANNED;
         if (index === 0) {
-            entries.push({ date: dateKey, kind: 'checkin', time: checkinTime, status });
+            entries.push({
+                date: dateKey,
+                kind: 'checkin',
+                checkinTime: checkinTime || null,
+                checkoutTime: null,
+                time: checkinTime || null,
+                status,
+                pickup: false,
+                dropoff: false,
+                ticketUsages: [],
+            });
         } else if (index === dateKeys.length - 1) {
-            entries.push({ date: dateKey, kind: 'checkout', time: checkoutTime, status });
+            entries.push({
+                date: dateKey,
+                kind: 'checkout',
+                checkinTime: null,
+                checkoutTime: checkoutTime || null,
+                time: checkoutTime || null,
+                status,
+                pickup: false,
+                dropoff: false,
+                ticketUsages: [],
+            });
         } else {
-            entries.push({ date: dateKey, kind: 'stay', time: null, status });
+            entries.push({
+                date: dateKey,
+                kind: 'stay',
+                checkinTime: null,
+                checkoutTime: null,
+                time: null,
+                status,
+                pickup: false,
+                dropoff: false,
+                ticketUsages: [],
+            });
         }
     });
 
@@ -160,7 +216,11 @@ function normalizeRoomId(value) {
 
 export function getHotelingTicketOptions(tickets, memberTickets) {
     const options = getIssuedTicketOptions(tickets, memberTickets);
-    return options.filter((option) => option.type === "hoteling");
+    return options.filter(
+        (option) =>
+            option.type === "hoteling"
+            && Number(option?.reservableCount) > 0
+    );
 }
 
 export function getHotelingRoomIdsForTickets(tickets, ticketOptions, selectionOrder) {

@@ -163,7 +163,7 @@
   color: var(--color-secondary);
 }
 
-.ticket-issue__badge[data-type="kindergarten"] {
+.ticket-issue__badge[data-type="school"] {
   color: #1e78f0;
   background: rgba(30, 120, 240, 0.12);
 }
@@ -246,6 +246,10 @@
   align-items: baseline;
   gap: 4px;
   font-weight: 700;
+}
+
+.ticket-issue-table__availability.is-overage {
+  gap: 0;
 }
 
 .ticket-issue-table__availability-label {
@@ -919,6 +923,24 @@
   gap: var(--spacing-5);
 }
 
+.settings-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.class-form__inline-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-4);
+}
+
+.class-form__weekday-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
 .form-field {
   display: flex;
   gap: var(--spacing-3);
@@ -1065,21 +1087,28 @@
   gap: var(--spacing-2);
 }
 
-.class-member-count {
-  font-weight: 700;
-  color: var(--color-secondary);
-}
-
+.settings-selection-count,
+.class-member-count,
 .class-ticket-count {
   font-weight: 700;
   color: var(--color-secondary);
 }
 
+.settings-selection-actions,
 .class-member-actions,
 .class-ticket-actions {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
+}
+
+.settings-selection-stack,
+.class-member-stack,
+.class-ticket-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  width: 100%;
 }
 
 .class-member-label {
@@ -1121,7 +1150,9 @@ textarea.form-field__control {
   gap: var(--spacing-2);
 }
 
-.class-member-list {
+.settings-selection-list,
+.class-member-list,
+.class-ticket-list {
   display: grid;
   gap: var(--spacing-2);
   padding: var(--spacing-2);
@@ -1130,18 +1161,31 @@ textarea.form-field__control {
   background: #fff;
   max-height: 220px;
   overflow-y: auto;
+}
+
+.settings-selection-list--members,
+.class-member-list {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
-.class-member-row {
-  padding: 6px 8px;
+.settings-selection-item {
+  padding: var(--settings-selection-item-padding, 8px 10px);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.settings-selection-item.is-checked {
+  border-color: var(--color-primary);
+  background: #eef5ff;
+}
+
+.class-member-row {
+  --settings-selection-item-padding: 6px 8px;
   display: grid;
   grid-template-columns: 28px 1fr;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
   min-height: 44px;
 }
 
@@ -1188,31 +1232,12 @@ textarea.form-field__control {
   height: 1px;
 }
 
-.class-member-row.is-checked {
-  border-color: var(--color-primary);
-  background: #eef5ff;
-}
-
-.class-ticket-list {
-  display: grid;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #fff;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
 .class-ticket-row {
+  --settings-selection-item-padding: 8px 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-2);
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
 }
 
 .class-ticket-row__name {
@@ -1221,19 +1246,21 @@ textarea.form-field__control {
   color: var(--color-text);
 }
 
+.class-ticket-row.is-checked .class-ticket-row__name {
+  color: var(--color-primary);
+}
+
 .class-ticket-row__meta {
   font-size: 14px;
   color: var(--color-secondary);
   white-space: nowrap;
 }
 
-.class-ticket-row.is-checked {
-  border-color: var(--color-primary);
-  background: #eef5ff;
-}
-
 @media (max-width: 840px) {
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .class-form__inline-fields {
     grid-template-columns: 1fr;
   }
   .reservation-form {
@@ -1423,7 +1450,6 @@ textarea.form-field__control {
 
 .reservation-detail__status-menu {
   position: absolute;
-  right: 0;
   top: calc(100% + 8px);
   min-width: 160px;
   background: #fff;
@@ -1653,7 +1679,7 @@ textarea.form-field__control {
   flex-shrink: 0;
 }
 
-.reservation-ticket-row__badge[data-type="kindergarten"] {
+.reservation-ticket-row__badge[data-type="school"] {
   color: #1e78f0;
   background: rgba(30, 120, 240, 0.12);
 }
@@ -1896,6 +1922,10 @@ textarea.form-field__control {
   align-items: center;
   gap: var(--spacing-3);
   font-weight: 700;
+}
+
+.reservation-counts [data-reservation-count-limit].is-over-limit {
+  color: var(--color-holiday);
 }
 
 .reservation-counts__error {
@@ -2253,6 +2283,7 @@ textarea.form-field__control {
   display: flex;
   align-items: center;
   gap: var(--spacing-4);
+  position: relative;
 }
 
 .hoteling-detail__status {
@@ -2262,6 +2293,8 @@ textarea.form-field__control {
   font-size: 14px;
   color: #fff;
   background: #3b8787;
+  border: none;
+  cursor: pointer;
 }
 
 .hoteling-detail__status--checkin {
@@ -2278,6 +2311,16 @@ textarea.form-field__control {
 
 .hoteling-detail__status--canceled {
   background: var(--color-holiday);
+}
+
+.hoteling-detail__status--noshow {
+  background: var(--color-holiday);
+}
+
+[data-hoteling-detail-status-menu] {
+  left: var(--spacing-4);
+  top: calc(100% - var(--spacing-2));
+  z-index: 30;
 }
 
 .hoteling-detail__member-name {

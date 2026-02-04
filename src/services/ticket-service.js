@@ -14,7 +14,7 @@ export function formatTicketCount(quantity) {
 
 export function formatTicketType(type) {
   const map = {
-    kindergarten: "유치원",
+    school: "유치원",
     daycare: "데이케어",
     hoteling: "호텔링",
     pickdrop: "픽드랍",

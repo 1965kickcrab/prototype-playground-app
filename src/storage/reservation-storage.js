@@ -3,32 +3,41 @@ import { createId } from "../utils/id.js";
 
 const UNIFIED_STORAGE_KEY = "reservations";
 
-// Unified status keys.
+// Unified status keys mapped to Display Labels (Korean).
+// list.js expects STATUS values to be the display labels for tone mapping.
 const STATUS = Object.freeze({
   // Daycare statuses
-  PLANNED: "PLANNED", // '예약' / '입실 예정'
-  CHECKIN: "CHECKIN", // '등원' / '입실'
-  CHECKOUT: "CHECKOUT", // '하원' / '퇴실'
-  ABSENT: "ABSENT", // '결석'
-  CANCELED: "CANCELED", // '예약 취소'
+  PLANNED: "예약",
+  CHECKIN: "등원",
+  CHECKOUT: "하원",
+  ABSENT: "결석",
+  CANCELED: "예약 취소",
   // Hoteling specific
-  NO_SHOW: "NO_SHOW", // '노쇼'
+  NO_SHOW: "노쇼",
 });
 
-const DAYCARE_STATUS_MAP = {
-    "예약": STATUS.PLANNED,
-    "등원": STATUS.CHECKIN,
-    "하원": STATUS.CHECKOUT,
-    "결석": STATUS.ABSENT,
-    "예약 취소": STATUS.CANCELED,
-};
-
-const STATUS_MAP = {
-    "입실 예정": STATUS.PLANNED,
-    "입실": STATUS.CHECKIN,
-    "퇴실": STATUS.CHECKOUT,
-    "예약 취소": STATUS.CANCELED,
-    "노쇼": STATUS.NO_SHOW,
+// Map legacy text/keys/labels to Unified KEYS (e.g. "PLANNED")
+const STATUS_KEY_MAP = {
+    "예약": "PLANNED",
+    "입실 예정": "PLANNED",
+    "PLANNED": "PLANNED",
+    
+    "등원": "CHECKIN",
+    "입실": "CHECKIN",
+    "CHECKIN": "CHECKIN",
+    
+    "하원": "CHECKOUT",
+    "퇴실": "CHECKOUT",
+    "CHECKOUT": "CHECKOUT",
+    
+    "결석": "ABSENT",
+    "ABSENT": "ABSENT",
+    
+    "예약 취소": "CANCELED",
+    "CANCELED": "CANCELED",
+    
+    "노쇼": "NO_SHOW",
+    "NO_SHOW": "NO_SHOW"
 };
 
 
@@ -38,6 +47,43 @@ function normalizeTicketUsage(usage) {
   const sequence = Number(usage.sequence);
   if (!ticketId || !Number.isFinite(sequence) || sequence <= 0) return null;
   return { ticketId, sequence };
+}
+
+function normalizeTicketUsages(value, fallbackSingle = null) {
+  if (Array.isArray(value)) {
+    return value
+      .map((usage) => normalizeTicketUsage(usage))
+      .filter(Boolean);
+  }
+  const single = normalizeTicketUsage(value ?? fallbackSingle);
+  return single ? [single] : [];
+}
+
+function normalizePickdropFlags(entry = {}, fallback = {}) {
+  return {
+    pickup: Boolean(
+      entry.pickup
+      ?? entry?.pickdrop?.pickup
+      ?? fallback.pickup
+      ?? fallback.hasPickup
+      ?? false
+    ),
+    dropoff: Boolean(
+      entry.dropoff
+      ?? entry?.pickdrop?.dropoff
+      ?? fallback.dropoff
+      ?? fallback.hasDropoff
+      ?? false
+    ),
+  };
+}
+
+function normalizeTimeOrNull(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
 }
 
 /**
@@ -56,30 +102,56 @@ function normalizeReservation(item = {}) {
     service = null;
     memo = item.memo || "";
 
-    // Convert top-level status to per-date status
-    const topLevelStatusKey = STATUS_MAP[item.status] || STATUS.PLANNED;
+    // Resolve status to KEY
+    const rawStatus = item.status;
+    const topLevelStatusKey = STATUS_KEY_MAP[rawStatus] || "PLANNED";
 
-    dates = (item.dates || []).map(d => ({
-        date: d.date,
-        kind: d.kind, // 'checkin', 'checkout', 'stay'
-        status: topLevelStatusKey,
-        ticketUsage: normalizeTicketUsage(d.ticketUsage),
-        time: d.kind === 'checkin' ? item.checkinTime : (d.kind === 'checkout' ? item.checkoutTime : null)
-    }));
+    dates = (item.dates || []).map(d => {
+        const entryRawStatus = d.baseStatusKey || d.statusText || d.status || rawStatus;
+        const entryStatusKey = STATUS_KEY_MAP[entryRawStatus] || topLevelStatusKey;
+        return {
+            date: d.date,
+            kind: d.kind, // 'checkin', 'checkout', 'stay'
+            baseStatusKey: entryStatusKey,
+            statusText: STATUS[entryStatusKey], // Ensure statusText is set
+            ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
+            ...normalizePickdropFlags(d, item),
+            checkinTime: normalizeTimeOrNull(
+              d.checkinTime
+                ?? (d.kind === "checkin" ? d.time : null)
+                ?? (d.kind === "checkin" ? item.checkinTime : null)
+            ),
+            checkoutTime: normalizeTimeOrNull(
+              d.checkoutTime
+                ?? (d.kind === "checkout" ? d.time : null)
+                ?? (d.kind === "checkout" ? item.checkoutTime : null)
+            ),
+        };
+    });
     
   } else { // Is Daycare
-    type = 'daycare';
+    type = item.type || 'daycare';
     room = null;
     service = item.service || item.class || "";
     memo = item.memo || "";
 
-    dates = (item.dates || []).map(d => ({
-        date: d.date,
-        service: d.service || service,
-        // Convert old status representation to new unified keys
-        status: d.baseStatusKey || DAYCARE_STATUS_MAP[d.statusText] || STATUS.PLANNED,
-        ticketUsage: normalizeTicketUsage(d.ticketUsage)
-    }));
+    dates = (item.dates || []).map(d => {
+        // Resolve status to KEY
+        // Prioritize baseStatusKey, then statusText, then fallback
+        const rawStatus = d.baseStatusKey || d.statusText;
+        const statusKey = STATUS_KEY_MAP[rawStatus] || "PLANNED";
+        
+        return {
+            date: d.date,
+            service: d.service || service,
+            baseStatusKey: statusKey,
+            statusText: STATUS[statusKey], // Ensure statusText is synced with key
+            ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
+            ...normalizePickdropFlags(d, item),
+            checkinTime: normalizeTimeOrNull(d.checkinTime ?? item.checkinTime),
+            checkoutTime: normalizeTimeOrNull(d.checkoutTime ?? item.checkoutTime),
+        };
+    });
   }
 
   return {
@@ -106,6 +178,9 @@ function writeReservations(reservations) {
 export function initReservationStorage() {
   return {
     STATUS,
+    resolveStatus(status) {
+        return status;
+    },
     loadReservations: readReservations,
     saveReservations(reservations) {
       const normalized = Array.isArray(reservations)
@@ -137,41 +212,4 @@ export function initReservationStorage() {
         return next;
     }
   };
-}
-
-/**
- * One-time migration function to move from old data structure to the new unified one.
- */
-export function migrateToUnifiedReservations() {
-    const MIGRATION_FLAG_KEY = "reservation_migration_complete_v1";
-    const OLD_DAYCARE_KEY = "daycare-reservations:reservations";
-    const OLD_HOTELING_KEY = "hoteling-reservations:reservations";
-
-    if (localStorage.getItem(MIGRATION_FLAG_KEY)) {
-        return; // Migration already done
-    }
-
-    const oldDaycareData = readStorageArray(OLD_DAYCARE_KEY, { fallback: [] });
-    const oldHotelingData = readStorageArray(OLD_HOTELING_KEY, { fallback: [] });
-
-    if (oldDaycareData.length === 0 && oldHotelingData.length === 0) {
-        // No old data to migrate, just set flag and exit
-        localStorage.setItem(MIGRATION_FLAG_KEY, "true");
-        return;
-    }
-
-    const normalizedDaycare = oldDaycareData.map(item => normalizeReservation(item));
-    const normalizedHoteling = oldHotelingData.map(item => normalizeReservation(item));
-
-    const allReservations = [...normalizedDaycare, ...normalizedHoteling];
-
-    writeReservations(allReservations);
-
-    // Clean up old data
-    localStorage.removeItem(OLD_DAYCARE_KEY);
-    localStorage.removeItem(OLD_HOTELING_KEY);
-
-    // Set flag to prevent re-running
-    localStorage.setItem(MIGRATION_FLAG_KEY, "true");
-    console.log("Reservation data migration complete.");
 }

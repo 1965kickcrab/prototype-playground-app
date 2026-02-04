@@ -1,4 +1,13 @@
-﻿import { normalizeNumericInput } from "./number.js";
+﻿/**
+ * reservation-fee-total.js
+ * Responsibility:
+ * - Calculate and render the total of reservation fee items within a given scope
+ * - Read fee amounts from `.reservation-fee-card__amount` (data-fee-amount) and format as price
+ * Notes:
+ * - Returns null when no valid fee amounts exist, and renders "-" in that case
+ * - Uses number normalization to handle user-entered formatting safely
+ */
+import { normalizeNumericInput } from "./number.js";
 import { formatTicketPrice } from "../services/ticket-service.js";
 
 function parseNumericValue(value) {

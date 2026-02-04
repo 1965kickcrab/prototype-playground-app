@@ -1,9 +1,19 @@
-﻿import { writeStorageValue } from "./storage-utils.js";
+﻿/**
+ * ticket-issue-members.js
+ * - Update `memberList` in localStorage when tickets are issued or reservation status changes
+ * - Maintain remaining / total counts per service type
+ * - Trigger ticket auto-assign and count recalculation
+ *
+ * Scope:
+ * - Data only (no UI)
+ * - Normalizes legacy member/ticket schemas
+ */
+import { writeStorageValue } from "./storage-utils.js";
 import { autoApplyIssuedTicketsToReservations } from "../services/ticket-auto-assign.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 
 const STORAGE_KEY = "memberList";
-const SERVICE_TYPES = ["kindergarten", "daycare", "hoteling", "pickdrop"];
+const SERVICE_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
 
 const DEFAULT_MEMBERS = [
   {
@@ -12,16 +22,18 @@ const DEFAULT_MEMBERS = [
     breed: "비숑 프리제",
     guardianName: "김이나",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -31,16 +43,18 @@ const DEFAULT_MEMBERS = [
     breed: "푸들",
     guardianName: "이서현",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -50,16 +64,18 @@ const DEFAULT_MEMBERS = [
     breed: "코카 스패니얼",
     guardianName: "박지수",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -69,16 +85,18 @@ const DEFAULT_MEMBERS = [
     breed: "말티즈",
     guardianName: "최수연",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -88,16 +106,18 @@ const DEFAULT_MEMBERS = [
     breed: "세퍼드",
     guardianName: "정이라",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -107,16 +127,18 @@ const DEFAULT_MEMBERS = [
     breed: "닥스훈트",
     guardianName: "조홍준",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -126,16 +148,18 @@ const DEFAULT_MEMBERS = [
     breed: "비글",
     guardianName: "윤서진",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -145,16 +169,18 @@ const DEFAULT_MEMBERS = [
     breed: "위너",
     guardianName: "김미려",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -164,16 +190,18 @@ const DEFAULT_MEMBERS = [
     breed: "리트리버",
     guardianName: "이정훈",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
@@ -183,23 +211,22 @@ const DEFAULT_MEMBERS = [
     breed: "스피츠",
     guardianName: "박서준",
     remainingCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     totalReservableCountByType: {
-      kindergarten: 0,
+      school: 0,
       daycare: 0,
       hoteling: 0,
-      pickdrop: 0,
+      oneway: 0,
+      roundtrip: 0,
     },
     tickets: [],
   },
 ];
-
-const TOTAL_STATUS_KEYS = new Set(["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT"]);
-const COMPLETED_STATUS_KEYS = new Set(["CHECKIN", "CHECKOUT", "ABSENT"]);
 
 function cloneMember(member) {
   return JSON.parse(JSON.stringify(member));
@@ -223,19 +250,6 @@ function normalizeCountMap(source) {
     }
   });
   return map;
-}
-
-function getCountByType(map, type) {
-  if (!map || !type) {
-    return null;
-  }
-  const value = Number(map[type]);
-  return Number.isFinite(value) ? value : null;
-}
-
-function setCountByType(item, key, type, value) {
-  const current = item && typeof item[key] === "object" ? item[key] : {};
-  item[key] = { ...current, [type]: value };
 }
 
 function normalizeMember(item) {
@@ -319,56 +333,6 @@ function readStorage() {
 
 function getBaseMembers() {
   return DEFAULT_MEMBERS.map((member) => normalizeMember(member));
-}
-
-function applyIssueCounts(member, type, totalAdd) {
-  const baseRemaining = getMemberRemainingCountByType(member, type, 0);
-  const remaining = baseRemaining + totalAdd;
-  return { remaining };
-}
-
-function isStatusIncluded(statusKey, set) {
-  return Boolean(statusKey) && set.has(String(statusKey));
-}
-
-function getMemberTotalCountByType(member, type, fallback = null) {
-  const totalByType = getCountByType(member?.totalReservableCountByType, type);
-  if (Number.isFinite(totalByType)) {
-    return totalByType;
-  }
-  return fallback;
-}
-
-function getMemberRemainingCountByType(member, type, fallback = null) {
-  const remainingByType = getCountByType(member?.remainingCountByType, type);
-  if (Number.isFinite(remainingByType)) {
-    return remainingByType;
-  }
-  return fallback;
-}
-
-function applyReservationStatusDelta(member, beforeStatusKey, afterStatusKey, count, type) {
-  if (!Number.isFinite(count) || count <= 0) {
-    return {
-      total: getMemberTotalCountByType(member, type),
-      remaining: getMemberRemainingCountByType(member, type),
-      changed: false,
-    };
-  }
-
-  const totalBefore = isStatusIncluded(beforeStatusKey, TOTAL_STATUS_KEYS);
-  const totalAfter = isStatusIncluded(afterStatusKey, TOTAL_STATUS_KEYS);
-  const completedBefore = isStatusIncluded(beforeStatusKey, COMPLETED_STATUS_KEYS);
-  const completedAfter = isStatusIncluded(afterStatusKey, COMPLETED_STATUS_KEYS);
-
-  let total = getMemberTotalCountByType(member, type, 0);
-  let remaining = getMemberRemainingCountByType(member, type, total);
-  const totalDelta = (totalBefore ? count : 0) - (totalAfter ? count : 0);
-  const remainingDelta = (completedBefore ? count : 0) - (completedAfter ? count : 0);
-  total += totalDelta;
-  remaining += remainingDelta;
-
-  return { total, remaining, changed: totalDelta !== 0 || remainingDelta !== 0 };
 }
 
 function normalizeTicketEntry(ticket) {
@@ -484,21 +448,11 @@ export function applyIssueToMembers(issues, ticketQuantity) {
         usedCount: Number(issue.usedCount) || 0,
       };
     });
-    const issueType = normalizedIssues[0]?.type || "kindergarten";
-    const totalAdd = normalizedIssues.reduce(
-      (sum, issue) => sum + (Number(issue.reservableCount) || 0),
-      0
-    );
-    const updated = applyIssueCounts(member, issueType, totalAdd);
-    setCountByType(item, "remainingCountByType", issueType, updated.remaining);
-    const nextTotal = getMemberTotalCountByType(member, issueType, 0) + totalAdd;
-    if (Number.isFinite(nextTotal)) {
-      setCountByType(item, "totalReservableCountByType", issueType, nextTotal);
-    }
     appendIssuedTickets(item, normalizedIssues);
     return item;
   });
 
+  // Commit normalized member list back to storage (single write)
   writeStorageValue(STORAGE_KEY, next);
   autoApplyIssuedTicketsToReservations(
     issues,
@@ -510,43 +464,17 @@ export function applyReservationStatusChange(
   beforeStatusKey,
   afterStatusKey,
   count = 1,
-  type = "kindergarten"
+  type = "school"
 ) {
-  if (!memberId || !Number.isFinite(count) || count <= 0) {
-    return;
-  }
-  const list = readStorage();
-  if (!Array.isArray(list) || list.length === 0) {
-    return;
-  }
-
-  const next = list.map((item) => {
-    const member = normalizeMember(item);
-    if (String(member.id) !== String(memberId)) {
-      return item;
-    }
-    const updated = applyReservationStatusDelta(
-      member,
-      beforeStatusKey,
-      afterStatusKey,
-      count,
-      type
-    );
-    if (!updated.changed) {
-      return item;
-    }
-    setCountByType(item, "remainingCountByType", type, updated.remaining);
-    if (Number.isFinite(updated.total)) {
-      setCountByType(item, "totalReservableCountByType", type, updated.total);
-    }
-    return item;
-  });
-
-  writeStorageValue(STORAGE_KEY, next);
+  void memberId;
+  void beforeStatusKey;
+  void afterStatusKey;
+  void count;
+  void type;
   recalculateTicketCounts();
 }
 
-export function applyReservationToMember(memberId, useCount, type = "kindergarten") {
+export function applyReservationToMember(memberId, useCount, type = "school") {
   applyReservationStatusChange(memberId, null, "PLANNED", useCount, type);
 }
 
@@ -559,5 +487,9 @@ export function rollbackReservationMemberTickets(memberId, usageMap) {
 }
 
 export function ensureMemberDefaults() {
+  const members = readStorage();
+  recalculateTicketCounts();
   return readStorage();
 }
+
+

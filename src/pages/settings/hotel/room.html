@@ -89,7 +89,7 @@
         </button>
       </div>
       <div class="modal__body">
-          <div class="form-grid">
+          <div class="settings-modal-form">
             <label class="form-field">
               <span class="form-field__label">호실 이름</span>
               <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
@@ -120,14 +120,16 @@
                 </div>
               </label>
               <label class="form-field form-field--full" data-class-tickets-section>
-                <span class="form-field__label form-field__label--row">
-                  <span>예약 가능한 이용권</span>
-                <span class="class-ticket-actions">
-                  <span class="class-ticket-count" data-class-ticket-count>0개</span>
-                  <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
-                </span>
-              </span>
-              <div class="class-ticket-list" data-class-tickets></div>
+                <div class="class-ticket-stack settings-selection-stack">
+                  <div class="form-field__label form-field__label--row">
+                    <span>예약 가능한 이용권</span>
+                    <span class="class-ticket-actions settings-selection-actions">
+                      <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                    </span>
+                  </div>
+                  <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+                </div>
             </label>
           <label class="form-field form-field--full">
             <span class="form-field__label">호실 설명</span>
@@ -145,13 +147,13 @@
     <div class="modal__overlay" data-class-detail-overlay></div>
     <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="class-detail-title">
       <div class="modal__header">
-        <h2 id="class-detail-title">호실 정보</h2>
+        <h2 id="class-detail-title">호실 상세</h2>
         <button class="icon-button modal__close" type="button" data-class-detail-close aria-label="닫기">
           <img src="../../../../assets/iconClose.svg" alt="" aria-hidden="true">
         </button>
       </div>
       <div class="modal__body">
-        <div class="form-grid">
+        <div class="settings-modal-form">
           <label class="form-field">
             <span class="form-field__label">호실 이름</span>
             <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
@@ -182,14 +184,16 @@
               </div>
             </label>
             <label class="form-field form-field--full" data-class-tickets-section>
-              <span class="form-field__label form-field__label--row">
-                <span>예약 가능한 이용권</span>
-              <span class="class-ticket-actions">
-                <span class="class-ticket-count" data-class-ticket-count>0개</span>
-                <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
-              </span>
-            </span>
-            <div class="class-ticket-list" data-class-tickets></div>
+              <div class="class-ticket-stack settings-selection-stack">
+                <div class="form-field__label form-field__label--row">
+                  <span>예약 가능한 이용권</span>
+                  <span class="class-ticket-actions settings-selection-actions">
+                    <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                  </span>
+                </div>
+                <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+              </div>
           </label>
           <label class="form-field form-field--full">
             <span class="form-field__label">호실 설명</span>

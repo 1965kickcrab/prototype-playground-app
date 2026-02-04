@@ -1,4 +1,4 @@
-﻿import {
+import {
   formatTicketDisplayName,
   formatTicketPrice,
   normalizePickdropType,
@@ -355,9 +355,9 @@ export function renderHotelingFeeBreakdown({
 }
 
 export function renderPricingBreakdown({
-  kindergartenFeeContainer,
+  schoolFeeContainer,
   pickdropFeeContainer,
-  kindergartenTotalEl,
+  schoolTotalEl,
   pickdropTotalEl,
   totalEl,
   pricingItems,
@@ -383,15 +383,15 @@ export function renderPricingBreakdown({
     (!Number.isFinite(serviceCount) || serviceCount <= 0)
     && (!Number.isFinite(pickdropCount) || pickdropCount <= 0)
   ) {
-    if (kindergartenFeeContainer) {
-      kindergartenFeeContainer.textContent = "";
+    if (schoolFeeContainer) {
+      schoolFeeContainer.textContent = "";
     }
     if (pickdropFeeContainer) {
       pickdropFeeContainer.textContent = "";
     }
-    if (kindergartenTotalEl) {
-      setFeeAmountValue(kindergartenTotalEl, "-");
-      delete kindergartenTotalEl.dataset.feeAmount;
+    if (schoolTotalEl) {
+      setFeeAmountValue(schoolTotalEl, "-");
+      delete schoolTotalEl.dataset.feeAmount;
     }
     if (pickdropTotalEl) {
       setFeeAmountValue(pickdropTotalEl, "-");
@@ -424,7 +424,7 @@ export function renderPricingBreakdown({
     if (!classInfo?.id) {
       return;
     }
-    const classType = classInfo.type || "kindergarten";
+    const classType = classInfo.type || "school";
     const candidates = (pricingByType.get(classType) || []).filter((item) => {
       const classIds = Array.isArray(item.classIds) ? item.classIds : [];
       if (classIds.length > 0 && !classIds.includes(classInfo.id)) {
@@ -487,8 +487,8 @@ export function renderPricingBreakdown({
     });
   }
 
-  if (kindergartenFeeContainer) {
-    kindergartenFeeContainer.innerHTML = "";
+  if (schoolFeeContainer) {
+    schoolFeeContainer.innerHTML = "";
   }
   if (pickdropFeeContainer) {
     pickdropFeeContainer.innerHTML = "";
@@ -500,8 +500,8 @@ export function renderPricingBreakdown({
     const shouldApplyPrice = line.matchedWeekdays !== false;
     const lineTotal = shouldApplyPrice ? line.priceValue * line.count : 0;
     serviceTotal += lineTotal;
-    if (kindergartenFeeContainer) {
-      kindergartenFeeContainer.appendChild(
+    if (schoolFeeContainer) {
+      schoolFeeContainer.appendChild(
         createFeeLine(
           line.label,
           line.matchedWeekdays === false
@@ -527,13 +527,13 @@ export function renderPricingBreakdown({
   const hasAnyLines = serviceLines.length + pickdropLines.length > 0;
   const total = serviceTotal + pickdropTotal;
   setFeeAmountValue(totalEl, hasAnyLines ? formatTicketPrice(total) : "-");
-  if (kindergartenTotalEl) {
+  if (schoolTotalEl) {
     if (serviceLines.length > 0) {
-      setFeeAmountValue(kindergartenTotalEl, formatTicketPrice(serviceTotal));
-      kindergartenTotalEl.dataset.feeAmount = String(serviceTotal);
+      setFeeAmountValue(schoolTotalEl, formatTicketPrice(serviceTotal));
+      schoolTotalEl.dataset.feeAmount = String(serviceTotal);
     } else {
-      setFeeAmountValue(kindergartenTotalEl, "-");
-      delete kindergartenTotalEl.dataset.feeAmount;
+      setFeeAmountValue(schoolTotalEl, "-");
+      delete schoolTotalEl.dataset.feeAmount;
     }
   }
   if (pickdropTotalEl) {
@@ -545,8 +545,8 @@ export function renderPricingBreakdown({
       delete pickdropTotalEl.dataset.feeAmount;
     }
   }
-  if (kindergartenFeeContainer && serviceLines.length === 0) {
-    kindergartenFeeContainer.textContent = "-";
+  if (schoolFeeContainer && serviceLines.length === 0) {
+    schoolFeeContainer.textContent = "-";
   }
   if (pickdropFeeContainer && pickdropLines.length === 0) {
     pickdropFeeContainer.textContent = "-";

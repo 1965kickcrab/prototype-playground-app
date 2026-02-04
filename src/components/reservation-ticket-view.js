@@ -8,7 +8,6 @@ export function renderTicketOptions(
   allocations,
   hasMember,
   selectedCount,
-  usedAllocations,
   disabledIds = new Set()
 ) {
   if (!container || !placeholder) {
@@ -65,25 +64,35 @@ export function renderTicketOptions(
     name.appendChild(badge);
     name.appendChild(nameText);
 
-    const remainingBeforeRaw = Number(ticket.remainingCount);
-    const remainingBefore = Number.isFinite(remainingBeforeRaw) ? remainingBeforeRaw : 0;
+    const reservableRaw = Number(ticket?.reservableCount);
+    const remainingRaw = Number(ticket?.remainingCount);
+    const remainingBefore = Number.isFinite(reservableRaw)
+      ? reservableRaw
+      : (Number.isFinite(remainingRaw) ? remainingRaw : 0);
+
     const unitLabel = ticket.type === "hoteling" ? "박" : "회";
     const meta = document.createElement("span");
     meta.className = "reservation-ticket-row__meta";
     if (selectedSet.has(ticket.id)) {
-      const remainingAfter = Math.max(remainingBefore - (Number(selectedCount) || 0), 0);
+      const allocation = allocations?.get?.(ticket.id);
+      const appliedBefore = allocation
+        ? Number(allocation.remainingBefore) || 0
+        : remainingBefore;
+      const appliedAfter = allocation
+        ? Number(allocation.remainingAfter) || 0
+        : remainingBefore;
       const beforeValue = document.createElement("span");
       beforeValue.className = "reservation-ticket-row__meta-value";
-      if (remainingBefore <= 2) {
+      if (appliedBefore <= 2) {
         beforeValue.classList.add("is-low");
       }
-      beforeValue.textContent = `${remainingBefore}${unitLabel}`;
+      beforeValue.textContent = `${appliedBefore}${unitLabel}`;
       const afterValue = document.createElement("span");
       afterValue.className = "reservation-ticket-row__meta-value";
-      if (remainingAfter <= 2) {
+      if (appliedAfter <= 2) {
         afterValue.classList.add("is-low");
       }
-      afterValue.textContent = `${remainingAfter}${unitLabel}`;
+      afterValue.textContent = `${appliedAfter}${unitLabel}`;
       meta.dataset.unitLabel = unitLabel;
       meta.append(beforeValue, " → ", afterValue);
       info.appendChild(name);

@@ -6,6 +6,19 @@
   rows.forEach((row) => row.remove());
 }
 
+function getEntryTimeText(entry) {
+  if (!entry || typeof entry !== "object") {
+    return "-";
+  }
+  if (entry.kind === "checkin") {
+    return entry.checkinTime || entry.time || "-";
+  }
+  if (entry.kind === "checkout") {
+    return entry.checkoutTime || entry.time || "-";
+  }
+  return "-";
+}
+
 function buildRow({ reservation, entry }) {
   const row = document.createElement("div");
   row.className = "hoteling-table__row hoteling-table__row--data";
@@ -40,7 +53,7 @@ function buildRow({ reservation, entry }) {
   const timeCell = document.createElement("span");
   timeCell.className = "hoteling-table__time";
   timeCell.setAttribute("role", "cell");
-  timeCell.textContent = entry.time || "-";
+  timeCell.textContent = getEntryTimeText(entry);
 
   const moreCell = document.createElement("span");
   moreCell.className = "hoteling-table__more";
@@ -137,4 +150,3 @@ export function renderHotelingList(elements, groups) {
     elements.stayEmptyRow
   );
 }
-

@@ -1,4 +1,12 @@
-const DEFAULT_SERVICE = "kindergarten";
+/**
+ * service-selection.js
+ * Responsibility:
+ * - Normalize service selection based on state and fallback rules
+ * - Provide helpers to resolve default service and currently active services
+ * Notes:
+ * - Falls back to `state.defaultService` → first key in `state.selectedServices` → DEFAULT_SERVICE
+ */
+const DEFAULT_SERVICE = "school";
 
 export function getDefaultService(state) {
   return (

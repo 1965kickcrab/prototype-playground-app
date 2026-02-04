@@ -4,7 +4,7 @@ export function initState(initialReservations = [], options = {}) {
     selectedDate: new Date(),
     reservations: Array.isArray(initialReservations) ? [...initialReservations] : [],
     selectedServices: options.selectedServices || {
-      kindergarten: true,
+      school: true,
       daycare: true,
     },
     defaultService: options.defaultService || "",

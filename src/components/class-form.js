@@ -8,13 +8,13 @@
 
   members.forEach((member) => {
     const label = document.createElement("label");
-    label.className = "class-member-row";
+    label.className = "class-member-row settings-selection-item settings-selection-item--member";
     label.dataset.classMember = "";
     label.dataset.memberId = member.id;
 
     const profile = document.createElement("img");
     profile.className = "class-member-row__profile";
-    profile.src = "../../../assets/defaultProfile.svg";
+    profile.src = "/assets/defaultProfile.svg";
     profile.alt = "";
     profile.setAttribute("aria-hidden", "true");
 
@@ -41,7 +41,14 @@
   updateMemberCount(root);
 }
 
-export function renderTicketOptions(root, tickets, formatTicketDisplayName, formatTicketCount, formatTicketValidity) {
+export function renderTicketOptions(
+  root,
+  tickets,
+  formatTicketDisplayName,
+  formatTicketCount,
+  formatTicketValidity,
+  classType
+) {
   const container = root.querySelector("[data-class-tickets]");
   if (!container) {
     return;
@@ -49,13 +56,22 @@ export function renderTicketOptions(root, tickets, formatTicketDisplayName, form
 
   container.innerHTML = "";
 
+  const activeType = typeof classType === "string" && classType
+    ? classType
+    : root.dataset.classType || "school";
+
   const validTickets = Array.isArray(tickets)
-    ? tickets.filter((ticket) => ticket && typeof ticket === "object")
+    ? tickets.filter((ticket) => {
+      if (!ticket || typeof ticket !== "object") {
+        return false;
+      }
+      return ticket.type === activeType;
+    })
     : [];
 
   validTickets.forEach((ticket) => {
     const row = document.createElement("label");
-    row.className = "class-ticket-row";
+    row.className = "class-ticket-row settings-selection-item settings-selection-item--ticket";
     row.dataset.classTicket = "";
     row.dataset.ticketId = String(ticket.id ?? "");
 

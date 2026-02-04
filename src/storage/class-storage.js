@@ -1,6 +1,6 @@
 import { readStorageArray, writeStorageValue } from "./storage-utils.js";
 
-const STORAGE_KEY = "daycareClassList";
+const STORAGE_KEY = "schoolClassList";
 
 const DEFAULT_CLASSES = [
   {
@@ -14,7 +14,7 @@ const DEFAULT_CLASSES = [
     description: null,
     memberIds: null,
     ticketIds: null,
-    type: null,
+    type: "school",
     publicHolidayOff: null,
   },
 ];

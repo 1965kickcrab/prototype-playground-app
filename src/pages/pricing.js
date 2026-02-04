@@ -1,4 +1,4 @@
-﻿import { initClassStorage } from "../storage/class-storage.js";
+import { initClassStorage } from "../storage/class-storage.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
 import { syncClassesFromPricing } from "../services/class-pricing-sync.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
@@ -11,8 +11,8 @@ import { renderPricingDetail } from "../components/pricing-view.js";
 import { formatNumericInputWithCommas } from "../utils/number.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
 
-const SERVICE_TYPES = ["kindergarten", "daycare", "hoteling", "pickdrop"];
-const DEFAULT_SERVICE_TYPE = "kindergarten";
+const SERVICE_TYPES = ["school", "daycare", "hoteling", "pickdrop"];
+const DEFAULT_SERVICE_TYPE = "school";
 const SERVICE_DEDUCTIONS = {
   daycare: { value: "1", unit: "시간" },
   hoteling: { value: "24", unit: "시간" },
@@ -86,7 +86,7 @@ function formatDurationHours(minutes) {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
 }
 
-function getKindergartenDeduction(row, classes) {
+function getSchoolDeduction(row, classes) {
   const classIds = Array.from(
     row.querySelectorAll("[data-pricing-class].is-checked")
   )
@@ -135,8 +135,8 @@ function applyServiceDefaultsToRow(row, serviceType, classes) {
     return;
   }
 
-  if (serviceType === "kindergarten") {
-    const deduction = getKindergartenDeduction(row, classes);
+  if (serviceType === "school") {
+    const deduction = getSchoolDeduction(row, classes);
     deductionValue.value = deduction.value;
     deductionUnit.value = deduction.unit;
     return;
@@ -687,8 +687,8 @@ const setupPricingClassSelection = (classes, rooms, getServiceType) => {
         classRow.classList.toggle("is-checked", shouldSelect);
       });
       syncPricingClassSelectionState(row);
-      if (getServiceType() === "kindergarten") {
-        applyServiceDefaultsToRow(row, "kindergarten", classes);
+      if (getServiceType() === "school") {
+        applyServiceDefaultsToRow(row, "school", classes);
       }
       return;
     }
@@ -701,8 +701,8 @@ const setupPricingClassSelection = (classes, rooms, getServiceType) => {
     const row = classRow.closest(".list-table__row");
     if (row) {
       syncPricingClassSelectionState(row);
-      if (getServiceType() === "kindergarten") {
-        applyServiceDefaultsToRow(row, "kindergarten", classes);
+      if (getServiceType() === "school") {
+        applyServiceDefaultsToRow(row, "school", classes);
       }
     }
   });
@@ -801,6 +801,3 @@ document.addEventListener("DOMContentLoaded", () => {
   }, { getServiceType, classes });
   setupPricingDetailModal(classes, rooms);
 });
-
-
-

@@ -1,3 +1,12 @@
+/**
+ * date.js
+ * Responsibility:
+ * - Date utilities for calendar rendering and date-key operations
+ * - Support timezone-aware "today" and weekday calculations
+ * Notes:
+ * - Date keys are `YYYY-MM-DD` (zero-padded)
+ * - `buildMonthCells` returns leading/trailing month cells for a full grid
+ */
 const WEEKDAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function getFormatter(timeZone, options) {

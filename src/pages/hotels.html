@@ -404,7 +404,19 @@
         </div>
       </div>
       <div class="hoteling-detail__member-card">
-        <span class="hoteling-detail__status" data-hoteling-detail-status>입실 예정</span>
+        <button
+          class="hoteling-detail__status"
+          type="button"
+          data-hoteling-detail-status-trigger
+          aria-expanded="false"
+        >
+          <span data-hoteling-detail-status-value>입실 예정</span>
+        </button>
+        <div
+          class="reservation-detail__status-menu"
+          data-hoteling-detail-status-menu
+          hidden
+        ></div>
         <div class="hoteling-detail__member-name">
           <span data-hoteling-detail-dog-name>-</span>
           <span class="hoteling-detail__member-meta">
@@ -460,6 +472,13 @@
               <div class="form-field__label">퇴실 일자</div>
               <input class="hoteling-detail__time-input" type="date" data-hoteling-detail-checkout-date>
               <input class="hoteling-detail__time-input" type="time" data-hoteling-detail-checkout-time>
+            </div>
+          </div>
+          <div class="form-field form-field--inline form-field--full">
+            <span class="form-field__label">픽드랍 여부</span>
+            <div class="form-field__chips" data-hoteling-detail-pickdrop-options>
+              <button class="filter-chip" type="button" data-hoteling-detail-pickdrop="pickup">픽업</button>
+              <button class="filter-chip" type="button" data-hoteling-detail-pickdrop="dropoff">드랍</button>
             </div>
           </div>
         </div>
@@ -626,10 +645,10 @@
                 <span class="reservation-fee-total__value" data-reservation-total>-</span>
               </div>
               <div class="reservation-fee-panel">
-                <details class="reservation-fee-card" data-reservation-fee-kindergarten open>
+                <details class="reservation-fee-card" data-reservation-fee-school open>
                   <summary class="reservation-fee-card__summary">
                     <span class="reservation-fee-card__title">유치원</span>
-                    <span class="reservation-fee-card__amount is-empty" data-reservation-kindergarten-total>
+                    <span class="reservation-fee-card__amount is-empty" data-reservation-school-total>
                       <span class="reservation-ticket-row__meta-value">-</span>
                       <span class="reservation-fee-card__amount-arrow" aria-hidden="true">→</span>
                       <span class="reservation-ticket-row__meta-value">-</span>
@@ -647,7 +666,7 @@
                     <div class="reservation-fee-section">
                       <div class="reservation-fee-section__label">요금</div>
                       <div class="reservation-fee-section__body">
-                        <div class="reservation-fee-list" data-reservation-fee-kindergarten-list>-</div>
+                        <div class="reservation-fee-list" data-reservation-fee-school-list>-</div>
                       </div>
                     </div>
                   </div>

@@ -1,13 +1,51 @@
+function normalizeUsage(usage) {
+  const ticketId = String(usage?.ticketId ?? "");
+  const sequence = Number(usage?.sequence);
+  if (!ticketId || !Number.isFinite(sequence) || sequence <= 0) {
+    return null;
+  }
+  return {
+    ticketId,
+    sequence,
+  };
+}
+
+export function getEntryTicketUsages(entry = {}) {
+  if (Array.isArray(entry?.ticketUsages) && entry.ticketUsages.length > 0) {
+    return entry.ticketUsages
+      .map((usage) => normalizeUsage(usage))
+      .filter(Boolean);
+  }
+  const single = normalizeUsage(entry?.ticketUsage);
+  return single ? [single] : [];
+}
+
+export function getPrimaryTicketUsage(entry = {}) {
+  const usages = getEntryTicketUsages(entry);
+  return usages[0] || null;
+}
+
 export function addTicketUsageCount(map, usage, count = 1) {
   if (!(map instanceof Map)) {
     return map;
   }
-  const ticketId = String(usage?.ticketId ?? "");
+  const normalized = normalizeUsage(usage);
   const delta = Number(count) || 0;
-  if (!ticketId || delta <= 0) {
+  if (!normalized || delta <= 0) {
     return map;
   }
+  const ticketId = normalized.ticketId;
   map.set(ticketId, (map.get(ticketId) || 0) + delta);
+  return map;
+}
+
+export function addTicketUsagesCount(map, usages, count = 1) {
+  if (!(map instanceof Map) || !Array.isArray(usages)) {
+    return map;
+  }
+  usages.forEach((usage) => {
+    addTicketUsageCount(map, usage, count);
+  });
   return map;
 }
 
@@ -17,7 +55,7 @@ export function buildTicketUsageCountMap(items = []) {
     return map;
   }
   items.forEach((item) => {
-    addTicketUsageCount(map, item?.ticketUsage, 1);
+    addTicketUsagesCount(map, getEntryTicketUsages(item), 1);
   });
   return map;
 }
@@ -101,5 +139,37 @@ export function buildDateTicketUsageMap(dateKeys, selectionOrder, allocations, o
       sequence: usedBefore + nextIndex,
     });
   });
+  return usageMap;
+}
+
+export function buildDateTicketUsagesMap(dateKeys, usagePlan = [], optionMap = new Map()) {
+  const usageMap = new Map();
+  const perTicketIndex = new Map();
+  const orderedDates = Array.isArray(dateKeys) ? dateKeys.filter(Boolean) : [];
+
+  orderedDates.forEach((dateKey, index) => {
+    const plannedIds = Array.isArray(usagePlan[index]) ? usagePlan[index] : [];
+    if (plannedIds.length === 0) {
+      return;
+    }
+    const usages = [];
+    plannedIds.forEach((ticketId) => {
+      if (!ticketId) {
+        return;
+      }
+      const option = optionMap.get(ticketId);
+      const usedBefore = Number(option?.usedCount) || 0;
+      const nextIndex = (perTicketIndex.get(ticketId) || 0) + 1;
+      perTicketIndex.set(ticketId, nextIndex);
+      usages.push({
+        ticketId,
+        sequence: usedBefore + nextIndex,
+      });
+    });
+    if (usages.length > 0) {
+      usageMap.set(dateKey, usages);
+    }
+  });
+
   return usageMap;
 }

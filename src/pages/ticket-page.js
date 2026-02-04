@@ -100,7 +100,7 @@ export function initTicketPage(options = {}) {
   const createModal = document.querySelector("[data-ticket-create-modal]");
   const editModal = document.querySelector("[data-ticket-edit-modal]");
   const issueModal = document.querySelector("[data-ticket-issue-modal]");
-  const rooms = roomStorage.ensureDefaults();
+  roomStorage.ensureDefaults();
 
   if (!listContainer || !countTarget || !pagination) {
     return;
@@ -109,6 +109,19 @@ export function initTicketPage(options = {}) {
   let currentPage = 1;
   let activeTicketId = "";
   let editSnapshot = "";
+
+  const syncLinkedClassRoomSelections = () => {
+    const syncedClasses = syncClassesFromTickets(
+      tickets,
+      classStorage.loadClasses()
+    );
+    classStorage.saveClasses(syncedClasses);
+    const syncedRooms = syncClassesFromTickets(
+      tickets,
+      roomStorage.loadClasses()
+    );
+    roomStorage.saveClasses(syncedRooms);
+  };
 
   const updateView = () => {
     const totalPages = getPageCount(tickets.length);
@@ -155,7 +168,7 @@ export function initTicketPage(options = {}) {
       renderTicketServiceOptions(createForm, {
         type: input.value,
         classes: classStorage.loadClasses(),
-        rooms,
+        rooms: roomStorage.loadClasses(),
       });
     });
   }
@@ -173,7 +186,7 @@ export function initTicketPage(options = {}) {
       renderTicketServiceOptions(editForm, {
         type: input.value,
         classes: classStorage.loadClasses(),
-        rooms,
+        rooms: roomStorage.loadClasses(),
       });
     });
   }
@@ -222,9 +235,9 @@ export function initTicketPage(options = {}) {
     }
     resetTicketForm(createForm);
     renderTicketServiceOptions(createForm, {
-      type: "kindergarten",
+      type: "school",
       classes: classStorage.loadClasses(),
-      rooms,
+      rooms: roomStorage.loadClasses(),
     });
     updateCreateButtonState();
     createModalControls.openModal();
@@ -241,11 +254,7 @@ export function initTicketPage(options = {}) {
     const nextId = String(Date.now());
     tickets.push({ id: nextId, ...data });
     storage.saveTickets(tickets);
-    const syncedClasses = syncClassesFromTickets(
-      tickets,
-      classStorage.loadClasses()
-    );
-    classStorage.saveClasses(syncedClasses);
+    syncLinkedClassRoomSelections();
     updateView();
     createModalControls?.closeModal();
   });
@@ -278,7 +287,7 @@ export function initTicketPage(options = {}) {
     renderTicketServiceOptions(editForm, {
       type: ticket.type,
       classes: classStorage.loadClasses(),
-      rooms,
+      rooms: roomStorage.loadClasses(),
     });
     fillTicketForm(editForm, ticket);
     editSnapshot = JSON.stringify(readTicketForm(editForm));
@@ -302,11 +311,7 @@ export function initTicketPage(options = {}) {
     }
     tickets[targetIndex] = { ...tickets[targetIndex], ...updated };
     storage.saveTickets(tickets);
-    const syncedClasses = syncClassesFromTickets(
-      tickets,
-      classStorage.loadClasses()
-    );
-    classStorage.saveClasses(syncedClasses);
+    syncLinkedClassRoomSelections();
     updateView();
     editSnapshot = JSON.stringify(readTicketForm(editForm));
     editModalControls?.closeModal();
@@ -325,17 +330,28 @@ export function initTicketPage(options = {}) {
     tickets.length = 0;
     tickets.push(...nextTickets);
     storage.saveTickets(tickets);
-    const syncedClasses = syncClassesFromTickets(
-      tickets,
-      classStorage.loadClasses()
-    );
-    classStorage.saveClasses(syncedClasses);
+    syncLinkedClassRoomSelections();
     updateView();
     editModalControls?.closeModal();
   });
 
   setupSidebarToggle(options);
   updateView();
+}
+
+const TICKET_PAGE_DEFAULT_OPTIONS = {
+  iconOpen: "../../assets/menuIcon_sidebar_open.svg",
+  iconClose: "../../assets/menuIcon_sidebar_close.svg",
+};
+
+function bootstrapTicketPage() {
+  initTicketPage(TICKET_PAGE_DEFAULT_OPTIONS);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", bootstrapTicketPage);
+} else {
+  bootstrapTicketPage();
 }
 
 

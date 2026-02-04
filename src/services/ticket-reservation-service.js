@@ -1,4 +1,10 @@
-﻿import { getDateKeyFromParts, getDatePartsFromKey, getZonedTodayParts, getWeekdayIndex } from "../utils/date.js";
+﻿/**
+ * ticket-reservation-service.js
+ * - Resolve issued ticket options and allocation results
+ * - Calculate usage, overbooking, and auto-selected dates
+ * Scope: ticket selection & allocation logic only
+ */
+import { getDateKeyFromParts, getDatePartsFromKey, getZonedTodayParts, getWeekdayIndex } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { formatTicketDisplayName, normalizePickdropType } from "./ticket-service.js";
 import { WEEKDAY_KEYS } from "../utils/weekday.js";
@@ -70,12 +76,17 @@ export function getDefaultTicketSelection(classes, selectedServices, options) {
   if (!Array.isArray(classes) || !selectedServices || options.length === 0) {
     return [];
   }
-  const availableSet = new Set(options.map((option) => option.id));
   const optionMap = new Map();
   options.forEach((option) => {
-    if (!optionMap.has(option.ticketId)) {
-      optionMap.set(option.ticketId, option);
+    const ticketId = String(option?.ticketId ?? "");
+    const optionId = String(option?.id ?? "");
+    if (!ticketId || !optionId) {
+      return;
     }
+    if (!optionMap.has(ticketId)) {
+      optionMap.set(ticketId, []);
+    }
+    optionMap.get(ticketId).push(optionId);
   });
   const seen = new Set();
   const defaults = [];
@@ -89,13 +100,17 @@ export function getDefaultTicketSelection(classes, selectedServices, options) {
       ? classItem.ticketIds
       : [];
     ticketIds.forEach((ticketId) => {
-      const option = optionMap.get(String(ticketId));
-      const id = option?.id;
-      if (!id || !availableSet.has(id) || seen.has(id)) {
+      const optionIds = optionMap.get(String(ticketId));
+      if (!Array.isArray(optionIds) || optionIds.length === 0) {
         return;
       }
-      seen.add(id);
-      defaults.push(id);
+      optionIds.forEach((id) => {
+        if (!id || seen.has(id)) {
+          return;
+        }
+        seen.add(id);
+        defaults.push(id);
+      });
     });
   });
 
@@ -204,9 +219,3 @@ export function getAutoSelectedDateKeys({
 
   return selected;
 }
-
-
-
-
-
-

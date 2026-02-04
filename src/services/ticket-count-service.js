@@ -1,7 +1,10 @@
 import { readStorageArray, writeStorageValue } from "../storage/storage-utils.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
+import { getEntryTicketUsages } from "./ticket-usage-service.js";
+import { resolvePickdropTicketCountType } from "./pickdrop-policy.js";
 
 const MEMBERS_KEY = "memberList";
+const SERVICE_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
 
 /**
  * Recalculates used, reserved, and reservable counts for all tickets of all members
@@ -9,11 +12,11 @@ const MEMBERS_KEY = "memberList";
  */
 export function recalculateTicketCounts() {
   const reservationStorage = initReservationStorage();
-  const { STATUS } = reservationStorage;
-
-  // Define status sets
-  const RESERVED_STATUSES = new Set([STATUS.PLANNED]);
-  const USED_STATUSES = new Set([STATUS.CHECKIN, STATUS.CHECKOUT, STATUS.ABSENT, STATUS.NO_SHOW]);
+  
+  // Use keys explicitly as they are stored in baseStatusKey
+  const RESERVED_STATUSES = new Set(["PLANNED"]);
+  // Keep ABSENT/NO_SHOW in used-count by policy (in addition to CHECKIN/CHECKOUT).
+  const USED_STATUSES = new Set(["CHECKIN", "CHECKOUT", "ABSENT", "NO_SHOW"]);
 
   // 1. Read all data
   const members = readStorageArray(MEMBERS_KEY, { fallback: [] });
@@ -38,29 +41,62 @@ export function recalculateTicketCounts() {
   // 3. Process all reservations from the single source
   for (const reservation of reservations) {
     for (const dateEntry of reservation.dates) {
-      const ticketId = dateEntry.ticketUsage?.ticketId;
-      if (!ticketId) continue;
+      const usages = getEntryTicketUsages(dateEntry);
+      if (usages.length === 0) continue;
 
-      const ticket = ticketMap.get(ticketId);
-      if (!ticket) continue;
+      for (const usage of usages) {
+        const ticketId = usage?.ticketId;
+        if (!ticketId) continue;
 
-      // The status is now consistently in the dateEntry
-      const statusKey = dateEntry.status || STATUS.PLANNED;
+        const ticket = ticketMap.get(ticketId);
+        if (!ticket) continue;
 
-      if (RESERVED_STATUSES.has(statusKey)) {
-        ticket.reservedCount++;
-      } else if (USED_STATUSES.has(statusKey)) {
-        ticket.usedCount++;
+        // Use baseStatusKey which contains the unified status KEY (e.g., "PLANNED")
+        const statusKey = dateEntry.baseStatusKey || "PLANNED";
+
+        if (RESERVED_STATUSES.has(statusKey)) {
+          ticket.reservedCount++;
+        } else if (USED_STATUSES.has(statusKey)) {
+          ticket.usedCount++;
+        }
       }
     }
   }
 
-  // 4. Calculate the final reservableCount for all tickets
+  // 4. Calculate the final reservableCount for all tickets AND aggregate by type
   for (const member of members) {
+    const totalAggregates = {};
+    const remainingAggregates = {};
+    SERVICE_TYPES.forEach(type => {
+        totalAggregates[type] = 0;
+        remainingAggregates[type] = 0;
+    });
+
     for (const ticket of member.tickets) {
-      ticket.reservableCount =
-        ticket.totalCount - (ticket.usedCount + ticket.reservedCount);
+      const totalCount = Number(ticket.totalCount) || 0;
+      const usedCount = Number(ticket.usedCount) || 0;
+      const reservedCount = Number(ticket.reservedCount) || 0;
+      const reservableCount = totalCount - (usedCount + reservedCount);
+      const remainingCount = totalCount - usedCount;
+      ticket.reservableCount = reservableCount;
+      
+      const type = ticket.type === "pickdrop"
+        ? resolvePickdropTicketCountType(ticket)
+        : (ticket.type || "school");
+      if (totalAggregates[type] !== undefined) {
+          totalAggregates[type] += reservableCount;
+          remainingAggregates[type] += remainingCount;
+      }
     }
+
+    // Always synchronize member aggregates from ticket data.
+    if (!member.totalReservableCountByType) member.totalReservableCountByType = {};
+    if (!member.remainingCountByType) member.remainingCountByType = {};
+
+    SERVICE_TYPES.forEach(type => {
+        member.totalReservableCountByType[type] = totalAggregates[type];
+        member.remainingCountByType[type] = remainingAggregates[type];
+    });
   }
 
   // 5. Write the updated members list back to storage

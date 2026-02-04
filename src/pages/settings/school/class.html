@@ -98,30 +98,34 @@
             <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
           </div>
           <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
-            <div class="form-grid">
-              <label class="form-field">
-                <span class="form-field__label">반 이름</span>
-                <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
-              </label>
-              <label class="form-field">
-                <span class="form-field__label">담당 선생님</span>
-                <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
-              </label>
+            <div class="settings-modal-form">
+              <div class="class-form__inline-fields">
+                <label class="form-field">
+                  <span class="form-field__label">반 이름</span>
+                  <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
+                </label>
+                <label class="form-field">
+                  <span class="form-field__label">담당</span>
+                  <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
+                </label>
+              </div>
               <div class="form-field">
                 <span class="form-field__label">운영 요일</span>
-                <div class="form-field__chips">
-                  <button class="filter-chip is-selected" type="button" data-class-day="mon">월</button>
-                  <button class="filter-chip is-selected" type="button" data-class-day="tue">화</button>
-                  <button class="filter-chip is-selected" type="button" data-class-day="wed">수</button>
-                  <button class="filter-chip is-selected" type="button" data-class-day="thu">목</button>
-                  <button class="filter-chip is-selected" type="button" data-class-day="fri">금</button>
-                  <button class="filter-chip" type="button" data-class-day="sat">토</button>
-                  <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                <div class="class-form__weekday-stack">
+                  <div class="form-field__chips">
+                    <button class="filter-chip is-selected" type="button" data-class-day="mon">월</button>
+                    <button class="filter-chip is-selected" type="button" data-class-day="tue">화</button>
+                    <button class="filter-chip is-selected" type="button" data-class-day="wed">수</button>
+                    <button class="filter-chip is-selected" type="button" data-class-day="thu">목</button>
+                    <button class="filter-chip is-selected" type="button" data-class-day="fri">금</button>
+                    <button class="filter-chip" type="button" data-class-day="sat">토</button>
+                    <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                  </div>
+                  <label class="checkbox-inline">
+                    <input type="checkbox" data-class-public-holiday>
+                    <span>공휴일 휴무</span>
+                  </label>
                 </div>
-                <label class="checkbox-inline">
-                  <input type="checkbox" data-class-public-holiday>
-                  <span>공휴일 휴무</span>
-                </label>
               </div>
               <div class="form-field form-field--full form-field--time-row">
                 <label class="form-field">
@@ -140,7 +144,7 @@
             </div>
           </div>
           <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
-            <div class="form-grid">
+            <div class="settings-modal-form">
               <label class="form-field">
                 <span class="form-field__label form-field__label--inline">
                   <span>정원</span>
@@ -149,27 +153,31 @@
                 <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
               </label>
               <div class="form-field form-field--full" data-class-members-section>
-                <span class="form-field__label form-field__label--row">
-                  <span class="class-member-label">
-                    <span>소속 회원</span>
-                    <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
-                  </span>
-                  <span class="class-member-actions">
-                    <span class="class-member-count" data-class-member-count>0마리</span>
-                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
-                  </span>
-                </span>
-                <div class="class-member-list" data-class-members></div>
+                <div class="class-member-stack settings-selection-stack">
+                  <div class="form-field__label form-field__label--row">
+                    <span class="class-member-label">
+                      <span>소속 회원</span>
+                      <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
+                    </span>
+                    <span class="class-member-actions settings-selection-actions">
+                      <span class="class-member-count settings-selection-count" data-class-member-count>0마리</span>
+                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
+                    </span>
+                  </div>
+                  <div class="class-member-list settings-selection-list settings-selection-list--members" data-class-members></div>
+                </div>
               </div>
               <div class="form-field form-field--full" data-class-tickets-section>
-                <span class="form-field__label form-field__label--row">
-                  <span>예약 가능한 이용권</span>
-                  <span class="class-ticket-actions">
-                    <span class="class-ticket-count" data-class-ticket-count>0개</span>
-                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
-                  </span>
-                </span>
-                <div class="class-ticket-list" data-class-tickets></div>
+                <div class="class-ticket-stack settings-selection-stack">
+                  <div class="form-field__label form-field__label--row">
+                    <span>예약 가능한 이용권</span>
+                    <span class="class-ticket-actions settings-selection-actions">
+                      <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                    </span>
+                  </div>
+                  <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+                </div>
               </div>
             </div>
           </div>
@@ -194,30 +202,34 @@
             <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
           </div>
           <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
-            <div class="form-grid">
-              <label class="form-field">
-                <span class="form-field__label">반 이름</span>
-                <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
-              </label>
-              <label class="form-field">
-                <span class="form-field__label">담당 선생님</span>
-                <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
-              </label>
+            <div class="settings-modal-form">
+              <div class="class-form__inline-fields">
+                <label class="form-field">
+                  <span class="form-field__label">반 이름</span>
+                  <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
+                </label>
+                <label class="form-field">
+                  <span class="form-field__label">담당</span>
+                  <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
+                </label>
+              </div>
               <div class="form-field">
                 <span class="form-field__label">운영 요일</span>
-                <div class="form-field__chips">
-                  <button class="filter-chip" type="button" data-class-day="mon">월</button>
-                  <button class="filter-chip" type="button" data-class-day="tue">화</button>
-                  <button class="filter-chip" type="button" data-class-day="wed">수</button>
-                  <button class="filter-chip" type="button" data-class-day="thu">목</button>
-                  <button class="filter-chip" type="button" data-class-day="fri">금</button>
-                  <button class="filter-chip" type="button" data-class-day="sat">토</button>
-                  <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                <div class="class-form__weekday-stack">
+                  <div class="form-field__chips">
+                    <button class="filter-chip" type="button" data-class-day="mon">월</button>
+                    <button class="filter-chip" type="button" data-class-day="tue">화</button>
+                    <button class="filter-chip" type="button" data-class-day="wed">수</button>
+                    <button class="filter-chip" type="button" data-class-day="thu">목</button>
+                    <button class="filter-chip" type="button" data-class-day="fri">금</button>
+                    <button class="filter-chip" type="button" data-class-day="sat">토</button>
+                    <button class="filter-chip" type="button" data-class-day="sun">일</button>
+                  </div>
+                  <label class="checkbox-inline">
+                    <input type="checkbox" data-class-public-holiday>
+                    <span>공휴일 휴무</span>
+                  </label>
                 </div>
-                <label class="checkbox-inline">
-                  <input type="checkbox" data-class-public-holiday>
-                  <span>공휴일 휴무</span>
-                </label>
               </div>
               <div class="form-field form-field--full form-field--time-row">
                 <label class="form-field">
@@ -236,7 +248,7 @@
             </div>
           </div>
           <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
-            <div class="form-grid">
+            <div class="settings-modal-form">
               <label class="form-field">
                 <span class="form-field__label form-field__label--inline">
                   <span>정원</span>
@@ -245,27 +257,31 @@
                 <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
               </label>
               <div class="form-field form-field--full" data-class-members-section>
-                <span class="form-field__label form-field__label--row">
-                  <span class="class-member-label">
-                    <span>소속 회원</span>
-                    <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
-                  </span>
-                  <span class="class-member-actions">
-                    <span class="class-member-count" data-class-member-count>0마리</span>
-                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
-                  </span>
-                </span>
-                <div class="class-member-list" data-class-members></div>
+                <div class="class-member-stack settings-selection-stack">
+                  <div class="form-field__label form-field__label--row">
+                    <span class="class-member-label">
+                      <span>소속 회원</span>
+                      <span class="tooltip-icon" role="img" aria-label="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다." data-tooltip="회원을 지정해야 회원 앱에서 해당 클래스에 예약이 가능합니다.">i</span>
+                    </span>
+                    <span class="class-member-actions settings-selection-actions">
+                      <span class="class-member-count settings-selection-count" data-class-member-count>0마리</span>
+                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
+                    </span>
+                  </div>
+                  <div class="class-member-list settings-selection-list settings-selection-list--members" data-class-members></div>
+                </div>
               </div>
               <div class="form-field form-field--full" data-class-tickets-section>
-                <span class="form-field__label form-field__label--row">
-                  <span>예약 가능한 이용권</span>
-                  <span class="class-ticket-actions">
-                    <span class="class-ticket-count" data-class-ticket-count>0개</span>
-                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
-                  </span>
-                </span>
-                <div class="class-ticket-list" data-class-tickets></div>
+                <div class="class-ticket-stack settings-selection-stack">
+                  <div class="form-field__label form-field__label--row">
+                    <span>예약 가능한 이용권</span>
+                    <span class="class-ticket-actions settings-selection-actions">
+                      <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                    </span>
+                  </div>
+                  <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+                </div>
               </div>
             </div>
           </div>

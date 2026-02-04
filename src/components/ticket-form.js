@@ -511,7 +511,7 @@ export function renderTicketServiceOptions(root, options = {}) {
   emptyText.hidden = true;
   source.forEach((classItem) => {
     const row = document.createElement("label");
-    row.className = "class-ticket-row";
+    row.className = "class-ticket-row settings-selection-item settings-selection-item--ticket";
     row.dataset.ticketClass = "";
     const isPickdrop = type === "pickdrop";
     const sourceType = classItem._sourceType || "class";
@@ -536,7 +536,7 @@ export function renderTicketServiceOptions(root, options = {}) {
 }
 
 export function renderTicketClassOptions(root, classes = []) {
-  renderTicketServiceOptions(root, { type: "kindergarten", classes });
+  renderTicketServiceOptions(root, { type: "school", classes });
 }
 
 export function setupTicketClassSelection(root) {

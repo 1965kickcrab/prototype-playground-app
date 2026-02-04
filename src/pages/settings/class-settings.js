@@ -83,6 +83,14 @@ function setupClassModal(
     }
     if (event.target.closest("[data-class-modal-open]")) {
       resetClassForm(modal, weeklyDefaults, holidayDefault, config.defaultClassType);
+      renderTicketOptions(
+        modal,
+        tickets,
+        formatTicketDisplayName,
+        formatTicketCount,
+        formatTicketValidity,
+        config.defaultClassType
+      );
       setActiveClassTab(modal, "basic");
       openModal();
       return;
@@ -133,7 +141,8 @@ function setupClassModal(
     tickets,
     formatTicketDisplayName,
     formatTicketCount,
-    formatTicketValidity
+    formatTicketValidity,
+    config.defaultClassType
   );
 }
 
@@ -189,6 +198,14 @@ function setupClassDetailModal(
     }
 
     activeClassId = classItem.id;
+    renderTicketOptions(
+      modal,
+      tickets,
+      formatTicketDisplayName,
+      formatTicketCount,
+      formatTicketValidity,
+      classItem.type || config.defaultClassType
+    );
     fillClassForm(modal, classItem, holidayDefault, config.defaultClassType);
     setActiveClassTab(modal, "basic");
     initialSnapshot = JSON.stringify(collectClassFormData(modal, config));
@@ -288,7 +305,8 @@ function setupClassDetailModal(
     tickets,
     formatTicketDisplayName,
     formatTicketCount,
-    formatTicketValidity
+    formatTicketValidity,
+    config.defaultClassType
   );
 }
 

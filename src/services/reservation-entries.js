@@ -16,15 +16,37 @@ export function getReservationDateEntries(reservation) {
         checkinTime: reservation.checkinTime || "",
         checkoutTime: reservation.checkoutTime || "",
         daycareFee: Number(reservation.daycareFee) || 0,
-        ticketUsage: reservation.ticketUsage || null,
-        pickdrop: {
-          pickup: Boolean(reservation.hasPickup),
-          dropoff: Boolean(reservation.hasDropoff),
-        },
+        ticketUsages: Array.isArray(reservation.ticketUsages)
+          ? reservation.ticketUsages
+          : reservation.ticketUsage
+            ? [reservation.ticketUsage]
+            : [],
+        pickup: Boolean(reservation.pickup ?? reservation.hasPickup),
+        dropoff: Boolean(reservation.dropoff ?? reservation.hasDropoff),
       },
     ];
   }
   return [];
+}
+
+function resolveCheckinTime(entry, reservation) {
+  if (entry?.checkinTime != null) {
+    return entry.checkinTime;
+  }
+  if (entry?.kind === "checkin" && entry?.time != null) {
+    return entry.time;
+  }
+  return reservation?.checkinTime ?? "";
+}
+
+function resolveCheckoutTime(entry, reservation) {
+  if (entry?.checkoutTime != null) {
+    return entry.checkoutTime;
+  }
+  if (entry?.kind === "checkout" && entry?.time != null) {
+    return entry.time;
+  }
+  return reservation?.checkoutTime ?? "";
 }
 
 export function getReservationEntries(reservations) {
@@ -40,13 +62,44 @@ export function getReservationEntries(reservations) {
         entry.service ?? reservation.service ?? reservation.class ?? "",
       baseStatusKey: entry.baseStatusKey ?? reservation.baseStatusKey ?? "PLANNED",
       statusText: entry.statusText ?? reservation.statusText ?? "",
-      checkinTime: entry.checkinTime ?? reservation.checkinTime ?? "",
-      checkoutTime: entry.checkoutTime ?? reservation.checkoutTime ?? "",
+      checkinTime: resolveCheckinTime(entry, reservation),
+      checkoutTime: resolveCheckoutTime(entry, reservation),
       daycareFee: Number(entry.daycareFee ?? reservation.daycareFee) || 0,
-      ticketUsage: entry.ticketUsage || reservation.ticketUsage || null,
-      pickdrop: entry.pickdrop || {
-        pickup: Boolean(reservation.hasPickup),
-        dropoff: Boolean(reservation.hasDropoff),
+      ticketUsages: Array.isArray(entry.ticketUsages)
+        ? entry.ticketUsages
+        : entry.ticketUsage
+          ? [entry.ticketUsage]
+          : reservation.ticketUsage
+            ? [reservation.ticketUsage]
+            : [],
+      ticketUsage: Array.isArray(entry.ticketUsages) && entry.ticketUsages.length > 0
+        ? entry.ticketUsages[0]
+        : entry.ticketUsage || reservation.ticketUsage || null,
+      pickup: Boolean(
+        entry.pickup
+        ?? entry?.pickdrop?.pickup
+        ?? reservation.pickup
+        ?? reservation.hasPickup
+      ),
+      dropoff: Boolean(
+        entry.dropoff
+        ?? entry?.pickdrop?.dropoff
+        ?? reservation.dropoff
+        ?? reservation.hasDropoff
+      ),
+      pickdrop: {
+        pickup: Boolean(
+          entry.pickup
+          ?? entry?.pickdrop?.pickup
+          ?? reservation.pickup
+          ?? reservation.hasPickup
+        ),
+        dropoff: Boolean(
+          entry.dropoff
+          ?? entry?.pickdrop?.dropoff
+          ?? reservation.dropoff
+          ?? reservation.hasDropoff
+        ),
       },
     }))
   );

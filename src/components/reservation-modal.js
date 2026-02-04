@@ -1,4 +1,4 @@
-﻿const buildIcon = (assetPrefix, name, alt = "", className = "") => {
+const buildIcon = (assetPrefix, name, alt = "", className = "") => {
   const classAttr = className ? ` class="${className}"` : "";
   return `<img src="${assetPrefix}assets/${name}" alt="${alt}" aria-hidden="true"${classAttr}>`;
 };
@@ -137,7 +137,7 @@ export function renderReservationModal({ rootSelector, modalHtml }) {
   root.innerHTML = modalHtml;
 }
 
-export function getKindergartenReservationModalMarkup({ assetPrefix = "../" } = {}) {
+export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
   const progressHtml = `
     <div class="reservation-progress" data-reservation-progress>
       <span class="reservation-progress__line" aria-hidden="true"></span>
@@ -246,13 +246,13 @@ export function getKindergartenReservationModalMarkup({ assetPrefix = "../" } = 
 
   const feeCardsHtml = `
     ${buildReservationFeeCard({
-      detailAttr: "data-reservation-fee-kindergarten",
+      detailAttr: "data-reservation-fee-school",
       title: "유치원",
-      amountAttr: "data-reservation-kindergarten-total",
+      amountAttr: "data-reservation-school-total",
       ticketsClass: "reservation-ticket-list",
       ticketsAttr: "data-reservation-tickets",
       ticketsEmptyAttr: "data-reservation-tickets-empty",
-      feeListAttr: "data-reservation-fee-kindergarten-list",
+      feeListAttr: "data-reservation-fee-school-list",
       assetPrefix,
       open: true,
     })}
@@ -433,4 +433,3 @@ export function getHotelingReservationModalMarkup({ assetPrefix = "../../" } = {
     assetPrefix,
   });
 }
-

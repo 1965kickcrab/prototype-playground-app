@@ -1,4 +1,10 @@
-﻿import { formatNumberWithCommas, normalizeNumericInput } from "../utils/number.js";
+﻿/**
+ * pricing-service.js
+ * - Normalize, serialize, and format pricing rows
+ * - Convert DOM input rows into pricing data objects
+ * Scope: pricing data helpers (no storage writes)
+ */
+import { formatNumberWithCommas, normalizeNumericInput } from "../utils/number.js";
 import { formatPickdropType, normalizePickdropType } from "./ticket-service.js";
 
 const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일", "공휴일"];
@@ -87,7 +93,7 @@ export function createPricingItemFromRow(row) {
   }
 
   const serviceType =
-    getInputValue(row.querySelector("[data-pricing-service]")) || "kindergarten";
+    getInputValue(row.querySelector("[data-pricing-service]")) || "school";
   const typeInput = row.querySelector("[data-pricing-pickdrop-type]");
   const pickdropType = normalizePickdropTypeValue(getInputValue(typeInput));
   const typeDefault = normalizePickdropTypeValue(

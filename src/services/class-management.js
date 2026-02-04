@@ -1,7 +1,7 @@
 import { syncTicketsFromClasses } from "./class-ticket-sync.js";
 
 export function getDefaultClassType(isHotelScope) {
-  return isHotelScope ? "hoteling" : "kindergarten";
+  return isHotelScope ? "hoteling" : "school";
 }
 
 export function setupClassList(storage, isHotelScope) {

@@ -31,13 +31,16 @@ function createAvailability(availability, ticketType) {
   const { totalReservable } = availability || {};
   const unit = getAvailabilityUnit(ticketType);
 
-  const appendValue = (valueText) => {
+  const appendValue = (valueText, options = {}) => {
     const value = document.createElement("span");
     value.className = "ticket-issue-table__availability-value";
+    if (options.isOverage) {
+      value.classList.add("ticket-issue-table__overage");
+    }
     value.textContent = valueText;
     wrapper.appendChild(value);
 
-    if (valueText !== "-") {
+    if (valueText !== "-" && options.appendUnit !== false) {
       const unitEl = document.createElement("span");
       unitEl.className = "ticket-issue-table__availability-unit";
       unitEl.textContent = unit;
@@ -49,7 +52,14 @@ function createAvailability(availability, ticketType) {
     if (totalReservable <= 2) {
       wrapper.classList.add("is-low");
     }
-    appendValue(String(totalReservable));
+    if (totalReservable < 0) {
+      wrapper.classList.add("is-overage");
+      appendValue(`초과 ${Math.abs(totalReservable)}`, {
+        isOverage: true,
+      });
+    } else {
+      appendValue(String(totalReservable));
+    }
   } else {
     appendValue("-");
   }

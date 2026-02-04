@@ -1,4 +1,4 @@
-﻿import { initClassStorage } from "../storage/class-storage.js";
+import { initClassStorage } from "../storage/class-storage.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { initOperationsStorage } from "../storage/operations-storage.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
@@ -33,8 +33,12 @@ import {
 import { formatTicketPrice, normalizePickdropType } from "../services/ticket-service.js";
 import { getReservationEntries } from "../services/reservation-entries.js";
 import { getMemberReservationConflictDates } from "../services/member-reservation-summary.js";
-import { buildDateTicketUsageMap } from "../services/ticket-usage-service.js";
+import { buildDateTicketUsageMap, buildDateTicketUsagesMap } from "../services/ticket-usage-service.js";
 import { createId } from "../utils/id.js";
+import {
+  getPickdropReservableTotal,
+  resolvePickdropTicketCountType,
+} from "../services/pickdrop-policy.js";
 
 const PICKDROP_OPTIONS = [
   { value: "pickup", label: "픽업" },
@@ -42,7 +46,7 @@ const PICKDROP_OPTIONS = [
 ];
 
 const SERVICE_OPTIONS = [
-  { value: "kindergarten", label: "유치원" },
+  { value: "school", label: "유치원" },
   { value: "daycare", label: "데이케어" },
 ];
 
@@ -112,11 +116,21 @@ function getNumericValue(element, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
-function setCountValue(element, value) {
+function setCountValue(element, value, options = {}) {
   if (!element) return;
-  const normalized = String(value);
-  element.textContent = normalized;
+  const numericValue = Number(value);
+  const isNumeric = Number.isFinite(numericValue);
+  const normalized = isNumeric ? String(numericValue) : String(value);
+  const shouldMarkExceeded = Boolean(options.negativeAsExceeded && isNumeric && numericValue < 0);
+
   element.dataset.value = normalized;
+  element.textContent = shouldMarkExceeded
+    ? `초과 ${Math.abs(numericValue)}`
+    : normalized;
+
+  if (options.negativeClassName) {
+    element.classList.toggle(options.negativeClassName, shouldMarkExceeded);
+  }
 }
 
 function getMemberReservableCountByType(member, type) {
@@ -136,7 +150,7 @@ function getMemberReservableCountByType(member, type) {
 function getReservationMode(elements) {
   return elements?.modal?.classList?.contains("is-pickdrop")
     ? "pickdrop"
-    : "kindergarten";
+    : "school";
 }
 
 function getSelectedServiceType(state, classes, elements) {
@@ -145,10 +159,10 @@ function getSelectedServiceType(state, classes, elements) {
   }
   const selectedName = Array.from(state.services || [])[0] || "";
   if (!selectedName) {
-    return "kindergarten";
+    return "school";
   }
   const match = classes.find((item) => item.name === selectedName);
-  return match?.type || "kindergarten";
+  return match?.type || "school";
 }
 
 function filterConflictingDates(dates, conflicts) {
@@ -173,7 +187,7 @@ function getMemberTotalReservableCount(state, serviceType) {
   if (!member) {
     return null;
   }
-  const type = serviceType || "kindergarten";
+  const type = serviceType || "school";
   const totalValue = Number(member.totalReservableCountByType?.[type]);
   if (Number.isFinite(totalValue)) {
     return totalValue;
@@ -228,7 +242,10 @@ function syncCounts(state, elements, classes = []) {
     : memberLimit;
 
   setCountValue(elements.countCurrent, current);
-  setCountValue(elements.countLimit, limit);
+  setCountValue(elements.countLimit, limit, {
+    negativeAsExceeded: true,
+    negativeClassName: "is-over-limit",
+  });
 
   const currentValue = getNumericValue(elements.countCurrent, current);
   const limitValue = getNumericValue(elements.countLimit, limit);
@@ -479,6 +496,84 @@ function getSortedDateKeys(dateSet) {
   return sortDateKeys(Array.from(dateSet || []));
 }
 
+function buildPickdropUsagePlan({
+  dateKeys,
+  pickdropFlags,
+  selectionOrder,
+  optionMap,
+}) {
+  const planByDate = [];
+  const usedByTicket = new Map();
+  const mutableRemaining = new Map();
+  const roundtripTickets = [];
+  const onewayTickets = [];
+  const orderedSelection = Array.isArray(selectionOrder) ? selectionOrder : [];
+
+  orderedSelection.forEach((ticketId) => {
+    const option = optionMap.get(ticketId);
+    if (!option) {
+      return;
+    }
+    const remaining = Number(option.reservableCount ?? option.remainingCount) || 0;
+    if (remaining <= 0) {
+      return;
+    }
+    mutableRemaining.set(ticketId, remaining);
+    const countType = resolvePickdropTicketCountType(option);
+    if (countType === "roundtrip") {
+      roundtripTickets.push(ticketId);
+      return;
+    }
+    onewayTickets.push(ticketId);
+  });
+
+  const pickFrom = (pool, quantity = 1) => {
+    const selected = [];
+    for (let i = 0; i < quantity; i += 1) {
+      const ticketId = pool.find((id) => (mutableRemaining.get(id) || 0) > 0);
+      if (!ticketId) {
+        break;
+      }
+      const before = mutableRemaining.get(ticketId) || 0;
+      mutableRemaining.set(ticketId, Math.max(before - 1, 0));
+      selected.push(ticketId);
+      usedByTicket.set(ticketId, (usedByTicket.get(ticketId) || 0) + 1);
+    }
+    return selected;
+  };
+
+  const dates = Array.isArray(dateKeys) ? dateKeys : [];
+  dates.forEach(() => {
+    const { hasPickup, hasDropoff } = pickdropFlags;
+    if (!hasPickup && !hasDropoff) {
+      planByDate.push([]);
+      return;
+    }
+    if (hasPickup && hasDropoff) {
+      const roundtrip = pickFrom(roundtripTickets, 1);
+      if (roundtrip.length === 1) {
+        planByDate.push(roundtrip);
+        return;
+      }
+      const oneway = pickFrom(onewayTickets, 2);
+      planByDate.push(oneway);
+      return;
+    }
+    const oneway = pickFrom(onewayTickets, 1);
+    if (oneway.length === 1) {
+      planByDate.push(oneway);
+      return;
+    }
+    const fallbackRoundtrip = pickFrom(roundtripTickets, 1);
+    planByDate.push(fallbackRoundtrip);
+  });
+
+  return {
+    planByDate,
+    usedByTicket,
+  };
+}
+
 
 function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}) {
   const { miniGrid, miniCurrent } = elements;
@@ -613,7 +708,7 @@ function hasPickdropPricing(pricingItems, key) {
   state.ticketLimit = RESERVATION_LIMIT;
   state.miniViewDate = new Date();
     state.autoSelected = false;
-    state.context = "kindergarten";
+    state.context = "school";
     state.pickdropSelectionsInitialized = false;
     state.pickdropDatesInitialized = false;
   elements.memberInput.value = "";
@@ -640,7 +735,6 @@ function hasPickdropPricing(pricingItems, key) {
     new Map(),
     false,
     0,
-    new Map(),
     new Set()
   );
 
@@ -709,7 +803,24 @@ function getMemberTicketClassNames(classes, ticketOptions, serviceOptions) {
     .map((item) => item.name)
     .filter((name) => typeof name === "string" && name.trim().length > 0);
   const optionSet = new Set(serviceOptions.map((option) => option.value));
-  return matched.filter((name) => optionSet.has(name));
+  const mappedMatches = matched.filter((name) => optionSet.has(name));
+  if (mappedMatches.length > 0) {
+    return mappedMatches;
+  }
+
+  const ticketTypeSet = new Set(
+    ticketOptions
+      .map((option) => String(option?.type || "").trim())
+      .filter((type) => type)
+  );
+  if (ticketTypeSet.size === 0) {
+    return [];
+  }
+  return classes
+    .filter((item) => ticketTypeSet.has(String(item?.type || "").trim()))
+    .map((item) => item.name)
+    .filter((name) => typeof name === "string" && name.trim().length > 0)
+    .filter((name) => optionSet.has(name));
 }
 
 function getEligibleTicketOptions(ticketOptions, selectedServices, classes) {
@@ -720,6 +831,9 @@ function getEligibleTicketOptions(ticketOptions, selectedServices, classes) {
     return [];
   }
   const ticketIdSet = new Set();
+  const selectedName = Array.from(selectedServices)[0] || "";
+  const selectedType = classes.find((item) => item.name === selectedName)?.type
+    || "school";
   classes.forEach((classItem) => {
     if (!selectedServices.has(classItem.name)) {
       return;
@@ -730,14 +844,15 @@ function getEligibleTicketOptions(ticketOptions, selectedServices, classes) {
     });
   });
   if (ticketIdSet.size === 0) {
-    const selectedName = Array.from(selectedServices)[0] || "";
-    const selectedType = classes.find((item) => item.name === selectedName)?.type
-      || "kindergarten";
     return ticketOptions.filter((ticket) => ticket.type === selectedType);
   }
-  return ticketOptions.filter((ticket) =>
+  const linkedOptions = ticketOptions.filter((ticket) =>
     ticketIdSet.has(String(ticket.ticketId || ""))
   );
+  if (linkedOptions.length > 0) {
+    return linkedOptions;
+  }
+  return ticketOptions.filter((ticket) => ticket.type === selectedType);
 }
 
 function applyMemberClassSelection(state, elements, classNames) {
@@ -869,7 +984,7 @@ function getSelectedWeekdayCounts(selectedDates, timeZone) {
   return counts;
 }
 
-function getMemberAutoSelectionOptions(state, classes, storage, timeZone) {
+function getMemberAutoSelectionOptions(state, classes, timeZone) {
   if (!state.selectedMember || !state.services || state.services.size === 0) {
     return null;
   }
@@ -881,34 +996,12 @@ function getMemberAutoSelectionOptions(state, classes, storage, timeZone) {
   if (!eligibleOptions.length) {
     return null;
   }
-  const classTicketMap = buildClassTicketMap(
-    classes,
-    state.services,
-    state.ticketOptions
-  );
-  const usageOrder = eligibleOptions.map((ticket) => ticket.id);
-  const totalRemainingMap = new Map(
-    eligibleOptions.map((ticket) => [
-      ticket.id,
-      Number(ticket.totalCount) || 0,
-    ])
-  );
-  const usedCounts = getUsedReservationCountByClass(
-    storage,
-    state.selectedMember,
-    state.services
-  );
-  const usedAllocationResult = allocateCountsByClass({
-    classCounts: usedCounts,
-    classTicketMap,
-    ticketOrder: usageOrder,
-    ticketRemainingMap: totalRemainingMap,
-  });
   const availableMap = new Map(
     eligibleOptions.map((ticket) => {
-      const remainingAfter = usedAllocationResult.remainingMap.get(ticket.id)
-        ?? totalRemainingMap.get(ticket.id)
-        ?? 0;
+      const remainingRaw = Number(ticket.remainingCount);
+      const remainingAfter = Number.isFinite(remainingRaw)
+        ? Math.max(remainingRaw, 0)
+        : 0;
       return [ticket.id, Math.max(remainingAfter, 0)];
     })
   );
@@ -965,11 +1058,11 @@ export function setupReservationModal(state, storage) {
   const daycareStartTime = modal.querySelector("[data-reservation-start-time]");
   const daycareEndTime = modal.querySelector("[data-reservation-end-time]");
   const daycareFeeValue = modal.querySelector("[data-reservation-daycare-fee]");
-  const kindergartenFeeList = modal.querySelector("[data-reservation-fee-kindergarten-list]");
+  const schoolFeeList = modal.querySelector("[data-reservation-fee-school-list]");
   const pickdropFeeList = modal.querySelector("[data-reservation-fee-pickdrop-list]");
-  const kindergartenTotalValue = modal.querySelector("[data-reservation-kindergarten-total]");
+  const schoolTotalValue = modal.querySelector("[data-reservation-school-total]");
   const pickdropTotalValue = modal.querySelector("[data-reservation-pickdrop-total]");
-  const feeKindergartenCard = modal.querySelector("[data-reservation-fee-kindergarten]");
+  const feeSchoolCard = modal.querySelector("[data-reservation-fee-school]");
   const feePickdropCard = modal.querySelector("[data-reservation-fee-pickdrop]");
   const pricingTotalValue = modal.querySelector("[data-reservation-total]");
   const pickdropTicketField = modal.querySelector("[data-reservation-pickdrop-tickets]");
@@ -983,7 +1076,7 @@ export function setupReservationModal(state, storage) {
   const progressSteps = modal.querySelectorAll("[data-reservation-progress-step]");
   const nextButton = modal.querySelector("[data-reservation-next]");
   const submitButton = modal.querySelector("[data-reservation-submit]");
-  const kindergartenFeeSection = kindergartenFeeList?.closest(".reservation-fee-section");
+  const schoolFeeSection = schoolFeeList?.closest(".reservation-fee-section");
   const pickdropFeeSection = pickdropFeeList?.closest(".reservation-fee-section");
 
   const elements = {
@@ -1009,11 +1102,11 @@ export function setupReservationModal(state, storage) {
     daycareStartTime,
     daycareEndTime,
     daycareFeeValue,
-    kindergartenFeeList,
+    schoolFeeList,
     pickdropFeeList,
-    kindergartenTotalValue,
+    schoolTotalValue,
     pickdropTotalValue,
-    feeKindergartenCard,
+    feeSchoolCard,
     feePickdropCard,
     pricingTotalValue,
     pickdropTicketField,
@@ -1036,23 +1129,23 @@ export function setupReservationModal(state, storage) {
     selectedDates: new Set(),
     pickdropDates: new Set(),
     ticketSelections: [],
-    kindergartenSelections: [],
+    schoolSelections: [],
     pickdropSelectionsInitialized: false,
     pickdropDatesInitialized: false,
     conflicts: new Set(),
     ticketOptions: [],
     ticketLimit: RESERVATION_LIMIT,
-    kindergartenAllocationMap: new Map(),
-    kindergartenRemainingMap: new Map(),
+    schoolAllocationMap: new Map(),
+    schoolRemainingMap: new Map(),
     pickdropAllocationMap: new Map(),
     pickdropRemainingMap: new Map(),
     miniViewDate: new Date(state.currentDate),
     autoSelected: false,
-    context: "kindergarten",
+    context: "school",
   };
 
   const renderContextualLabels = () => {
-    const context = formState.context || "kindergarten";
+    const context = formState.context || "school";
     const baseLabel = context === "hoteling" ? "호텔링 예약" : "유치원 예약";
     if (stepTitle) {
       stepTitle.textContent = modal?.classList?.contains("is-pickdrop")
@@ -1075,14 +1168,14 @@ export function setupReservationModal(state, storage) {
   };
 
   const syncFeeDisclosure = (isPickdropMode) => {
-    if (elements.feeKindergartenCard instanceof HTMLDetailsElement) {
-      elements.feeKindergartenCard.open = !isPickdropMode;
+    if (elements.feeSchoolCard instanceof HTMLDetailsElement) {
+      elements.feeSchoolCard.open = !isPickdropMode;
     }
     if (elements.feePickdropCard instanceof HTMLDetailsElement) {
       elements.feePickdropCard.open = isPickdropMode;
     }
-    if (elements.feeKindergartenCard) {
-      elements.feeKindergartenCard.classList.toggle("is-disabled", isPickdropMode);
+    if (elements.feeSchoolCard) {
+      elements.feeSchoolCard.classList.toggle("is-disabled", isPickdropMode);
     }
     if (elements.feePickdropCard) {
       elements.feePickdropCard.classList.toggle("is-disabled", !isPickdropMode);
@@ -1093,7 +1186,7 @@ export function setupReservationModal(state, storage) {
     if (enabled) {
       formState.context = options.context
         || formState.context
-        || "kindergarten";
+        || "school";
     }
     modal.classList.toggle("is-pickdrop", enabled);
     renderContextualLabels();
@@ -1168,7 +1261,7 @@ export function setupReservationModal(state, storage) {
         syncFilterChip(input);
       });
       syncPricingFee();
-      formState.ticketSelections = [...formState.kindergartenSelections];
+      formState.ticketSelections = [...formState.schoolSelections];
     }
     const conflicts = getConflictDates(formState, storage);
     formState.conflicts = conflicts;
@@ -1212,8 +1305,8 @@ export function setupReservationModal(state, storage) {
       formState.pickdropRemainingMap = new Map();
       return;
     }
-    const pickdropLimit = Number(
-      formState.selectedMember?.totalReservableCountByType?.pickdrop
+    const pickdropLimit = getPickdropReservableTotal(
+      formState.selectedMember?.totalReservableCountByType
     );
     const forceEmpty = Number.isFinite(pickdropLimit) && pickdropLimit <= 0;
     const pickdropOptions = formState.ticketOptions.filter(
@@ -1292,74 +1385,102 @@ export function setupReservationModal(state, storage) {
     delete amountEl.dataset.feeAmount;
   };
 
-  const resetAmountRange = (amountEl) => {
+  const getSelectedTicketMetaElement = (container) =>
+    container?.querySelector?.(
+      ".reservation-ticket-row.is-selected .reservation-ticket-row__meta"
+    );
+
+  const applyTicketMetaAmount = (amountEl, metaEl) => {
+    if (!amountEl || !metaEl) {
+      return false;
+    }
+    amountEl.replaceChildren(metaEl.cloneNode(true));
+    amountEl.classList.toggle("is-empty", false);
+    delete amountEl.dataset.feeAmount;
+    return true;
+  };
+
+  const applyFeeAmountText = (amountEl) => {
     if (!amountEl) {
       return;
     }
-    const values = amountEl.querySelectorAll(".reservation-ticket-row__meta-value");
-    const beforeEl = values[0] || null;
-    const afterEl = values[1] || null;
-    if (beforeEl && afterEl) {
-      beforeEl.textContent = "-";
-      afterEl.textContent = "-";
-      beforeEl.classList.remove("is-low");
-      afterEl.classList.remove("is-low");
-      amountEl.classList.add("is-empty");
-    } else {
-      amountEl.textContent = "-";
-    }
-    delete amountEl.dataset.feeAmount;
+    const feeAmount = Number(amountEl.dataset.feeAmount);
+    const hasFeeAmount = Number.isFinite(feeAmount);
+    const text = hasFeeAmount ? formatTicketPrice(Math.max(feeAmount, 0)) : "-";
+    amountEl.textContent = text;
+    amountEl.classList.toggle("is-empty", text === "-");
   };
 
   const syncFeeCardState = () => {
     const mode = getReservationMode(elements);
-    const kindergartenSelectionOrder = mode === "pickdrop"
-      ? formState.kindergartenSelections
+    const schoolSelectionOrder = mode === "pickdrop"
+      ? formState.schoolSelections
       : formState.ticketSelections;
     const pickdropSelectionOrder = mode === "pickdrop"
       ? formState.ticketSelections
       : [];
 
-    const hasKindergartenSelection = Array.isArray(kindergartenSelectionOrder)
-      && kindergartenSelectionOrder.length > 0;
+    const hasSchoolSelection = Array.isArray(schoolSelectionOrder)
+      && schoolSelectionOrder.length > 0;
     const hasPickdropSelection = Array.isArray(pickdropSelectionOrder)
       && pickdropSelectionOrder.length > 0;
 
-    if (kindergartenFeeSection) {
-      kindergartenFeeSection.classList.toggle("is-disabled", hasKindergartenSelection);
+    if (schoolFeeSection) {
+      schoolFeeSection.classList.toggle("is-disabled", hasSchoolSelection);
     }
     if (pickdropFeeSection) {
       pickdropFeeSection.classList.toggle("is-disabled", hasPickdropSelection);
     }
 
-    if (kindergartenTotalValue && hasKindergartenSelection) {
-      const totals = sumSelectionRemaining(
-        kindergartenSelectionOrder,
-        formState.kindergartenAllocationMap,
-        formState.kindergartenRemainingMap
-      );
-      setAmountRange(
-        kindergartenTotalValue,
-        totals.remainingBefore,
-        totals.remainingAfter
-      );
-    } else if (kindergartenTotalValue) {
-      resetAmountRange(kindergartenTotalValue);
+    const classes = classStorage.ensureDefaults();
+    const selectedClassType = getSelectedServiceType(formState, classes, elements);
+
+    if (schoolTotalValue) {
+      if (hasSchoolSelection) {
+        const totals = sumSelectionRemaining(
+          schoolSelectionOrder,
+          formState.schoolAllocationMap,
+          formState.schoolRemainingMap
+        );
+        const totalReservable = formState.selectedMember?.totalReservableCountByType?.[selectedClassType];
+        const beforeValue = Number.isFinite(Number(totalReservable))
+          ? Number(totalReservable)
+          : totals.remainingBefore;
+        setAmountRange(
+          schoolTotalValue,
+          beforeValue,
+          totals.remainingAfter
+        );
+      } else {
+        applyFeeAmountText(schoolTotalValue);
+      }
     }
 
-    if (pickdropTotalValue && hasPickdropSelection) {
-      const totals = sumSelectionRemaining(
-        pickdropSelectionOrder,
-        formState.pickdropAllocationMap,
-        formState.pickdropRemainingMap
-      );
-      setAmountRange(
-        pickdropTotalValue,
-        totals.remainingBefore,
-        totals.remainingAfter
-      );
-    } else if (pickdropTotalValue) {
-      resetAmountRange(pickdropTotalValue);
+    if (pickdropTotalValue) {
+      if (hasPickdropSelection) {
+        const selectedMeta = getSelectedTicketMetaElement(elements.pickdropTicketField);
+        if (!applyTicketMetaAmount(pickdropTotalValue, selectedMeta)) {
+          const totals = sumSelectionRemaining(
+            pickdropSelectionOrder,
+            formState.pickdropAllocationMap,
+            formState.pickdropRemainingMap
+          );
+          const usage = totals.remainingBefore - totals.remainingAfter;
+          const totalReservable = getPickdropReservableTotal(
+            formState.selectedMember?.totalReservableCountByType
+          );
+          const beforeValue = Number.isFinite(Number(totalReservable))
+            ? Number(totalReservable)
+            : totals.remainingBefore;
+          setAmountRange(
+            pickdropTotalValue,
+            beforeValue,
+            beforeValue - usage
+          );
+        }
+      } else {
+        applyFeeAmountText(pickdropTotalValue);
+      }
     }
   };
 
@@ -1373,9 +1494,9 @@ export function setupReservationModal(state, storage) {
       ? formState.pickdropDates
       : activeDates;
     renderPricingBreakdown({
-      kindergartenFeeContainer: elements.kindergartenFeeList,
+      schoolFeeContainer: elements.schoolFeeList,
       pickdropFeeContainer: elements.pickdropFeeList,
-      kindergartenTotalEl: elements.kindergartenTotalValue,
+      schoolTotalEl: elements.schoolTotalValue,
       pickdropTotalEl: elements.pickdropTotalValue,
       totalEl: elements.pricingTotalValue,
       pricingItems: pricingStorage.loadPricingItems(),
@@ -1448,10 +1569,10 @@ export function setupReservationModal(state, storage) {
         elements.ticketPlaceholder.hidden = !formState.selectedMember;
       }
       formState.ticketSelections = [];
-      formState.kindergartenSelections = [];
+      formState.schoolSelections = [];
       formState.ticketLimit = 0;
-      formState.kindergartenAllocationMap = new Map();
-      formState.kindergartenRemainingMap = new Map();
+      formState.schoolAllocationMap = new Map();
+      formState.schoolRemainingMap = new Map();
       syncPickdropTickets();
       syncCounts(formState, elements, classes);
       syncActionState(formState, elements, classes);
@@ -1471,15 +1592,15 @@ export function setupReservationModal(state, storage) {
     const pickdropOptions = formState.ticketOptions.filter(
       (ticket) => ticket.type === "pickdrop"
     );
-    const kindergartenOptions = eligibleOptions.filter(
-      (ticket) => ticket.type === "kindergarten"
+    const serviceOptions = eligibleOptions.filter(
+      (ticket) => ticket.type === selectedClassType
     );
-    const displayOptions = kindergartenOptions;
+    const displayOptions = serviceOptions;
     const disabledIds = mode === "pickdrop"
-      ? new Set(kindergartenOptions.map((ticket) => ticket.id))
+      ? new Set(serviceOptions.map((ticket) => ticket.id))
       : new Set();
-    const kindergartenAllocationMap = new Map();
-    const kindergartenRemainingMap = new Map();
+    const schoolAllocationMap = new Map();
+    const schoolRemainingMap = new Map();
 
     if (mode === "pickdrop") {
       const pickdropMap = new Map(
@@ -1500,52 +1621,35 @@ export function setupReservationModal(state, storage) {
         (sum, ticket) => sum + (Number(ticket.remainingCount) || 0),
         0
       );
-      if (kindergartenOptions.length > 0) {
+      if (serviceOptions.length > 0) {
         const classTicketMap = buildClassTicketMap(
           classes,
           formState.services,
-          kindergartenOptions
+          serviceOptions
         );
-        const usageOrder = kindergartenOptions.map((ticket) => ticket.id);
-        const totalRemainingMap = new Map(
-          kindergartenOptions.map((ticket) => [
-            ticket.id,
-            Number(ticket.totalCount) || 0,
-          ])
-        );
-        const usedCounts = getUsedReservationCountByClass(
-          storage,
-          formState.selectedMember,
-          formState.services
-        );
-        const usedAllocationResult = allocateCountsByClass({
-          classCounts: usedCounts,
-          classTicketMap,
-          ticketOrder: usageOrder,
-          ticketRemainingMap: totalRemainingMap,
-        });
         const availableMap = new Map(
-          kindergartenOptions.map((ticket) => {
-            const totalCount = Number(ticket.totalCount) || 0;
-            const remainingAfter = usedAllocationResult.remainingMap.get(ticket.id)
-              ?? totalCount;
+          serviceOptions.map((ticket) => {
+            const remainingRaw = Number(ticket.remainingCount);
+            const remainingAfter = Number.isFinite(remainingRaw)
+              ? Math.max(remainingRaw, 0)
+              : 0;
             return [
               ticket.id,
               {
                 ...ticket,
-                remainingCount: Math.max(remainingAfter, 0),
+                remainingCount: remainingAfter,
               },
             ];
           })
         );
         availableMap.forEach((ticket, ticketId) => {
-          kindergartenRemainingMap.set(
+          schoolRemainingMap.set(
             ticketId,
             Number(ticket.remainingCount) || 0
           );
         });
         const selectedRemainingMap = new Map(
-          formState.kindergartenSelections.map((ticketId) => [
+          formState.schoolSelections.map((ticketId) => [
             ticketId,
             availableMap.get(ticketId)?.remainingCount ?? 0,
           ])
@@ -1559,14 +1663,14 @@ export function setupReservationModal(state, storage) {
         const selectionAllocation = allocateCountsByClass({
           classCounts: selectionCounts,
           classTicketMap,
-          ticketOrder: formState.kindergartenSelections,
+          ticketOrder: formState.schoolSelections,
           ticketRemainingMap: selectedRemainingMap,
         });
-        formState.kindergartenSelections.forEach((ticketId) => {
+        formState.schoolSelections.forEach((ticketId) => {
           const remainingBefore = selectedRemainingMap.get(ticketId) || 0;
           const remainingAfter = selectionAllocation.remainingMap.get(ticketId)
             ?? remainingBefore;
-          kindergartenAllocationMap.set(ticketId, {
+          schoolAllocationMap.set(ticketId, {
             remainingBefore,
             remainingAfter,
             used: Math.max(remainingBefore - remainingAfter, 0),
@@ -1577,55 +1681,31 @@ export function setupReservationModal(state, storage) {
         ticketContainer,
         ticketPlaceholder,
         displayOptions,
-        formState.kindergartenSelections,
-        kindergartenAllocationMap,
+        formState.schoolSelections,
+        schoolAllocationMap,
         Boolean(formState.selectedMember),
         getReservationCount(formState, elements),
-        new Map(),
         disabledIds
       );
-      formState.kindergartenAllocationMap = kindergartenAllocationMap;
-      formState.kindergartenRemainingMap = kindergartenRemainingMap;
+      formState.schoolAllocationMap = schoolAllocationMap;
+      formState.schoolRemainingMap = schoolRemainingMap;
     } else {
       const classTicketMap = buildClassTicketMap(
         classes,
         formState.services,
         displayOptions
       );
-      const usageOrder = displayOptions.map((ticket) => ticket.id);
-      const totalRemainingMap = new Map(
-        displayOptions.map((ticket) => [
-          ticket.id,
-          Number(ticket.totalCount) || 0,
-        ])
-      );
-      const usedCounts = getUsedReservationCountByClass(
-        storage,
-        formState.selectedMember,
-        formState.services
-      );
-      const usedAllocationResult = allocateCountsByClass({
-        classCounts: usedCounts,
-        classTicketMap,
-        ticketOrder: usageOrder,
-        ticketRemainingMap: totalRemainingMap,
-      });
-      const usedAllocations = new Map();
       const availableMap = new Map(
         displayOptions.map((ticket) => {
-          const totalCount = Number(ticket.totalCount) || 0;
-          const remainingAfter = usedAllocationResult.remainingMap.get(ticket.id)
-            ?? totalCount;
-          usedAllocations.set(ticket.id, {
-            remainingBefore: totalCount,
-            remainingAfter,
-            used: Math.max(totalCount - remainingAfter, 0),
-          });
+          const remainingRaw = Number(ticket.remainingCount);
+          const remainingAfter = Number.isFinite(remainingRaw)
+            ? Math.max(remainingRaw, 0)
+            : 0;
           return [
             ticket.id,
             {
               ...ticket,
-              remainingCount: Math.max(remainingAfter, 0),
+              remainingCount: remainingAfter,
             },
           ];
         })
@@ -1674,7 +1754,7 @@ export function setupReservationModal(state, storage) {
         })
       );
       availableMap.forEach((ticket, ticketId) => {
-        kindergartenRemainingMap.set(
+        schoolRemainingMap.set(
           ticketId,
           Number(ticket.remainingCount) || 0
         );
@@ -1693,12 +1773,11 @@ export function setupReservationModal(state, storage) {
         selectionAllocations,
         Boolean(formState.selectedMember),
         getReservationCount(formState, elements),
-        usedAllocations,
         disabledIds
       );
-      formState.kindergartenSelections = [...formState.ticketSelections];
-      formState.kindergartenAllocationMap = selectionAllocations;
-      formState.kindergartenRemainingMap = kindergartenRemainingMap;
+      formState.schoolSelections = [...formState.ticketSelections];
+      formState.schoolAllocationMap = selectionAllocations;
+      formState.schoolRemainingMap = schoolRemainingMap;
     }
     syncPickdropTickets();
     syncCounts(formState, elements, classes);
@@ -1724,9 +1803,11 @@ export function setupReservationModal(state, storage) {
     const tickets = getTickets();
     const memberId = formState.selectedMember?.id;
     const memberTickets = getMemberTickets(memberId);
-    formState.ticketOptions = getIssuedTicketOptions(
-      tickets,
-      memberTickets
+    formState.ticketOptions = getReservableTicketOptions(
+      getIssuedTicketOptions(
+        tickets,
+        memberTickets
+      )
     );
     const availableIds = formState.ticketOptions.map((ticket) => ticket.id);
     formState.ticketSelections = formState.ticketSelections.filter((id) =>
@@ -1770,9 +1851,11 @@ export function setupReservationModal(state, storage) {
   const memberSelectOptions = {
     onMemberSelect: (member) => {
       const tickets = getTickets();
-      formState.ticketOptions = getIssuedTicketOptions(
-        tickets,
-        getMemberTickets(member.id)
+      formState.ticketOptions = getReservableTicketOptions(
+        getIssuedTicketOptions(
+          tickets,
+          getMemberTickets(member.id)
+        )
       );
       formState.ticketSelections = [];
       const classes = classStorage.ensureDefaults();
@@ -1788,7 +1871,6 @@ export function setupReservationModal(state, storage) {
       const autoOverrides = getMemberAutoSelectionOptions(
         formState,
         classes,
-        storage,
         timeZone
       );
       refreshTicketOptions(true, autoOverrides);
@@ -1915,7 +1997,7 @@ export function setupReservationModal(state, storage) {
   const submitReservation = (options = {}) => {
     const includePickdrop = options.includePickdrop === true;
     const classes = classStorage.ensureDefaults();
-    const mode = includePickdrop ? "pickdrop" : "kindergarten";
+    const mode = includePickdrop ? "pickdrop" : "school";
     const serviceType = includePickdrop
       ? "pickdrop"
       : getSelectedServiceType(formState, classes, elements);
@@ -1957,7 +2039,7 @@ export function setupReservationModal(state, storage) {
       : "";
     const serviceName = Array.from(formState.services)[0] || "";
     const serviceClass = classes.find((item) => item.name === serviceName);
-    const primaryServiceType = serviceClass?.type || "kindergarten";
+    const primaryServiceType = serviceClass?.type || "school";
     const serviceDates = getSortedDateKeys(formState.selectedDates);
     const pickdropDates = includePickdrop
       ? getSortedDateKeys(formState.pickdropDates)
@@ -1971,6 +2053,8 @@ export function setupReservationModal(state, storage) {
     const usageMap = new Map();
     let serviceUsedMap = new Map();
     let pickdropUsedMap = new Map();
+    let pickdropUsagePlan = [];
+    let pickdropMemberCount = { oneway: 0, roundtrip: 0 };
 
     if (hasMember) {
       const tickets = getTickets();
@@ -1987,9 +2071,9 @@ export function setupReservationModal(state, storage) {
       };
 
       if (includePickdrop) {
-        if (formState.kindergartenSelections.length > 0) {
+        if (formState.schoolSelections.length > 0) {
           const selectedRemainingMap = new Map(
-            formState.kindergartenSelections.map((ticketId) => [
+            formState.schoolSelections.map((ticketId) => [
               ticketId,
               Number(optionMap.get(ticketId)?.remainingCount) || 0,
             ])
@@ -2008,7 +2092,7 @@ export function setupReservationModal(state, storage) {
           const selectionAllocation = allocateCountsByClass({
             classCounts: selectionCounts,
             classTicketMap,
-            ticketOrder: formState.kindergartenSelections,
+            ticketOrder: formState.schoolSelections,
             ticketRemainingMap: selectedRemainingMap,
           });
           serviceUsedMap = selectionAllocation.usedMap;
@@ -2016,22 +2100,24 @@ export function setupReservationModal(state, storage) {
         }
 
         if (formState.ticketSelections.length > 0) {
+          const pickdropOptions = options.filter((option) => option.type === "pickdrop");
           const pickdropMap = new Map(
-            options
-              .filter((option) => option.type === "pickdrop")
-              .map((option) => [option.id, option])
+            pickdropOptions.map((option) => [option.id, option])
           );
-          const pickdropAllocation = allocateTicketUsage(
-            formState.ticketSelections,
-            pickdropMap,
-            formState.pickdropDates.size
-          );
-          const nextPickdropUsed = new Map();
-          pickdropAllocation.allocations.forEach((allocation, ticketId) => {
-            nextPickdropUsed.set(ticketId, Number(allocation?.used) || 0);
+          const built = buildPickdropUsagePlan({
+            dateKeys: pickdropDates,
+            pickdropFlags,
+            selectionOrder: formState.ticketSelections,
+            optionMap: pickdropMap,
           });
-          pickdropUsedMap = nextPickdropUsed;
-          applyUsage(nextPickdropUsed);
+          pickdropUsagePlan = built.planByDate;
+          pickdropUsedMap = built.usedByTicket;
+          pickdropUsedMap.forEach((used, ticketId) => {
+            const option = pickdropMap.get(ticketId);
+            const countType = resolvePickdropTicketCountType(option);
+            pickdropMemberCount[countType] += Number(used) || 0;
+          });
+          applyUsage(pickdropUsedMap);
         }
       } else if (formState.ticketSelections.length > 0) {
         const selectedRemainingMap = new Map(
@@ -2063,7 +2149,7 @@ export function setupReservationModal(state, storage) {
     }
 
     const serviceSelectionOrder = includePickdrop
-      ? formState.kindergartenSelections
+      ? formState.schoolSelections
       : formState.ticketSelections;
     const serviceTicketUsageMap = buildDateTicketUsageMap(
       serviceDates,
@@ -2071,10 +2157,9 @@ export function setupReservationModal(state, storage) {
       serviceUsedMap,
       optionMap
     );
-    const pickdropTicketUsageMap = buildDateTicketUsageMap(
+    const pickdropTicketUsagesMap = buildDateTicketUsagesMap(
       pickdropDates,
-      formState.ticketSelections,
-      pickdropUsedMap,
+      pickdropUsagePlan,
       optionMap
     );
 
@@ -2085,6 +2170,8 @@ export function setupReservationModal(state, storage) {
     });
 
     serviceDates.forEach((dateKey) => {
+      const pickdropForDate = getPickdropForDate(dateKey);
+      const serviceUsage = serviceTicketUsageMap.get(dateKey) || null;
       reservationDates.push({
         date: dateKey,
         class: serviceName,
@@ -2094,8 +2181,8 @@ export function setupReservationModal(state, storage) {
         checkinTime: elements.daycareStartTime?.value || "",
         checkoutTime: elements.daycareEndTime?.value || "",
         daycareFee: isDaycare ? daycareFee : 0,
-        ticketUsage: serviceTicketUsageMap.get(dateKey) || null,
-        pickdrop: getPickdropForDate(dateKey),
+        ticketUsages: serviceUsage ? [serviceUsage] : [],
+        ...pickdropForDate,
       });
     });
 
@@ -2104,6 +2191,7 @@ export function setupReservationModal(state, storage) {
         if (formState.selectedDates.has(dateKey)) {
           return;
         }
+        const pickdropForDate = getPickdropForDate(dateKey);
         reservationDates.push({
           date: dateKey,
           class: "",
@@ -2113,14 +2201,14 @@ export function setupReservationModal(state, storage) {
           checkinTime: "",
           checkoutTime: "",
           daycareFee: 0,
-          ticketUsage: pickdropTicketUsageMap.get(dateKey) || null,
-          pickdrop: getPickdropForDate(dateKey),
+          ticketUsages: pickdropTicketUsagesMap.get(dateKey) || [],
+          ...pickdropForDate,
         });
       });
     }
 
-    const hasAnyPickup = reservationDates.some((entry) => entry.pickdrop?.pickup);
-    const hasAnyDropoff = reservationDates.some((entry) => entry.pickdrop?.dropoff);
+    const hasAnyPickup = reservationDates.some((entry) => entry.pickup);
+    const hasAnyDropoff = reservationDates.some((entry) => entry.dropoff);
     const reservationItem = {
       id: createId(),
       type: primaryServiceType,
@@ -2155,11 +2243,23 @@ export function setupReservationModal(state, storage) {
           primaryServiceType
         );
       }
-      if (pickdropCount > 0) {
+      if (pickdropCount > 0 && pickdropFlags.hasPickup && pickdropFlags.hasDropoff && pickdropMemberCount.oneway === 0 && pickdropMemberCount.roundtrip === 0) {
+        pickdropMemberCount.roundtrip = pickdropCount;
+      } else if (pickdropCount > 0 && (pickdropFlags.hasPickup || pickdropFlags.hasDropoff) && pickdropMemberCount.oneway === 0 && pickdropMemberCount.roundtrip === 0) {
+        pickdropMemberCount.oneway = pickdropCount;
+      }
+      if (pickdropMemberCount.oneway > 0) {
         applyReservationToMember(
           formState.selectedMember.id,
-          pickdropCount,
-          "pickdrop"
+          pickdropMemberCount.oneway,
+          "oneway"
+        );
+      }
+      if (pickdropMemberCount.roundtrip > 0) {
+        applyReservationToMember(
+          formState.selectedMember.id,
+          pickdropMemberCount.roundtrip,
+          "roundtrip"
         );
       }
     }
@@ -2389,15 +2489,19 @@ export function setupReservationModal(state, storage) {
     syncActionState(formState, elements, classes);
   });
 
+  const filterVisibleReservations = (reservations) =>
+    (Array.isArray(reservations) ? reservations : []).filter(
+      (item) => item?.type !== "hoteling"
+    );
+
   const persistReservations = (items) => {
     if (storage && typeof storage.addReservation === "function") {
-      let newReservations;
-      items.forEach(item => {
-        newReservations = storage.addReservation(item);
+      items.forEach((item) => {
+        storage.addReservation(item);
       });
-      return newReservations;
+      return filterVisibleReservations(storage.loadReservations());
     }
-    return [...(state.reservations || []), ...items];
+    return filterVisibleReservations([...(state.reservations || []), ...items]);
   };
 
   submitButton?.addEventListener("click", () => {
@@ -2426,4 +2530,3 @@ export function setupReservationModal(state, storage) {
     openPickdropModal,
   };
 }
-

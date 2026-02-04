@@ -1,4 +1,4 @@
-export function getDefaultIssueQuantity(ticketQuantity, member, ticketType = "kindergarten") {
+export function getDefaultIssueQuantity(ticketQuantity, member, ticketType = "school") {
   const totalMap = member?.totalReservableCountByType;
   const totalReservable = Number(totalMap?.[ticketType]);
   const overage = Number.isFinite(totalReservable) && totalReservable < 0
@@ -34,7 +34,7 @@ export function computeIssueAvailability(
   isSelected,
   ticketType
 ) {
-  const type = ticketType || "kindergarten";
+  const type = ticketType || "school";
   const totalByType = member?.totalReservableCountByType;
   const baseRemaining = Number.isFinite(totalByType?.[type])
     ? totalByType[type]

@@ -186,24 +186,29 @@ export function initTicketIssueModal({ modal }) {
     }
     syncMembers();
     const filteredMembers = getFilteredMembers();
-          const availabilityMap = new Map(
-            filteredMembers.map((member) => {
-              const quantity = state.selections.get(member.id) || 1;
-              const type = state.ticket?.type || "kindergarten";
-              const availability = computeIssueAvailability(
-                member,
-                state.ticket?.quantity,
-                quantity,
-                state.selections.has(member.id),
-                type
-              );
-              const totalReservable = member.totalReservableCountByType?.[type];
-              availability.totalReservable = Number.isFinite(totalReservable)
-                ? totalReservable
-                : null;
-              return [member.id, availability];
-            })
-          );    renderIssueRows(
+    const availabilityMap = new Map(
+      filteredMembers.map((member) => {
+        const quantity = state.selections.get(member.id) || 1;
+        const type = state.ticket?.type === "pickdrop"
+          ? (normalizePickdropType(state.ticket?.pickdropType || state.ticket?.name) === "왕복"
+            ? "roundtrip"
+            : "oneway")
+          : (state.ticket?.type || "school");
+        const availability = computeIssueAvailability(
+          member,
+          state.ticket?.quantity,
+          quantity,
+          state.selections.has(member.id),
+          type
+        );
+        availability.totalReservable = Number.isFinite(availability.overage)
+          && availability.overage > 0
+          ? -availability.overage
+          : availability.remaining;
+        return [member.id, availability];
+      })
+    );
+    renderIssueRows(
       rowsContainer,
       filteredMembers,
       state.selections,
@@ -223,43 +228,60 @@ export function initTicketIssueModal({ modal }) {
       getZonedParts(new Date(), timeZone)
     );
     const issuedAtBase = Date.now();
-    return Array.from(state.selections.entries()).map(
-      ([memberId, quantity], index) => ({
-        id: `${issuedAtBase}-${index}`,
-        ticketId: state.ticket.id,
-        memberId,
-        quantity,
-        issuedDate,
-        issueDate: issuedDate,
-        timeZone,
-        name: state.ticket.name || "",
-        pickdropType: state.ticket.type === "pickdrop"
-          ? normalizePickdropType(state.ticket.pickdropType || state.ticket.name)
-          : "",
-        type: state.ticket.type || "",
-        totalCount: (Number(state.ticket.quantity) || 0) * (Number(quantity) || 0),
-        validity: Number(state.ticket.validity) || 0,
-        unit: state.ticket.unit || "",
-        startPolicy: state.ticket.startDatePolicy || "first-attendance",
-        reservationDateRule: state.ticket.reservationDateRule || "expiry",
-        startDate: state.ticket.startDatePolicy === "issue-date" ? issuedDate : "",
-        usedCount: 0,
-        reservableCount: (Number(state.ticket.quantity) || 0) * (Number(quantity) || 0),
-        expiryDate:
-          state.ticket.unlimitedValidity || state.ticket.startDatePolicy !== "issue-date"
-            ? ""
-            : addValidityToDate(
-                issuedDate,
-                Number(state.ticket.validity) || 0,
-                state.ticket.unit || ""
-              ),
-      })
-    );
+    const ticketUnitCount = Number(state.ticket.quantity) || 0;
+    const issues = [];
+    let issueIndex = 0;
+    Array.from(state.selections.entries()).forEach(([memberId, quantity]) => {
+      const issueQuantity = Math.max(1, Number(quantity) || 1);
+      for (let i = 0; i < issueQuantity; i += 1) {
+        issues.push({
+          id: `${issuedAtBase}-${issueIndex}`,
+          ticketId: state.ticket.id,
+          memberId,
+          quantity: 1,
+          issuedDate,
+          issueDate: issuedDate,
+          timeZone,
+          name: state.ticket.name || "",
+          pickdropType: state.ticket.type === "pickdrop"
+            ? normalizePickdropType(state.ticket.pickdropType || state.ticket.name)
+            : "",
+          type: state.ticket.type || "",
+          totalCount: ticketUnitCount,
+          validity: Number(state.ticket.validity) || 0,
+          unit: state.ticket.unit || "",
+          startPolicy: state.ticket.startDatePolicy || "first-attendance",
+          reservationDateRule: state.ticket.reservationDateRule || "expiry",
+          startDate: state.ticket.startDatePolicy === "issue-date" ? issuedDate : "",
+          usedCount: 0,
+          reservableCount: ticketUnitCount,
+          expiryDate:
+            state.ticket.unlimitedValidity || state.ticket.startDatePolicy !== "issue-date"
+              ? ""
+              : addValidityToDate(
+                  issuedDate,
+                  Number(state.ticket.validity) || 0,
+                  state.ticket.unit || ""
+                ),
+        });
+        issueIndex += 1;
+      }
+    });
+    return issues;
   };
 
   const buildReservationUrl = (memberId) => {
-    const target = new URL("../../public/index.html", window.location.href);
-    target.searchParams.set("reservation", "open");
+    const ticketType = state.ticket?.type || "";
+    const isHoteling = ticketType === "hoteling";
+    const target = new URL(
+      isHoteling ? "./hotels.html" : "../../public/index.html",
+      window.location.href
+    );
+    if (isHoteling) {
+      target.searchParams.set("hotelingReservation", "open");
+    } else {
+      target.searchParams.set("reservation", "open");
+    }
     target.searchParams.set("memberId", String(memberId));
     return target.toString();
   };
@@ -296,7 +318,11 @@ export function initTicketIssueModal({ modal }) {
     const quantity = getDefaultIssueQuantity(
       state.ticket.quantity,
       member,
-      state.ticket.type || "kindergarten"
+      state.ticket?.type === "pickdrop"
+        ? (normalizePickdropType(state.ticket?.pickdropType || state.ticket?.name) === "왕복"
+          ? "roundtrip"
+          : "oneway")
+        : (state.ticket.type || "school")
     );
     state.selections.set(memberId, quantity);
   };

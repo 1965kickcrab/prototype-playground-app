@@ -1,4 +1,4 @@
-﻿import { markReady, syncFilterChip } from "../utils/dom.js";
+import { markReady, syncFilterChip } from "../utils/dom.js";
 import {
   getActiveServices,
   getDefaultService,
@@ -18,7 +18,12 @@ import { formatTicketPrice } from "../services/ticket-service.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { getIssuedTicketOptions } from "../services/ticket-reservation-service.js";
 import { renderSelectableChips, setSelectedChip } from "./selection-chips.js";
-import { addTicketUsageCount } from "../services/ticket-usage-service.js";
+import {
+  addTicketUsageCount,
+  addTicketUsagesCount,
+  getEntryTicketUsages,
+  getPrimaryTicketUsage,
+} from "../services/ticket-usage-service.js";
 import {
   applyReservationStatusChange,
   loadIssueMembers,
@@ -29,6 +34,7 @@ import {
   removeReservationDateEntry,
   updateReservationDateEntry,
 } from "../services/reservation-entries.js";
+import { getPickdropCountType } from "../services/pickdrop-policy.js";
 
 const STATUS_CLASSES = [
   "list-table__status--primary",
@@ -45,6 +51,26 @@ const PICKDROP_TYPES = {
 };
 
 const STATUS_MENU_ORDER = ["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT", "CANCELED"];
+
+const SCHOOL_RESERVATION_TYPE = "school";
+
+const filterSchoolReservations = (reservations) =>
+  (Array.isArray(reservations) ? reservations : []).filter(
+    (item) => item?.type === SCHOOL_RESERVATION_TYPE
+  );
+
+const loadSchoolReservationsFromStorage = (storage) =>
+  storage && typeof storage.loadReservations === "function"
+    ? filterSchoolReservations(storage.loadReservations())
+    : [];
+
+const resolveSchoolReservations = (storage, reservations) => {
+  const stored = loadSchoolReservationsFromStorage(storage);
+  if (stored.length > 0) {
+    return stored;
+  }
+  return filterSchoolReservations(reservations);
+};
 
 function formatDateKey(date) {
   if (!date) return "";
@@ -157,8 +183,8 @@ function getReservationPickdropSummary(entries) {
   }
   return entries.reduce(
     (acc, entry) => ({
-      hasPickup: acc.hasPickup || Boolean(entry?.pickdrop?.pickup),
-      hasDropoff: acc.hasDropoff || Boolean(entry?.pickdrop?.dropoff),
+      hasPickup: acc.hasPickup || Boolean(entry?.pickup),
+      hasDropoff: acc.hasDropoff || Boolean(entry?.dropoff),
     }),
     { hasPickup: false, hasDropoff: false }
   );
@@ -386,9 +412,7 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
 
   body.innerHTML = "";
 
-  state.reservations = Array.isArray(state.reservations)
-    ? state.reservations
-    : [];
+  state.reservations = filterSchoolReservations(state.reservations);
 
   const activeServices = new Set(getActiveServices(state));
   const targetDateKey = formatDateKey(state.selectedDate);
@@ -400,8 +424,8 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
 
   reservations.forEach((entry) => {
     const { reservation } = entry;
-    const pickupChecked = entry.pickdrop?.pickup === true;
-    const dropoffChecked = entry.pickdrop?.dropoff === true;
+    const pickupChecked = entry.pickup === true;
+    const dropoffChecked = entry.dropoff === true;
     const hasPickup = pickupChecked;
     const hasDropoff = dropoffChecked;
 
@@ -559,8 +583,8 @@ function setupPickdropModal(list, state, getRows) {
       })
       .flatMap((entry) => {
         const reservation = entry.reservation;
-        const pickupChecked = entry.pickdrop?.pickup === true;
-        const dropoffChecked = entry.pickdrop?.dropoff === true;
+        const pickupChecked = entry.pickup === true;
+        const dropoffChecked = entry.dropoff === true;
         const ownerName = reservation.owner || "";
         const address = reservation.address || "주소 미정";
         const dogName = reservation.dogName || "";
@@ -718,18 +742,24 @@ function resolveReservationServiceTypes(reservation, entry, classStorage) {
   if (className) {
     const classes = classStorage.ensureDefaults();
     const match = classes.find((item) => item.name === className);
-    types.push(match?.type || "kindergarten");
+    types.push(match?.type || "school");
   }
   const hasPickdrop = Boolean(
-    entry?.pickdrop?.pickup
-    || entry?.pickdrop?.dropoff
+    entry?.pickup
+    || entry?.dropoff
     || reservation?.hasPickup
     || reservation?.hasDropoff
   );
   if (hasPickdrop) {
-    types.push("pickdrop");
+    const countType = getPickdropCountType({
+      pickup: Boolean(entry?.pickup || reservation?.hasPickup),
+      dropoff: Boolean(entry?.dropoff || reservation?.hasDropoff),
+    });
+    if (countType) {
+      types.push(countType);
+    }
   }
-  return types.length > 0 ? types : ["kindergarten"];
+  return types.length > 0 ? types : ["school"];
 }
 
 function applyMemberStatusDelta(
@@ -737,7 +767,7 @@ function applyMemberStatusDelta(
   beforeStatusKey,
   afterStatusKey,
   count = 1,
-  serviceType = "kindergarten"
+  serviceType = "school"
 ) {
   const memberId = getMemberIdFromReservation(reservation);
   if (!memberId) {
@@ -749,7 +779,7 @@ function applyMemberStatusDelta(
 function applyMemberStatusDeltas(reservation, beforeStatusKey, afterStatusKey, count, serviceTypes) {
   const types = Array.isArray(serviceTypes) && serviceTypes.length > 0
     ? serviceTypes
-    : ["kindergarten"];
+    : ["school"];
   types.forEach((type) => {
     applyMemberStatusDelta(reservation, beforeStatusKey, afterStatusKey, count, type);
   });
@@ -816,21 +846,15 @@ function applySelectedStatus(row, selectedKey) {
 }
 
 function syncReservationRow(row, state, storage) {
-  if (!state || !Array.isArray(state.reservations)) {
+  if (!state) {
     return;
   }
-
   const id = row.dataset.reservationId;
   if (!id) {
     return;
   }
   const dateKey = row.dataset.reservationDate;
   if (!dateKey) {
-    return;
-  }
-
-  const targetIndex = state.reservations.findIndex((item) => item.id === id);
-  if (targetIndex === -1) {
     return;
   }
 
@@ -842,28 +866,42 @@ function syncReservationRow(row, state, storage) {
   const checkinTime = row.dataset.checkinTime || "";
   const checkoutTime = row.dataset.checkoutTime || "";
 
-  const updated = updateReservationDateEntry(
-    state.reservations[targetIndex],
-    dateKey,
-    (entry) => ({
-      baseStatusKey,
-      statusText,
-      checkinTime,
-      checkoutTime,
-    })
-  );
-
-  const pickdropSummary = getReservationPickdropSummary(updated.dates);
-  state.reservations[targetIndex] = {
-    ...updated,
-    hasPickup: pickdropSummary.hasPickup,
-    hasDropoff: pickdropSummary.hasDropoff,
-    pickupChecked: pickdropSummary.hasPickup,
-    dropoffChecked: pickdropSummary.hasDropoff,
+  const updateReservationItem = (item) => {
+    const updated = updateReservationDateEntry(
+      item,
+      dateKey,
+      (entry) => ({
+        baseStatusKey,
+        statusText,
+        checkinTime,
+        checkoutTime,
+      })
+    );
+    const pickdropSummary = getReservationPickdropSummary(updated.dates);
+    return {
+      ...updated,
+      hasPickup: pickdropSummary.hasPickup,
+      hasDropoff: pickdropSummary.hasDropoff,
+      pickupChecked: pickdropSummary.hasPickup,
+      dropoffChecked: pickdropSummary.hasDropoff,
+    };
   };
 
-  if (storage && typeof storage.saveReservations === "function") {
-    storage.saveReservations(state.reservations);
+  if (storage && typeof storage.updateReservation === "function") {
+    const updatedReservations = storage.updateReservation(id, updateReservationItem);
+    state.reservations = filterSchoolReservations(updatedReservations);
+    return;
+  }
+
+  if (state && Array.isArray(state.reservations)) {
+    const targetIndex = state.reservations.findIndex((item) => item.id === id);
+    if (targetIndex !== -1) {
+      state.reservations[targetIndex] = updateReservationItem(state.reservations[targetIndex]);
+    }
+
+    if (storage && typeof storage.saveReservations === "function") {
+      storage.saveReservations(state.reservations);
+    }
   }
 }
 
@@ -923,9 +961,7 @@ function setupStatusMenu(list, storage, state, onUpdate) {
     const previousKey = activeRow.dataset.baseStatus || "PLANNED";
     const reservationId = activeRow.dataset.reservationId || "";
     const reservationDate = activeRow.dataset.reservationDate || "";
-    const reservations = storage && typeof storage.loadReservations === "function"
-      ? storage.loadReservations()
-      : state.reservations || [];
+    const reservations = resolveSchoolReservations(storage, state.reservations);
     const reservation = reservations.find((item) => item.id === reservationId);
     const dateEntry = reservationDate
       ? getReservationEntries([reservation]).find((entry) => entry.date === reservationDate)
@@ -945,7 +981,7 @@ function setupStatusMenu(list, storage, state, onUpdate) {
         const memberId = getMemberIdFromReservation(reservation);
         if (memberId) {
           const usageMap = new Map();
-          addTicketUsageCount(usageMap, dateEntry?.ticketUsage, 1);
+          addTicketUsagesCount(usageMap, getEntryTicketUsages(dateEntry), 1);
           rollbackReservationMemberTickets(memberId, usageMap);
         }
       }
@@ -1054,9 +1090,7 @@ function setupCancelModal(list, state, storage, refresh) {
       return;
     }
 
-    const reservations = storage && typeof storage.loadReservations === "function"
-      ? storage.loadReservations()
-      : state.reservations || [];
+    const reservations = resolveSchoolReservations(storage, state.reservations);
     const usageByMember = new Map();
     const canceledStatusKey = "CANCELED";
     const canceledLabel =
@@ -1084,7 +1118,7 @@ function setupCancelModal(list, state, storage, refresh) {
           const memberId = getMemberIdFromReservation(item);
           if (memberId) {
             const memberUsage = usageByMember.get(memberId) || new Map();
-            addTicketUsageCount(memberUsage, entry?.ticketUsage, 1);
+            addTicketUsagesCount(memberUsage, getEntryTicketUsages(entry), 1);
             usageByMember.set(memberId, memberUsage);
           }
         }
@@ -1100,7 +1134,7 @@ function setupCancelModal(list, state, storage, refresh) {
       storage.saveReservations(nextReservations);
     }
 
-    state.reservations = nextReservations;
+    state.reservations = filterSchoolReservations(nextReservations);
     usageByMember.forEach((usageMap, memberId) => {
       rollbackReservationMemberTickets(memberId, usageMap);
     });
@@ -1335,7 +1369,7 @@ function setupDetailModal(list, state, storage, refresh) {
       renderTicketInfoBadge(ticketInfo);
       return;
     }
-    const usage = dateEntry?.ticketUsage;
+    const usage = getPrimaryTicketUsage(dateEntry || {});
     if (!usage?.ticketId || !usage?.sequence) {
       renderTicketInfoBadge(ticketInfo);
       return;
@@ -1367,9 +1401,7 @@ function setupDetailModal(list, state, storage, refresh) {
     }
     activeReservationId = reservationId;
     activeReservationDate = dateKey || "";
-    const reservations = storage && typeof storage.loadReservations === "function"
-      ? storage.loadReservations()
-      : state.reservations || [];
+    const reservations = resolveSchoolReservations(storage, state.reservations);
     const target = reservations.find((item) => item.id === reservationId);
     activeMemberId = getMemberIdFromReservation(target);
     const dateEntries = getReservationEntries([target]);
@@ -1404,7 +1436,7 @@ function setupDetailModal(list, state, storage, refresh) {
       phoneDetailText.textContent = target?.phone || target?.ownerPhone || "-";
     }
     updateTicketInfo(target, dateEntry);
-    const hasTicketUsage = Boolean(dateEntry?.ticketUsage?.ticketId && dateEntry?.ticketUsage?.sequence);
+    const hasTicketUsage = getEntryTicketUsages(dateEntry || {}).length > 0;
     setPaymentMethod(hasTicketUsage ? "ticket" : "cash");
     const className = dateEntry?.className || target?.class || target?.service || "";
     setSelectedClass(className);
@@ -1412,10 +1444,13 @@ function setupDetailModal(list, state, storage, refresh) {
     const statusKey = dateEntry?.baseStatusKey || fallbackKey;
     updateStatusDisplay(statusKey);
     initialStatusKey = statusKey;
-    const entryPickdrop = dateEntry?.pickdrop || null;
+    const entryPickdrop = {
+      pickup: Boolean(dateEntry?.pickup ?? target?.hasPickup),
+      dropoff: Boolean(dateEntry?.dropoff ?? target?.hasDropoff),
+    };
     setPickdropFlags(
-      Boolean(entryPickdrop?.pickup ?? target?.hasPickup),
-      Boolean(entryPickdrop?.dropoff ?? target?.hasDropoff)
+      entryPickdrop.pickup,
+      entryPickdrop.dropoff
     );
     updateDaycareFee();
     setActiveDetailTab("product");
@@ -1428,8 +1463,8 @@ function setupDetailModal(list, state, storage, refresh) {
       checkoutTime: checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
       className,
       statusKey: activeStatusKey,
-      hasPickup: Boolean(entryPickdrop?.pickup ?? target?.hasPickup),
-      hasDropoff: Boolean(entryPickdrop?.dropoff ?? target?.hasDropoff),
+      hasPickup: entryPickdrop.pickup,
+      hasDropoff: entryPickdrop.dropoff,
     });
     updateSaveState();
     if (dateInput instanceof HTMLInputElement) {
@@ -1530,13 +1565,19 @@ function setupDetailModal(list, state, storage, refresh) {
       ? checkoutInput.value
       : "";
     const classes = classStorage.ensureDefaults();
-    const classType = classes.find((item) => item.name === nextClass)?.type || "kindergarten";
+    const classType = classes.find((item) => item.name === nextClass)?.type || "school";
     const serviceTypes = nextClass ? [classType] : [];
     if (pickdropFlags.hasPickup || pickdropFlags.hasDropoff) {
-      serviceTypes.push("pickdrop");
+      const pickdropType = getPickdropCountType({
+        pickup: pickdropFlags.hasPickup,
+        dropoff: pickdropFlags.hasDropoff,
+      });
+      if (pickdropType) {
+        serviceTypes.push(pickdropType);
+      }
     }
     if (serviceTypes.length === 0) {
-      serviceTypes.push("kindergarten");
+      serviceTypes.push("school");
     }
     const pricing = operationsStorage.loadSettings().daycarePricing || {};
     const daycareFee = classType === "daycare"
@@ -1555,10 +1596,8 @@ function setupDetailModal(list, state, storage, refresh) {
         checkinTime: nextCheckin,
         checkoutTime: nextCheckout,
         daycareFee,
-        pickdrop: {
-          pickup: pickdropFlags.hasPickup,
-          dropoff: pickdropFlags.hasDropoff,
-        },
+        pickup: pickdropFlags.hasPickup,
+        dropoff: pickdropFlags.hasDropoff,
       }));
       const pickdropSummary = getReservationPickdropSummary(updated.dates);
       return {
@@ -1573,17 +1612,21 @@ function setupDetailModal(list, state, storage, refresh) {
       };
     };
     if (storage && typeof storage.updateReservation === "function") {
-      state.reservations = storage.updateReservation(
-        activeReservationId,
-        updateReservationItem
+      state.reservations = filterSchoolReservations(
+        storage.updateReservation(
+          activeReservationId,
+          updateReservationItem
+        )
       );
     } else {
-      state.reservations = (state.reservations || []).map((item) => {
-        if (item.id !== activeReservationId) {
-          return item;
-        }
-        return updateReservationItem(item);
-      });
+      state.reservations = filterSchoolReservations(
+        (state.reservations || []).map((item) => {
+          if (item.id !== activeReservationId) {
+            return item;
+          }
+          return updateReservationItem(item);
+        })
+      );
     }
     if (nextDate) {
       activeReservationDate = nextDate;
@@ -1599,15 +1642,13 @@ function setupDetailModal(list, state, storage, refresh) {
         );
       });
       if (nextStatusKey === "CANCELED" && initialStatusKey !== "CANCELED") {
-        const reservations = storage && typeof storage.loadReservations === "function"
-          ? storage.loadReservations()
-          : state.reservations || [];
+        const reservations = resolveSchoolReservations(storage, state.reservations);
         const target = reservations.find((item) => item.id === activeReservationId);
         const entry = target
           ? getReservationEntries([target]).find((value) => value.date === activeReservationDate)
           : null;
         const usageMap = new Map();
-        addTicketUsageCount(usageMap, entry?.ticketUsage, 1);
+        addTicketUsagesCount(usageMap, getEntryTicketUsages(entry), 1);
         rollbackReservationMemberTickets(activeMemberId, usageMap);
       }
     }
@@ -1623,9 +1664,7 @@ function setupDetailModal(list, state, storage, refresh) {
     if (!window.confirm("예약을 삭제할까요?")) {
       return;
     }
-    const reservations = storage && typeof storage.loadReservations === "function"
-      ? storage.loadReservations()
-      : state.reservations || [];
+    const reservations = resolveSchoolReservations(storage, state.reservations);
     const nextReservations = reservations.reduce((acc, item) => {
       if (item.id !== activeReservationId) {
         acc.push(item);
@@ -1643,7 +1682,7 @@ function setupDetailModal(list, state, storage, refresh) {
         const memberId = getMemberIdFromReservation(item);
         if (memberId) {
           const usageMap = new Map();
-          addTicketUsageCount(usageMap, entry?.ticketUsage, 1);
+          addTicketUsagesCount(usageMap, getEntryTicketUsages(entry), 1);
           rollbackReservationMemberTickets(memberId, usageMap);
         }
       }
@@ -1657,7 +1696,7 @@ function setupDetailModal(list, state, storage, refresh) {
     if (storage && typeof storage.saveReservations === "function") {
       storage.saveReservations(nextReservations);
     }
-    state.reservations = nextReservations;
+    state.reservations = filterSchoolReservations(nextReservations);
     closeModal();
     refresh();
   });
@@ -1684,7 +1723,6 @@ export function setupList(state, storage) {
   const getRows = () => list.querySelectorAll("[data-reservation-row]");
   const cancelButton = list.querySelector("[data-reservation-cancel-open]");
   const selectAll = list.querySelector("[data-reservation-select-all]");
-
   const updateCancelButtonState = () => {
     if (!cancelButton) {
       return;
@@ -1727,7 +1765,9 @@ export function setupList(state, storage) {
   const refresh = () => {
     const dayoffSettings = operationsStorage.loadSettings();
     if (storage && typeof storage.loadReservations === "function") {
-      state.reservations = storage.loadReservations();
+      state.reservations = loadSchoolReservationsFromStorage(storage);
+    } else {
+      state.reservations = filterSchoolReservations(state.reservations);
     }
     renderReservations(list, storage, state, dayoffSettings, timeZone);
     const rows = getRows();
@@ -1863,5 +1903,3 @@ export function setupList(state, storage) {
 
   void state;
 }
-
-

@@ -40,8 +40,11 @@ import {
 import { allocateTicketUsage, getIssuedTicketOptions } from "../services/ticket-reservation-service.js";
 import {
   buildDateTicketUsageMap,
+  buildDateTicketUsagesMap,
   buildTicketUsageCountMap,
   buildTicketUsageEntries,
+  getEntryTicketUsages,
+  getPrimaryTicketUsage,
   buildTicketUsageMapFromEntries,
   mergeTicketUsageCountMap,
 } from "../services/ticket-usage-service.js";
@@ -50,11 +53,10 @@ import { setupReservationModal } from "./reservation.js";
 import { getDatePartsFromKey } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { createId } from "../utils/id.js";
-import { initReservationStorage, migrateToUnifiedReservations } from "/src/storage/reservation-storage.js";
+import { initReservationStorage } from "/src/storage/reservation-storage.js";
+import { getPickdropReservableTotal } from "../services/pickdrop-policy.js";
 
 document.addEventListener("DOMContentLoaded", () => {
-  migrateToUnifiedReservations();
-  
   const timeZone = getTimeZone();
   const reservationStorage = initReservationStorage();
   const roomStorage = initHotelRoomStorage();
@@ -264,7 +266,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (reservationState.selectedDateKey) {
       renderListForKey(reservationState.selectedDateKey);
     } else if (reservationState.reservations.length > 0) {
-      renderListForKey(reservationState.reservations[0]?.checkinDate || "");
+      const firstReservation = reservationState.reservations[0];
+      const firstCheckinDate = Array.isArray(firstReservation?.dates)
+        ? firstReservation.dates.find((entry) => entry?.kind === "checkin")?.date || ""
+        : "";
+      renderListForKey(firstCheckinDate || firstReservation?.checkinDate || "");
     }
   };
 
@@ -303,7 +309,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailCloseButtons = document.querySelectorAll("[data-hoteling-detail-close]");
   const detailOwnerEl = document.querySelector("[data-hoteling-detail-owner]");
   const detailPhoneEl = document.querySelector("[data-hoteling-detail-phone]");
-  const detailStatusEl = document.querySelector("[data-hoteling-detail-status]");
+  const detailStatusTrigger = document.querySelector("[data-hoteling-detail-status-trigger]");
+  const detailStatusValue = document.querySelector("[data-hoteling-detail-status-value]");
+  const detailStatusMenu = document.querySelector("[data-hoteling-detail-status-menu]");
   const detailDogNameEl = document.querySelector("[data-hoteling-detail-dog-name]");
   const detailBreedEl = document.querySelector("[data-hoteling-detail-breed]");
   const detailWeightEl = document.querySelector("[data-hoteling-detail-weight]");
@@ -313,6 +321,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailCheckinTimeEl = document.querySelector("[data-hoteling-detail-checkin-time]");
   const detailCheckoutDateEl = document.querySelector("[data-hoteling-detail-checkout-date]");
   const detailCheckoutTimeEl = document.querySelector("[data-hoteling-detail-checkout-time]");
+  const detailPickdropOptions = document.querySelector("[data-hoteling-detail-pickdrop-options]");
   const detailMemoEl = document.querySelector("[data-hoteling-detail-memo]");
   const detailSaveButton = document.querySelector("[data-hoteling-detail-save]");
   const detailTabButtons = document.querySelectorAll("[data-hoteling-detail-tab]");
@@ -329,6 +338,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailState = {
     reservationId: "",
     initial: null,
+    statusKey: "PLANNED",
+    statusDateKey: "",
+    statusKind: "",
   };
   let activePaymentMethod = "ticket";
   const detailRoomDataKey = "hotelingDetailRoom";
@@ -443,8 +455,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       
-      // Update status on each date entry
+      // Keep status source-of-truth on baseStatusKey for ticket recount.
       reservation.dates.forEach(entry => {
+        entry.baseStatusKey = "CANCELED";
+        entry.statusText = reservationStorage.STATUS.CANCELED;
         entry.status = reservationStorage.STATUS.CANCELED;
       });
 
@@ -492,6 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!detailModal) {
       return;
     }
+    closeDetailStatusMenu();
     detailModal.setAttribute("aria-hidden", "true");
     detailModal.classList.remove("is-open");
   };
@@ -522,6 +537,94 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
+  const HOTELING_DETAIL_STATUS_ORDER = [
+    "PLANNED",
+    "CHECKIN",
+    "CHECKOUT",
+    "NO_SHOW",
+    "CANCELED",
+  ];
+
+  const HOTELING_STATUS_CLASS_MAP = {
+    PLANNED: "hoteling-detail__status--planned",
+    CHECKIN: "hoteling-detail__status--checkin",
+    CHECKOUT: "hoteling-detail__status--checkout",
+    NO_SHOW: "hoteling-detail__status--noshow",
+    CANCELED: "hoteling-detail__status--canceled",
+  };
+
+  const getHotelingStatusLabel = (statusKey) => {
+    if (statusKey === "CHECKIN") {
+      return "입실";
+    }
+    if (statusKey === "CHECKOUT") {
+      return "퇴실";
+    }
+    return STATUS[statusKey] || "-";
+  };
+
+  const closeDetailStatusMenu = () => {
+    if (!detailStatusMenu) {
+      return;
+    }
+    detailStatusMenu.hidden = true;
+    detailStatusTrigger?.setAttribute("aria-expanded", "false");
+  };
+
+  const updateDetailStatusDisplay = (statusKey) => {
+    const nextKey = String(statusKey || "PLANNED");
+    detailState.statusKey = nextKey;
+    if (detailStatusValue) {
+      detailStatusValue.textContent = getHotelingStatusLabel(nextKey);
+    }
+    if (detailStatusTrigger) {
+      detailStatusTrigger.classList.remove(
+        "hoteling-detail__status--planned",
+        "hoteling-detail__status--checkin",
+        "hoteling-detail__status--checkout",
+        "hoteling-detail__status--noshow",
+        "hoteling-detail__status--canceled"
+      );
+      detailStatusTrigger.classList.add(
+        HOTELING_STATUS_CLASS_MAP[nextKey] || HOTELING_STATUS_CLASS_MAP.PLANNED
+      );
+    }
+  };
+
+  const renderDetailStatusMenu = () => {
+    if (!detailStatusMenu) {
+      return;
+    }
+    detailStatusMenu.innerHTML = HOTELING_DETAIL_STATUS_ORDER
+      .map((key) => {
+        const label = getHotelingStatusLabel(key);
+        if (!label) {
+          return "";
+        }
+        const isSelected = key === detailState.statusKey ? " is-selected" : "";
+        return `
+          <button class="menu-option reservation-detail__status-option${isSelected}" type="button" data-hoteling-detail-status-option="${key}">
+            <span class="menu-option__title">${label}</span>
+          </button>
+        `;
+      })
+      .join("");
+  };
+
+  const toggleDetailStatusMenu = () => {
+    if (!detailStatusMenu) {
+      return;
+    }
+    const shouldOpen = detailStatusMenu.hidden;
+    if (!shouldOpen) {
+      closeDetailStatusMenu();
+      return;
+    }
+    renderDetailStatusMenu();
+    detailStatusMenu.hidden = false;
+    detailStatusTrigger?.setAttribute("aria-expanded", "true");
+  };
+
   const renderDetailTicketInfo = (reservation) => {
     if (!detailTicketInfo) {
       return;
@@ -532,9 +635,9 @@ document.addEventListener("DOMContentLoaded", () => {
       (item) => String(item.id) === String(memberId)
     );
     const usageEntry = Array.isArray(reservation?.dates)
-      ? reservation.dates.find((entry) => entry?.ticketUsage?.ticketId)
+      ? reservation.dates.find((entry) => getEntryTicketUsages(entry).length > 0)
       : null;
-    const usage = usageEntry?.ticketUsage || null;
+    const usage = getPrimaryTicketUsage(usageEntry || {}) || null;
     if (!memberId || !usage?.ticketId || !usage?.sequence) {
       const card = document.createElement("div");
       card.className =
@@ -583,18 +686,37 @@ document.addEventListener("DOMContentLoaded", () => {
     detailTicketInfo.appendChild(card);
   };
 
-  const openDetailModal = (reservation) => {
+  const getDetailPickdropFlags = () => {
+    const pickupChip = detailPickdropOptions?.querySelector(
+      "[data-hoteling-detail-pickdrop=\"pickup\"]"
+    );
+    const dropoffChip = detailPickdropOptions?.querySelector(
+      "[data-hoteling-detail-pickdrop=\"dropoff\"]"
+    );
+    return {
+      pickup: Boolean(pickupChip?.classList?.contains("is-selected")),
+      dropoff: Boolean(dropoffChip?.classList?.contains("is-selected")),
+    };
+  };
+
+  const openDetailModal = (reservation, context = {}) => {
     if (!detailModal || !reservation) {
       return;
     }
+    const schedule = getHotelingScheduleSnapshot(reservation);
+    const status = getHotelingDetailStatus(reservation, context);
+    const pickdropFlags = getHotelingPickdropFlags(reservation);
     detailState.reservationId = reservation.id || "";
     detailState.initial = {
       room: String(reservation.room || ""),
-      checkinDate: reservation.checkinDate || "",
-      checkoutDate: reservation.checkoutDate || "",
-      checkinTime: reservation.checkinTime || "",
-      checkoutTime: reservation.checkoutTime || "",
+      checkinDate: schedule.checkinDate,
+      checkoutDate: schedule.checkoutDate,
+      checkinTime: schedule.checkinTime,
+      checkoutTime: schedule.checkoutTime,
+      statusKey: status.key,
       memo: reservation.memo || "",
+      pickup: pickdropFlags.hasPickup,
+      dropoff: pickdropFlags.hasDropoff,
     };
     const owner = reservation.owner || "-";
     const dogName = reservation.dogName || "-";
@@ -631,27 +753,13 @@ document.addEventListener("DOMContentLoaded", () => {
         { dataKey: detailRoomDataKey, selectedValue: roomId }
       );
     }
-    if (detailStatusEl) {
-      detailStatusEl.textContent = reservation.status || "-";
-      detailStatusEl.classList.remove(
-        "hoteling-detail__status--planned",
-        "hoteling-detail__status--checkin",
-        "hoteling-detail__status--checkout",
-        "hoteling-detail__status--canceled"
-      );
-      if (reservation.status === STATUS.CHECKIN) {
-        detailStatusEl.classList.add("hoteling-detail__status--checkin");
-      } else if (reservation.status === STATUS.CHECKOUT) {
-        detailStatusEl.classList.add("hoteling-detail__status--checkout");
-      } else if (reservation.status === STATUS.CANCELED) {
-        detailStatusEl.classList.add("hoteling-detail__status--canceled");
-      } else {
-        detailStatusEl.classList.add("hoteling-detail__status--planned");
-      }
-    }
+    detailState.statusDateKey = context?.dateKey || "";
+    detailState.statusKind = context?.kind || "";
+    updateDetailStatusDisplay(status.key);
+    closeDetailStatusMenu();
     const nights = getNightCount(
-      getDateFromKey(reservation.checkinDate),
-      getDateFromKey(reservation.checkoutDate)
+      getDateFromKey(schedule.checkinDate),
+      getDateFromKey(schedule.checkoutDate)
     );
     if (detailNightsEl) {
       detailNightsEl.textContent =
@@ -660,16 +768,31 @@ document.addEventListener("DOMContentLoaded", () => {
           : "-";
     }
     if (detailCheckinDateEl) {
-      detailCheckinDateEl.value = reservation.checkinDate || "";
+      detailCheckinDateEl.value = schedule.checkinDate;
     }
     if (detailCheckoutDateEl) {
-      detailCheckoutDateEl.value = reservation.checkoutDate || "";
+      detailCheckoutDateEl.value = schedule.checkoutDate;
     }
     if (detailCheckinTimeEl) {
-      detailCheckinTimeEl.value = reservation.checkinTime || "";
+      detailCheckinTimeEl.value = schedule.checkinTime;
     }
     if (detailCheckoutTimeEl) {
-      detailCheckoutTimeEl.value = reservation.checkoutTime || "";
+      detailCheckoutTimeEl.value = schedule.checkoutTime;
+    }
+    if (detailPickdropOptions) {
+      const { hasPickup, hasDropoff } = pickdropFlags;
+      const pickupChip = detailPickdropOptions.querySelector(
+        "[data-hoteling-detail-pickdrop=\"pickup\"]"
+      );
+      const dropoffChip = detailPickdropOptions.querySelector(
+        "[data-hoteling-detail-pickdrop=\"dropoff\"]"
+      );
+      if (pickupChip) {
+        pickupChip.classList.toggle("is-selected", hasPickup);
+      }
+      if (dropoffChip) {
+        dropoffChip.classList.toggle("is-selected", hasDropoff);
+      }
     }
     if (detailMemoEl) {
       const memoValue = String(reservation.memo || "").trim();
@@ -681,7 +804,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     renderDetailTicketInfo(reservation);
     const hasTicketUsage = Array.isArray(reservation?.dates)
-      ? reservation.dates.some((entry) => entry?.ticketUsage?.ticketId)
+      ? reservation.dates.some((entry) => getEntryTicketUsages(entry).length > 0)
       : false;
     setPaymentMethod(hasTicketUsage ? "ticket" : "cash");
     setActiveDetailTab("product");
@@ -715,9 +838,11 @@ document.addEventListener("DOMContentLoaded", () => {
       checkoutDate: detailCheckoutDateEl?.value || "",
       checkinTime: detailCheckinTimeEl?.value || "",
       checkoutTime: detailCheckoutTimeEl?.value || "",
+      statusKey: detailState.statusKey || "PLANNED",
       memo: detailMemoEl instanceof HTMLTextAreaElement
         ? detailMemoEl.value.trim()
         : detailState.initial.memo || "",
+      ...getDetailPickdropFlags(),
     };
     const hasChanges =
       next.room !== (detailState.initial.room || "")
@@ -725,7 +850,10 @@ document.addEventListener("DOMContentLoaded", () => {
       || next.checkoutDate !== detailState.initial.checkoutDate
       || next.checkinTime !== detailState.initial.checkinTime
       || next.checkoutTime !== detailState.initial.checkoutTime
-      || next.memo !== (detailState.initial.memo || "");
+      || next.statusKey !== (detailState.initial.statusKey || "PLANNED")
+      || next.memo !== (detailState.initial.memo || "")
+      || next.pickup !== Boolean(detailState.initial.pickup)
+      || next.dropoff !== Boolean(detailState.initial.dropoff);
     detailSaveButton.disabled = !hasChanges;
   };
 
@@ -739,30 +867,46 @@ document.addEventListener("DOMContentLoaded", () => {
       checkoutDate: detailCheckoutDateEl?.value || "",
       checkinTime: detailCheckinTimeEl?.value || "",
       checkoutTime: detailCheckoutTimeEl?.value || "",
+      statusKey: detailState.statusKey || "PLANNED",
       memo: detailMemoEl instanceof HTMLTextAreaElement
         ? detailMemoEl.value.trim()
         : "",
+      ...getDetailPickdropFlags(),
     };
     reservationState.reservations = reservationStorage.updateReservation(
       detailState.reservationId,
       (item) => {
+        const { statusKey, ...nextPayload } = payload;
         const nextDates = buildHotelingDateEntries(
           payload.checkinDate,
-          payload.checkoutDate
+          payload.checkoutDate,
+          payload.checkinTime,
+          payload.checkoutTime
         );
         const usageMap = new Map(
           (Array.isArray(item.dates) ? item.dates : []).map((entry) => [
             `${entry.date}-${entry.kind}`,
-            entry.ticketUsage || null,
+            getEntryTicketUsages(entry),
           ])
         );
         return {
           ...item,
-          ...payload,
-          dates: nextDates.map((entry) => ({
-            ...entry,
-            ticketUsage: usageMap.get(`${entry.date}-${entry.kind}`) || null,
-          })),
+          ...nextPayload,
+          dates: nextDates.map((entry) => {
+            const key = `${entry.date}-${entry.kind}`;
+            const nextStatusKey = statusKey;
+            return {
+              ...entry,
+              baseStatusKey: nextStatusKey,
+              statusText: getHotelingStatusLabel(nextStatusKey),
+              status: getHotelingStatusLabel(nextStatusKey),
+              ticketUsages: usageMap.get(key) || [],
+              pickup: entry.kind === "checkin" ? payload.pickup : false,
+              dropoff: entry.kind === "checkout" ? payload.dropoff : false,
+            };
+          }),
+          hasPickup: Boolean(payload.pickup),
+          hasDropoff: Boolean(payload.dropoff),
         };
       }
     );
@@ -870,7 +1014,10 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!reservation) {
         return;
       }
-      openDetailModal(reservation);
+      openDetailModal(reservation, {
+        dateKey: reservationState.selectedDateKey || "",
+        kind: row?.dataset?.entryKind || "",
+      });
     });
   }
 
@@ -912,6 +1059,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   detailModal?.addEventListener("click", (event) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
+    const statusTrigger = target?.closest("[data-hoteling-detail-status-trigger]");
+    if (statusTrigger && detailStatusTrigger?.contains(statusTrigger)) {
+      toggleDetailStatusMenu();
+      return;
+    }
+    const statusOption = target?.closest("[data-hoteling-detail-status-option]");
+    if (statusOption && detailStatusMenu?.contains(statusOption)) {
+      updateDetailStatusDisplay(statusOption.dataset.hotelingDetailStatusOption || "PLANNED");
+      closeDetailStatusMenu();
+      syncDetailSaveState();
+      return;
+    }
     const tabButton = target?.closest("[data-hoteling-detail-tab]");
     if (tabButton && detailModal.contains(tabButton)) {
       setActiveDetailTab(tabButton.dataset.hotelingDetailTab);
@@ -927,9 +1086,24 @@ document.addEventListener("DOMContentLoaded", () => {
       syncDetailSaveState();
       return;
     }
+    const pickdropChip = target?.closest("[data-hoteling-detail-pickdrop]");
+    if (pickdropChip && detailPickdropOptions?.contains(pickdropChip)) {
+      pickdropChip.classList.toggle("is-selected");
+      syncDetailSaveState();
+      return;
+    }
     const paymentButton = target?.closest("[data-hoteling-detail-payment-method]");
     if (paymentButton && detailModal.contains(paymentButton)) {
       setPaymentMethod(paymentButton.dataset.hotelingDetailPaymentMethod);
+      return;
+    }
+    if (
+      detailStatusMenu
+      && !detailStatusMenu.hidden
+      && !target?.closest("[data-hoteling-detail-status-menu]")
+      && !target?.closest("[data-hoteling-detail-status-trigger]")
+    ) {
+      closeDetailStatusMenu();
     }
   });
   }
@@ -1077,6 +1251,64 @@ document.addEventListener("DOMContentLoaded", () => {
     return new Date(parts.year, parts.month - 1, parts.day);
   };
 
+  const getHotelingScheduleSnapshot = (reservation) => {
+    const entries = Array.isArray(reservation?.dates) ? reservation.dates : [];
+    const checkinEntry = entries.find((entry) => entry?.kind === "checkin");
+    const checkoutEntry = entries.find((entry) => entry?.kind === "checkout");
+    return {
+      checkinDate: checkinEntry?.date || reservation?.checkinDate || "",
+      checkoutDate: checkoutEntry?.date || reservation?.checkoutDate || "",
+      checkinTime:
+        checkinEntry?.checkinTime
+        || checkinEntry?.time
+        || reservation?.checkinTime
+        || "",
+      checkoutTime:
+        checkoutEntry?.checkoutTime
+        || checkoutEntry?.time
+        || reservation?.checkoutTime
+        || "",
+    };
+  };
+
+  const getStatusKeyByLabel = (label) => {
+    if (label === "입실") {
+      return "CHECKIN";
+    }
+    if (label === "퇴실") {
+      return "CHECKOUT";
+    }
+    return Object.entries(STATUS).find(([, value]) => value === label)?.[0] || "";
+  };
+
+  const getHotelingDetailStatus = (reservation, context = {}) => {
+    const entries = Array.isArray(reservation?.dates) ? reservation.dates : [];
+    const dateKey = context?.dateKey || "";
+    const kind = context?.kind || "";
+    const targetEntry = entries.find((entry) =>
+      entry?.date === dateKey && (!kind || entry?.kind === kind)
+    ) || entries.find((entry) => entry?.date === dateKey) || entries[0] || null;
+    const statusKey = String(
+      targetEntry?.baseStatusKey
+      || getStatusKeyByLabel(targetEntry?.statusText || "")
+      || getStatusKeyByLabel(targetEntry?.status || "")
+      || "PLANNED"
+    );
+    return {
+      key: statusKey,
+      label: getHotelingStatusLabel(statusKey) || targetEntry?.statusText || targetEntry?.status || "-",
+    };
+  };
+
+  const getHotelingPickdropFlags = (reservation) => {
+    const entries = Array.isArray(reservation?.dates) ? reservation.dates : [];
+    const hasPickup = entries.some((entry) => entry?.pickup)
+      || Boolean(reservation?.hasPickup);
+    const hasDropoff = entries.some((entry) => entry?.dropoff)
+      || Boolean(reservation?.hasDropoff);
+    return { hasPickup, hasDropoff };
+  };
+
   const getNightCount = (checkin, checkout) => {
     const checkinKey = getHotelingDateKey(checkin, timeZone);
     const checkoutKey = getHotelingDateKey(checkout, timeZone);
@@ -1175,7 +1407,7 @@ document.addEventListener("DOMContentLoaded", () => {
       allocationResult.allocations,
       Boolean(modalState.selectedMember),
       nightCount,
-      allocationResult.allocations
+      new Set()
     );
   };
 
@@ -1252,8 +1484,8 @@ document.addEventListener("DOMContentLoaded", () => {
     modalState.pickdropTicketSelections = modalState.pickdropTicketSelections.filter(
       (id) => pickdropMap.has(id)
     );
-    const pickdropLimit = Number(
-      modalState.selectedMember?.totalReservableCountByType?.pickdrop
+    const pickdropLimit = getPickdropReservableTotal(
+      modalState.selectedMember?.totalReservableCountByType
     );
     const hasNoPickdropTickets = Number.isFinite(pickdropLimit) && pickdropLimit <= 0;
     if (hasNoPickdropTickets) {
@@ -1274,9 +1506,9 @@ document.addEventListener("DOMContentLoaded", () => {
       nightCount
     );
     renderPricingBreakdown({
-      kindergartenFeeContainer: null,
+      schoolFeeContainer: null,
       pickdropFeeContainer: pickdropFeeList,
-      kindergartenTotalEl: null,
+      schoolTotalEl: null,
       pickdropTotalEl: pickdropTotalValue,
       totalEl: hotelingTotalAll,
       pricingItems,
@@ -1329,12 +1561,61 @@ document.addEventListener("DOMContentLoaded", () => {
       if (metaElement) {
         applyTicketMetaAmount(hotelingAmount, metaElement);
         applyTicketMetaAmount(hotelingTotalValue, metaElement);
+
+        const usage = modalState.ticketSelections.reduce((sum, id) => {
+          const alloc = hotelingAllocation.allocations.get(id);
+          return sum + (Number(alloc?.remainingBefore || 0) - Number(alloc?.remainingAfter || 0));
+        }, 0);
+        const total = modalState.selectedMember?.totalReservableCountByType?.hoteling;
+        const fallbackBefore = modalState.ticketSelections.reduce((sum, id) => {
+          const alloc = hotelingAllocation.allocations.get(id);
+          return sum + (Number(alloc?.remainingBefore) || 0);
+        }, 0);
+        const realBefore = Number.isFinite(Number(total)) ? Number(total) : fallbackBefore;
+
+        const updateValues = (el) => {
+          if (!el) return;
+          const vals = el.querySelectorAll(".reservation-ticket-row__meta-value");
+          if (vals.length >= 2) {
+            vals[0].textContent = `${realBefore}박`;
+            vals[1].textContent = `${realBefore - usage}박`;
+            vals[0].classList.toggle("is-low", realBefore <= 2);
+            vals[1].classList.toggle("is-low", (realBefore - usage) <= 2);
+          }
+        };
+        updateValues(hotelingAmount);
+        updateValues(hotelingTotalValue);
       }
     }
     if (hotelingFeeStep && hasPickdropSelection) {
       const metaElement = getSelectedTicketMetaElement(pickdropTicketField);
       if (metaElement) {
         applyTicketMetaAmount(pickdropTotalValue, metaElement);
+
+        const usage = modalState.pickdropTicketSelections.reduce((sum, id) => {
+          const alloc = pickdropAllocation.allocations.get(id);
+          return sum + (Number(alloc?.remainingBefore || 0) - Number(alloc?.remainingAfter || 0));
+        }, 0);
+        const total = getPickdropReservableTotal(
+          modalState.selectedMember?.totalReservableCountByType
+        );
+        const fallbackBefore = modalState.pickdropTicketSelections.reduce((sum, id) => {
+          const alloc = pickdropAllocation.allocations.get(id);
+          return sum + (Number(alloc?.remainingBefore) || 0);
+        }, 0);
+        const realBefore = Number.isFinite(Number(total)) ? Number(total) : fallbackBefore;
+
+        const updateValues = (el) => {
+          if (!el) return;
+          const vals = el.querySelectorAll(".reservation-ticket-row__meta-value");
+          if (vals.length >= 2) {
+            vals[0].textContent = `${realBefore}회`;
+            vals[1].textContent = `${realBefore - usage}회`;
+            vals[0].classList.toggle("is-low", realBefore <= 2);
+            vals[1].classList.toggle("is-low", (realBefore - usage) <= 2);
+          }
+        };
+        updateValues(pickdropTotalValue);
       }
     }
     syncReservationFeeTotal(reservationModal, hotelingTotalAll);
@@ -1388,7 +1669,7 @@ document.addEventListener("DOMContentLoaded", () => {
     icon.className = className
       ? `hoteling-calendar__mark ${className}`
       : "hoteling-calendar__mark";
-    icon.src = `../../assets/${iconName}`;
+    icon.src = `/assets/${iconName}`;
     icon.alt = alt;
     cell.appendChild(icon);
   };
@@ -1582,6 +1863,30 @@ document.addEventListener("DOMContentLoaded", () => {
     resetModalState();
   };
 
+  const openModalFromQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("hotelingReservation") !== "open") {
+      return;
+    }
+    const memberId = params.get("memberId");
+    openModal();
+    if (memberId) {
+      const member = loadIssueMembers().find(
+        (item) => String(item.id) === String(memberId)
+      );
+      if (member) {
+        applyMemberSelection(member);
+        if (memberInput) {
+          memberInput.value = `${member.dogName} / ${member.owner}`;
+        }
+      }
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("hotelingReservation");
+    url.searchParams.delete("memberId");
+    window.history.replaceState({}, "", url.toString());
+  };
+
   const closeModal = () => {
     if (!reservationModal) {
       return;
@@ -1601,6 +1906,8 @@ document.addEventListener("DOMContentLoaded", () => {
   if (reservationClose) {
     reservationClose.addEventListener("click", closeModal);
   }
+
+  openModalFromQuery();
 
   if (modalPrev) {
     modalPrev.addEventListener("click", () => {
@@ -1796,6 +2103,15 @@ document.addEventListener("DOMContentLoaded", () => {
             memo: formData.memo,
             dates: buildHotelingDateEntries(checkinDate, checkoutDate, checkinTime, checkoutTime),
         };
+        const hasPickup = modalState.pickdrops.has("pickup");
+        const hasDropoff = modalState.pickdrops.has("dropoff");
+        newReservation.hasPickup = hasPickup;
+        newReservation.hasDropoff = hasDropoff;
+        newReservation.dates = newReservation.dates.map((entry) => ({
+          ...entry,
+          pickup: entry.kind === "checkin" ? hasPickup : false,
+          dropoff: entry.kind === "checkout" ? hasDropoff : false,
+        }));
 
         const nights = getNightCount(modalState.checkin, modalState.checkout) || 0;
         
@@ -1809,7 +2125,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             newReservation.dates.forEach(entry => {
                 if (dateTicketUsageMap.has(entry.date)) {
-                    entry.ticketUsage = dateTicketUsageMap.get(entry.date);
+                    const usage = dateTicketUsageMap.get(entry.date);
+                    entry.ticketUsages = usage ? [usage] : [];
                 }
             });
         }
@@ -1817,9 +2134,18 @@ document.addEventListener("DOMContentLoaded", () => {
         reservationStorage.addReservation(newReservation);
         allReservations.push(newReservation);
         reservationState.reservations = allReservations.filter(r => r.type === 'hoteling');
+        refreshCalendarStats();
 
         // Recalculate counts which is now handled by applyReservationToMemberTickets
         const usageMap = buildTicketUsageCountMap(newReservation.dates);
+        if (modalState.selectedMember?.id && nights > 0) {
+            applyReservationToMember(modalState.selectedMember.id, nights, "hoteling");
+        }
+        if (modalState.selectedMember?.id && hasPickup && hasDropoff) {
+            applyReservationToMember(modalState.selectedMember.id, 1, "roundtrip");
+        } else if (modalState.selectedMember?.id && (hasPickup || hasDropoff)) {
+            applyReservationToMember(modalState.selectedMember.id, 1, "oneway");
+        }
         if (modalState.selectedMember?.id && usageMap.size > 0) {
             applyReservationToMemberTickets(modalState.selectedMember.id, usageMap);
         }

@@ -1,8 +1,50 @@
-﻿# CHANGELOG.md
+# CHANGELOG.md
 
 Human-friendly release notes. This file is intentionally brief.
 
 ## Unreleased
+- [hoteling][ui][cleanup] Consolidated hoteling page controller to `src/pages/hotels.js` and removed duplicate `src/services/hotels.js` to avoid split maintenance.
+- [reservation][storage][cleanup] Removed legacy unified-reservation migration bootstrap (`migrateToUnifiedReservations`) and old key references (`daycare-reservations:reservations`, `hoteling-reservations:reservations`) from app startup/storage flow.
+- [ticket][storage][count][bugfix] Member count maps now use ticket aggregation as single source: `totalReservableCountByType=ΣreservableCount`, `remainingCountByType=Σ(totalCount-usedCount)`; status/issue delta updates no longer mutate member maps directly.
+- [reservation][pickdrop][storage][ticket][hoteling][bugfix] Reservation data is now standardized to `dates[].pickup`/`dates[].dropoff` + `dates[].ticketUsages[]`; member pickdrop availability keys are standardized to `oneway`/`roundtrip`; school/hoteling detail modals now persist pickdrop chip edits to reservation dates.
+- [hoteling][ui] In hoteling detail modal `상품 정보`, `픽드랍 여부` display now uses the same `filter-chip` layout as school (`픽업`/`드랍`) instead of plain text.
+- [hoteling][ui] In hoteling reservation detail modal `상품 정보`, added a bottom `픽드랍 여부` field (`form-field form-field--inline form-field--full`) and bound it to reservation pickdrop flags.
+- [ticket][reservation][routing][bugfix] In ticket issue modal, `예약까지 진행` now opens the hoteling reservation modal on `hotels.html` for `hoteling` tickets, and opens the school reservation modal on `index.html` for non-hoteling tickets (member pre-selection kept).
+- [ticket][ui][bugfix] Ticket issue modal `예약 가능` column now updates `ticket-issue-table__availability-value` to the projected after value in real time when member selection (default quantity 1) or quantity changes.
+- [reservation][ui][ticket][bugfix] In school reservation modal, when tickets are selected, fee card amount now renders `before` from `totalReservableCountByType` and `after` as the summed selected-ticket `after` value.
+- [reservation][ticket][bugfix] School reservation availability and auto-weekday selection now use per-issued ticket `remainingCount` (not class-level re-allocation), fixing unselectable second issued tickets after split issuance.
+- [reservation][ticket][bugfix] School reservation default ticket selection now includes all issued option ids for the same ticket template, fixing duplicate-issued ticket selection and weekday auto-selection in reservation modal.
+- [ticket][storage][bugfix] In ticket issue modal, selecting quantity `N` now stores `N` separate issued-ticket records with distinct ids (no single aggregated `totalCount` record).
+- [reservation][ticket][ui][bugfix] In reservation registration modals, `reservation-ticket-list` now hides tickets whose `reservableCount` is `0`.
+- [settings][storage] Ticket create/edit/delete now synchronizes both class and room ticket links so ticket modal and class/room modals stay aligned bidirectionally.
+- [settings][ui] In class/room register+detail modals, `예약 가능한 이용권` now lists only tickets whose `type` matches the current class/room type.
+- [settings][ui] In ticket detail `예약 가능한 클래스/호실`, each row now has clear card borders and checked-state emphasis using shared `settings-selection-item`.
+- [settings][ui] In class/room modals, member/ticket option cards now share `settings-selection-item` for unified card and selected-state styles.
+- [settings][ui] Class/room register+detail modals now share common selection-area style classes (`settings-selection-*`) to unify member/ticket section layout styles.
+- [settings][ui] In hotel room register/detail modals, `예약 가능한 이용권` now uses a horizontal header (label + actions) with the ticket list below.
+- [settings][ui] In school class register/detail modals, member/ticket headers now align label and actions horizontally, with lists placed underneath.
+- [settings][ui] In school class register/detail modals, `예약 가능한 이용권` now vertically groups `class-ticket-actions` and `class-ticket-list` (`class-ticket-stack`).
+- [settings][bugfix] Fixed class/room settings member avatar path to `/assets/defaultProfile.svg` to prevent `/src/assets/defaultProfile.svg` 404.
+- [settings][ui] In school class register/detail modals, `소속 회원` now vertically groups `class-member-actions` and `class-member-list` (`class-member-stack`).
+- [settings][ui] In school class register/detail modals, the `운영 요일` field now stacks `form-field__chips` and `checkbox-inline` vertically.
+- [settings][ui] In school class register/detail modals, `반 이름` and `담당` form fields are now grouped side-by-side (`class-form__inline-fields`).
+- [settings][ui] Class/room register and detail modals no longer use `form-grid`; they now use a dedicated stacked layout (`settings-modal-form`).
+- [ui][routing] Merged ticket page entrypoint by removing `src/pages/tickets.js`; `src/pages/tickets.html` now loads `src/pages/ticket-page.js` directly.
+- [ui][routing] Confirmed page script dependency chain is active for `main.js`, `hotels.js`, `pricing.js`, `tickets.js`, `ticket-page.js`, and shared `reservation.js`.
+- [reservation][ticket][ui][bugfix] In ticket-issue overage state, value and unit are now attached as `초과 N회/박` (no visual gap).
+- [reservation][ticket][ui][bugfix] In ticket-issue modal overage state, availability unit (`회`/`박`) is now shown together with `초과 N`.
+- [reservation][ticket][ui][bugfix] In reservation registration and ticket-issue modals, negative availability/count limits now display as `초과` (instead of `-`) and are highlighted in red.
+- [hoteling][ui][storage] Hoteling status labels now show `입실`/`퇴실` for check-in/out, and changing status in detail modal now synchronizes all dates of the same reservation.
+- [hoteling][ui] In hoteling detail modal, clicking the status badge now opens a status option menu, and save persists the selected status to the reservation date entry.
+- [hoteling][ui][bugfix] Hoteling detail modal status (`.hoteling-detail__status`) now shows the resolved status text from the selected reservation entry (date/kind), not `-`.
+- [reservation][storage][bugfix] Changing school list status from `list-table__status` now persists immediately through `storage.updateReservation`.
+- [reservation][storage][hoteling] `reservations[].dates[]` now stores `checkinTime`/`checkoutTime` explicitly; `school` saves class start/end, and `hoteling` saves only boundary times while middle dates are `null`.
+- [reservation][ui][bugfix] In school reservation modal, amount now renders selected ticket meta (before/after) only when a ticket is selected; otherwise it shows a single fee text (or `-`).
+- [reservation][ui][bugfix] School reservation modal `reservation-fee-card__amount` now matches hoteling behavior: show ticket before/after when selected, otherwise keep fee output, and only show empty state when no fee exists.
+- [reservation][ticket][bugfix] Aligned school reservation modal with hoteling ticket behavior by adding ticket-type fallback when class-ticket mapping is missing, and by improving member class auto-selection fallback.
+- [reservation][bugfix] Fixed `list.js` detail modal runtime error by replacing scoped `resolveSchoolReservationsFromStorage` calls with a shared reservation resolver.
+- [reservation][ticket][bugfix] In reservation registration modal, available ticket rows now render for both `school` and `daycare` selected class types (placeholder no longer shown incorrectly).
+- [ticket][reservation][bugfix] Ticket issue now backfills matching `reservations[].dates[].ticketUsage` when overbooked dates existed, then re-syncs member ticket counts.
 - [hoteling][reservation] Hoteling reservation experience includes calendar/list views, detail edits, and modal-driven creation.
 - [ticket][reservation] Ticket issue/selection logic supports per-service availability, overage display, and cancellation rollback.
 - [pickdrop][reservation] Pickdrop flow is integrated into both daycare and hoteling reservation steps.

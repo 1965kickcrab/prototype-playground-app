@@ -1,5 +1,5 @@
 import { initClassStorage } from "../../storage/class-storage.js";
-import { initReservationStorage } from "/src/storage/reservation-storage.js";
+import { initReservationStorage } from "../../storage/reservation-storage.js";
 import { initOperationsStorage } from "../../storage/operations-storage.js";
 import { initHotelOperationsStorage } from "../../storage/hotel-operations-storage.js";
 import { initHotelRoomStorage } from "../../storage/hotel-room-storage.js";

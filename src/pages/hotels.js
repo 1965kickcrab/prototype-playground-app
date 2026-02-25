@@ -62,7 +62,7 @@ import { getDatePartsFromKey } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
 import { createId } from "../utils/id.js";
-import { initReservationStorage } from "/src/storage/reservation-storage.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 import { getPickdropReservableTotal } from "../services/pickdrop-policy.js";
 import {
   PAYMENT_METHODS,

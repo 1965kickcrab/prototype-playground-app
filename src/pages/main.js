@@ -1,5 +1,5 @@
 ﻿import { initState } from "../services/state.js";
-import { initReservationStorage } from "/src/storage/reservation-storage.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
 import { ensureMemberDefaults } from "../storage/ticket-issue-members.js";

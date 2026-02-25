@@ -1,4 +1,4 @@
-﻿.app {
+.app {
   display: grid;
   grid-template-columns: 200px 1fr;
   min-height: 100vh;
@@ -137,13 +137,28 @@
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   color: var(--color-text);
   font-weight: 600;
 }
 
 .sidebar__nav-item img {
   width: 18px;
+}
+
+.sidebar__nav-badge {
+  margin-left: auto;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #eef3ff;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar__nav-item--sub {
@@ -177,6 +192,12 @@
 }
 
 .main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.main__content {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
@@ -304,7 +325,7 @@
   display: grid;
   gap: var(--spacing-4);
   padding: var(--spacing-4);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   background: #fff;
 }
@@ -332,6 +353,10 @@
   gap: 6px;
   font-size: 13px;
   color: var(--color-secondary);
+}
+
+reservation-fee-line__label {
+  margin-right: 10px;
 }
 
 .reservation-fee-panel {
@@ -427,63 +452,156 @@
   gap: var(--spacing-2);
 }
 
-.reservation-fee-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--spacing-1);
-  font-weight: 800;
-  color: var(--color-text);
-}
-
-.reservation-fee-card__amount.is-low {
-  color: var(--color-holiday);
-}
-
-.reservation-memo-card {
-  margin-top: var(--spacing-4);
+.reservation-fee-group {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: #fff;
+  overflow: hidden;
+}
+
+.reservation-fee-group__header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4) var(--spacing-5);
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--color-text);
+  background: #fff;
+}
+
+.reservation-fee-group__amount {
+  margin-left: auto;
+  font-weight: 800;
+}
+
+.reservation-fee-group__arrow {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+
+.reservation-fee-group__body {
+  border-top: 1px solid var(--color-border);
   padding: var(--spacing-4);
+}
+
+.reservation-fee-segments {
   display: grid;
   gap: var(--spacing-3);
 }
 
-.reservation-memo-card__title {
-  font-weight: 800;
-  color: var(--color-text);
+.reservation-fee-segment {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: #fff;
+  overflow: hidden;
 }
 
-.reservation-memo-card__body {
-  display: grid;
-}
-
-.reservation-pickdrop-ticket-list {
-  display: grid;
-  gap: var(--spacing-2);
-}
-
-.reservation-fee-line {
+.reservation-fee-segment__header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   align-items: center;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  cursor: pointer;
 }
 
-.reservation-fee-line__label {
+.reservation-fee-segment__title {
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.reservation-fee-segment__amount {
+  margin-left: auto;
   font-weight: 700;
   color: var(--color-text);
 }
 
-.reservation-fee-line__calc {
+.reservation-fee-segment__arrow {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.2s ease;
+}
+
+.reservation-fee-segment__body {
+  padding: var(--spacing-3) var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
   color: var(--color-secondary);
 }
 
-@media (max-width: 720px) {
-  .reservation-fee-section {
-    grid-template-columns: 1fr;
-  }
+.reservation-fee-tabs {
+  display: grid;
+  gap: var(--spacing-4);
+}
+
+.reservation-fee-tab-list {
+  display: flex;
+  border-bottom: 2px solid var(--color-border);
+}
+
+.reservation-fee-tab {
+  flex: 1;
+  padding: var(--spacing-2) 0;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-weight: 700;
+  color: var(--color-secondary);
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.reservation-fee-tab.is-active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.reservation-fee-tab-panel {
+  display: none;
+}
+
+.reservation-fee-tab-panel.is-active {
+  display: block;
+}
+
+.reservation-fee-other {
+  display: flex;
+  gap: var(--spacing-2);
+  align-items: center;
+}
+
+.reservation-fee-other select {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.reservation-fee-other__input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.reservation-fee-other__input-wrapper .form-field__control {
+  width: 100%;
+  padding-right: 36px;
+  text-align: right;
+}
+
+.reservation-fee-other__suffix {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-secondary);
+  pointer-events: none;
+}
+
+.reservation-fee-total {
+  display: none;
+  /* Replaced by reservation-fee-group="total" */
 }
 
 @media (max-width: 1024px) {
@@ -510,13 +628,31 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  padding: var(--spacing-2) 0;
+  padding: var(--spacing-2) var(--spacing-6);
   background: var(--color-surface);
 }
 
 .topbar__left {
   display: flex;
   align-items: center;
+}
+
+.topbar__toggle-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.topbar__today-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  margin-left: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .topbar__actions {
@@ -674,6 +810,7 @@
   padding: 6px 10px;
   font-size: 12px;
 }
+
 .page-actions {
   display: flex;
   align-items: center;
@@ -817,6 +954,35 @@
   display: grid;
   gap: var(--spacing-4);
   padding-bottom: calc(var(--spacing-6) + 72px);
+}
+
+.reservation-fee-balance {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-4) var(--spacing-5);
+  font-weight: 800;
+  font-size: 16px;
+  background: #f8faff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.reservation-fee-balance__title {
+  color: var(--color-text);
+}
+
+.reservation-fee-balance.is-positive .reservation-fee-balance__price {
+  color: var(--color-holiday);
+}
+
+.reservation-ticket-total {
+  margin-left: auto;
+}
+
+[data-fee-toggle],
+[data-fee-group-toggle] {
+  cursor: pointer;
 }
 
 .settings-card-row {
@@ -1151,7 +1317,7 @@
 .reservation-card,
 .list-card {
   background: var(--color-surface);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   padding: var(--spacing-5);
 }
@@ -1234,6 +1400,7 @@
 .calendar__cell--selected {
   background-color: #f6f9ff !important;
 }
+
 .calendar__cell--muted {
   color: var(--color-muted);
   background: #fafbfd;
@@ -1341,7 +1508,7 @@
 }
 
 .list-table--reservation {
-  --list-table-columns: 0.5fr 0.9fr 0.9fr 1fr 1fr 1.4fr 0.4fr;
+  --list-table-columns: 0.5fr 0.9fr 0.9fr 1fr 1fr 1.1fr 1.4fr 0.4fr;
 }
 
 .list-table--room {
@@ -1364,45 +1531,45 @@
   --pricing-col-6-min: 96px;
 }
 
-.list-table--pricing-form .list-table__header > span,
-.list-table--pricing-form .list-table__row > span {
+.list-table--pricing-form .list-table__header>span,
+.list-table--pricing-form .list-table__row>span {
   min-width: 0;
   display: block;
   white-space: nowrap;
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(1),
-.list-table--pricing-form .list-table__row > span:nth-child(1) {
+.list-table--pricing-form .list-table__header>span:nth-child(1),
+.list-table--pricing-form .list-table__row>span:nth-child(1) {
   flex: 0 0 var(--pricing-col-1-min);
   width: var(--pricing-col-1-min);
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(2),
-.list-table--pricing-form .list-table__row > span:nth-child(2) {
+.list-table--pricing-form .list-table__header>span:nth-child(2),
+.list-table--pricing-form .list-table__row>span:nth-child(2) {
   flex: 0 0 var(--pricing-col-2-min);
   width: var(--pricing-col-2-min);
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(3),
-.list-table--pricing-form .list-table__row > span:nth-child(3) {
+.list-table--pricing-form .list-table__header>span:nth-child(3),
+.list-table--pricing-form .list-table__row>span:nth-child(3) {
   flex: 0 0 var(--pricing-col-3-min);
   width: var(--pricing-col-3-min);
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(4),
-.list-table--pricing-form .list-table__row > span:nth-child(4) {
+.list-table--pricing-form .list-table__header>span:nth-child(4),
+.list-table--pricing-form .list-table__row>span:nth-child(4) {
   flex: 0 0 var(--pricing-col-4-min);
   width: var(--pricing-col-4-min);
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(5),
-.list-table--pricing-form .list-table__row > span:nth-child(5) {
+.list-table--pricing-form .list-table__header>span:nth-child(5),
+.list-table--pricing-form .list-table__row>span:nth-child(5) {
   flex: 0 0 var(--pricing-col-5-min);
   width: var(--pricing-col-5-min);
 }
 
-.list-table--pricing-form .list-table__header > span:nth-child(6),
-.list-table--pricing-form .list-table__row > span:nth-child(6) {
+.list-table--pricing-form .list-table__header>span:nth-child(6),
+.list-table--pricing-form .list-table__row>span:nth-child(6) {
   flex: 0 0 var(--pricing-col-6-min);
   width: var(--pricing-col-6-min);
 }
@@ -1437,7 +1604,7 @@
   max-width: 320px;
   padding: var(--spacing-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   background: #fff;
   box-shadow: var(--shadow-card);
   display: none;
@@ -1446,6 +1613,27 @@
 
 .list-table--pricing-form .pricing-class-cell:focus-within .pricing-class-popup {
   display: grid;
+}
+
+.list-table--pricing-form .pricing-class-popup .class-ticket-list {
+  gap: var(--spacing-2);
+}
+
+.list-table--pricing-form .pricing-class-popup .class-ticket-row {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: #fff;
+  cursor: pointer;
+}
+
+.list-table--pricing-form .pricing-class-popup .class-ticket-row.is-checked {
+  border-color: var(--color-primary);
+  background: #eef5ff;
+}
+
+.list-table--pricing-form .pricing-class-popup .class-ticket-row.is-checked .class-ticket-row__name {
+  color: var(--color-primary);
 }
 
 .list-table--pricing-form .pricing-row-actions {
@@ -1491,15 +1679,13 @@
   justify-content: center;
 }
 
+.list-table--pricing-form .list-table__footer [data-pricing-add-row] {
+  width: 100%;
+}
+
 .list-table--pricing {
   --list-table-columns:
-    minmax(240px, 240px)
-    minmax(420px, 420px)
-    minmax(220px, 220px)
-    minmax(160px, 160px)
-    minmax(100px, 100px)
-    minmax(260px, 260px)
-    minmax(96px, 96px);
+    minmax(240px, 240px) minmax(420px, 420px) minmax(220px, 220px) minmax(160px, 160px) minmax(100px, 100px) minmax(260px, 260px) minmax(96px, 96px);
 }
 
 .list-table--pricing .list-table__header,
@@ -1522,7 +1708,7 @@
 }
 
 .list-card--scroll .list-table--pricing-form {
-  max-width: fit-content;
+  width: max-content;
 }
 
 .pricing-weekday-chips {
@@ -1618,7 +1804,7 @@ input[type="checkbox"] {
   justify-content: center;
   min-width: 84px;
   padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   font-weight: 700;
   font-size: 12px;
   cursor: pointer;
@@ -1747,6 +1933,10 @@ input[type="checkbox"] {
   }
 
   .main {
+    padding: 0;
+  }
+
+  .main__content {
     padding: var(--spacing-4);
   }
 

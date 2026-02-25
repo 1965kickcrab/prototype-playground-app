@@ -1,4 +1,4 @@
-﻿import { compareDateKeys, getDatePartsFromKey, getWeekdayIndex } from "../utils/date.js";
+import { compareDateKeys, getDatePartsFromKey, getWeekdayIndex } from "../utils/date.js";
 
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 

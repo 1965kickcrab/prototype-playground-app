@@ -1,4 +1,4 @@
-﻿export function renderWeekdayToggles(container, settings, weekdays) {
+export function renderWeekdayToggles(container, settings, weekdays) {
   if (!container) {
     return;
   }

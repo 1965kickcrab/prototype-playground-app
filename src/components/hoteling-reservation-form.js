@@ -1,4 +1,4 @@
-﻿import {
+import {
   getHotelingDateKey,
   STATUS,
 } from "../services/hoteling-reservation-service.js";
@@ -27,9 +27,7 @@ export function collectHotelingReservationFormData(root, modalState) {
     checkoutDate,
     checkinTime,
     checkoutTime,
-    dogName: member?.dogName || "",
-    breed: member?.breed || "",
-    owner: member?.owner || "",
+    memberId: String(member?.id || ""),
     hasPickup: false,
     hasDropoff: false,
     memo: memoValue,

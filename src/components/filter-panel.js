@@ -1,6 +1,10 @@
 ﻿import { normalizeTeacher } from "../utils/teacher-selection.js";
 
 const UNKNOWN_TEACHER = "미지정";
+const PAYMENT_FILTER_OPTIONS = [
+  { value: "paid", label: "완료" },
+  { value: "unpaid", label: "미결제" },
+];
 
 function normalizeTeacherName(value) {
   const trimmed = typeof value === "string" ? value.trim() : "";
@@ -15,7 +19,7 @@ function updateMenuOptionState(option) {
   option.classList.toggle("is-selected", input.checked);
 }
 
-function updateFilterButtonLabel(button, selected, total, allLabel) {
+function updateFilterButtonLabel(button, selected, total, allLabel, labelMap = null) {
   if (!button) {
     return;
   }
@@ -23,13 +27,16 @@ function updateFilterButtonLabel(button, selected, total, allLabel) {
     button.textContent = allLabel;
     return;
   }
-  if (selected.length === 1) {
-    button.textContent = selected[0];
+  const selectedLabels = Array.isArray(selected)
+    ? selected.map((value) => labelMap?.get(value) || value)
+    : [];
+  if (selectedLabels.length === 1) {
+    button.textContent = selectedLabels[0];
     return;
   }
-  if (selected.length > 1) {
-    const sorted = [...selected].sort((a, b) => a.localeCompare(b, "ko"));
-    button.textContent = `${sorted[0]} 외 ${selected.length - 1}`;
+  if (selectedLabels.length > 1) {
+    const sorted = [...selectedLabels].sort((a, b) => a.localeCompare(b, "ko"));
+    button.textContent = `${sorted[0]} 외 ${selectedLabels.length - 1}`;
     return;
   }
   button.textContent = allLabel;
@@ -126,6 +133,43 @@ function renderTeacherMenu(container, classes, state) {
   });
 }
 
+function renderPaymentMenu(container, state) {
+  if (!container) {
+    return;
+  }
+
+  if (!state.selectedPaymentStatuses || Object.keys(state.selectedPaymentStatuses).length === 0) {
+    state.selectedPaymentStatuses = { paid: true, unpaid: true };
+  }
+
+  if (!state.paymentStatusOptions || state.paymentStatusOptions.length === 0) {
+    state.paymentStatusOptions = PAYMENT_FILTER_OPTIONS.map((item) => item.value);
+  }
+
+  container.innerHTML = "";
+
+  PAYMENT_FILTER_OPTIONS.forEach(({ value, label: labelText }) => {
+    const label = document.createElement("label");
+    label.className = "menu-option";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = value;
+    input.checked = state.selectedPaymentStatuses[value] !== false;
+    input.setAttribute("data-payment-filter", "");
+
+    const title = document.createElement("span");
+    title.className = "menu-option__title";
+    title.textContent = labelText;
+
+    label.appendChild(input);
+    label.appendChild(title);
+    updateMenuOptionState(label);
+
+    container.appendChild(label);
+  });
+}
+
 function updateFilterSummary(panel) {
   const classButton = panel.querySelector("[data-filter-button='class']");
   const classInputs = panel.querySelectorAll("[data-class-filter]");
@@ -151,13 +195,30 @@ function updateFilterSummary(panel) {
     "전체 선생님"
   );
 
+  const paymentButton = panel.querySelector("[data-filter-button='payment']");
+  const paymentInputs = panel.querySelectorAll("[data-payment-filter]");
+  const paymentSelected = Array.from(paymentInputs)
+    .filter((input) => input.checked)
+    .map((input) => input.value);
+  const paymentLabelMap = new Map(PAYMENT_FILTER_OPTIONS.map((item) => [item.value, item.label]));
+  updateFilterButtonLabel(
+    paymentButton,
+    paymentSelected,
+    paymentInputs.length,
+    "결제 여부",
+    paymentLabelMap
+  );
+
   const badge = panel.querySelector("[data-filter-badge]");
   if (badge) {
     let activeCount = 0;
-    if (classSelected.length !== classInputs.length) {
+    if (classInputs.length > 0 && classSelected.length !== classInputs.length) {
       activeCount += 1;
     }
-    if (teacherSelected.length !== teacherInputs.length) {
+    if (teacherInputs.length > 0 && teacherSelected.length !== teacherInputs.length) {
+      activeCount += 1;
+    }
+    if (paymentInputs.length > 0 && paymentSelected.length !== paymentInputs.length) {
       activeCount += 1;
     }
     badge.textContent = String(activeCount);
@@ -192,10 +253,12 @@ export function setupFilterPanel(panel, classes, state) {
   const body = panel.querySelector("[data-filter-panel-body]");
   const classMenu = panel.querySelector("[data-filter-menu='class']");
   const teacherMenu = panel.querySelector("[data-filter-menu='teacher']");
-  const menus = [classMenu, teacherMenu].filter(Boolean);
+  const paymentMenu = panel.querySelector("[data-filter-menu='payment']");
+  const menus = [classMenu, teacherMenu, paymentMenu].filter(Boolean);
 
   renderClassMenu(classMenu, classes, state);
   renderTeacherMenu(teacherMenu, classes, state);
+  renderPaymentMenu(paymentMenu, state);
   updateFilterSummary(panel);
   closeAllMenus(menus);
 
@@ -244,9 +307,17 @@ export function setupFilterPanel(panel, classes, state) {
           updateMenuOptionState(input.closest(".menu-option"));
         }
       });
+      panel.querySelectorAll("[data-payment-filter]").forEach((input) => {
+        if (input instanceof HTMLInputElement) {
+          input.checked = true;
+          state.selectedPaymentStatuses[input.value] = true;
+          updateMenuOptionState(input.closest(".menu-option"));
+        }
+      });
       updateFilterSummary(panel);
       document.dispatchEvent(new CustomEvent("service-filter:change"));
       document.dispatchEvent(new CustomEvent("teacher-filter:change"));
+      document.dispatchEvent(new CustomEvent("payment-filter:change"));
     }
   });
 
@@ -277,6 +348,18 @@ export function setupFilterPanel(panel, classes, state) {
       updateMenuOptionState(input.closest(".menu-option"));
       updateFilterSummary(panel);
       document.dispatchEvent(new CustomEvent("teacher-filter:change"));
+      return;
+    }
+    if (input.matches("[data-payment-filter]")) {
+      state.selectedPaymentStatuses[input.value] = input.checked;
+      const hasActive = Object.values(state.selectedPaymentStatuses || {}).some(Boolean);
+      if (!hasActive) {
+        state.selectedPaymentStatuses[input.value] = true;
+        input.checked = true;
+      }
+      updateMenuOptionState(input.closest(".menu-option"));
+      updateFilterSummary(panel);
+      document.dispatchEvent(new CustomEvent("payment-filter:change"));
     }
   });
 
@@ -290,5 +373,3 @@ export function setupFilterPanel(panel, classes, state) {
     }
   });
 }
-
-

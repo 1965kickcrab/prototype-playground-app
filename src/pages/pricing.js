@@ -10,6 +10,9 @@ import { normalizePickdropType } from "../services/ticket-service.js";
 import { renderPricingDetail } from "../components/pricing-view.js";
 import { formatNumericInputWithCommas } from "../utils/number.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
+import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
+import { getTimeZone } from "../utils/timezone.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 
 const SERVICE_TYPES = ["school", "daycare", "hoteling", "pickdrop"];
 const DEFAULT_SERVICE_TYPE = "school";
@@ -573,6 +576,12 @@ const updatePricingClassSelectAll = (row) => {
 };
 
 const syncPricingClassSelectionState = (row) => {
+  getPricingClassRows(row).forEach((classRow) => {
+    classRow.setAttribute(
+      "aria-pressed",
+      String(classRow.classList.contains("is-checked"))
+    );
+  });
   updatePricingClassCount(row);
   updatePricingClassSelectAll(row);
   updatePricingClassInput(row);
@@ -640,6 +649,9 @@ function renderPricingClassOptions(row, classes, rooms) {
     const classRow = document.createElement("label");
     classRow.className = "class-ticket-row";
     classRow.dataset.pricingClass = "";
+    classRow.tabIndex = 0;
+    classRow.setAttribute("role", "button");
+    classRow.setAttribute("aria-pressed", "false");
     if (isPickdrop) {
       const baseId = String(classItem.id ?? "");
       const type = classItem.type === "room" ? "room" : "class";
@@ -669,6 +681,34 @@ const setupPricingClassSelection = (classes, rooms, getServiceType) => {
     return;
   }
 
+  const toggleClassSelection = (classRow) => {
+    if (!(classRow instanceof Element)) {
+      return;
+    }
+    classRow.classList.toggle("is-checked");
+    classRow.setAttribute(
+      "aria-pressed",
+      String(classRow.classList.contains("is-checked"))
+    );
+    const row = classRow.closest(".list-table__row");
+    if (row) {
+      syncPricingClassSelectionState(row);
+      if (getServiceType() === "school") {
+        applyServiceDefaultsToRow(row, "school", classes);
+      }
+    }
+  };
+
+  rowsContainer.addEventListener("pointerdown", (event) => {
+    const classRow = event.target.closest("[data-pricing-class]");
+    if (!classRow) {
+      return;
+    }
+    // Handle row toggle here to avoid click+mousedown double toggles.
+    event.preventDefault();
+    toggleClassSelection(classRow);
+  });
+
   rowsContainer.addEventListener("click", (event) => {
     const selectAll = event.target.closest("[data-pricing-class-select-all]");
     if (selectAll) {
@@ -693,18 +733,19 @@ const setupPricingClassSelection = (classes, rooms, getServiceType) => {
       return;
     }
 
+    // Row toggle is handled in pointerdown to prevent double-toggling on click.
+  });
+
+  rowsContainer.addEventListener("keydown", (event) => {
     const classRow = event.target.closest("[data-pricing-class]");
     if (!classRow) {
       return;
     }
-    classRow.classList.toggle("is-checked");
-    const row = classRow.closest(".list-table__row");
-    if (row) {
-      syncPricingClassSelectionState(row);
-      if (getServiceType() === "school") {
-        applyServiceDefaultsToRow(row, "school", classes);
-      }
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
     }
+    event.preventDefault();
+    toggleClassSelection(classRow);
   });
 };
 
@@ -780,10 +821,13 @@ const setupPricingDetailModal = (classes, rooms) => {
 };
 
 document.addEventListener("DOMContentLoaded", () => {
+  const reservationStorage = initReservationStorage();
+  const timeZone = getTimeZone();
   setupSidebarToggle({
-    iconOpen: "../assets/menuIcon_sidebar_open.svg",
-    iconClose: "../assets/menuIcon_sidebar_close.svg",
+    iconOpen: "../../assets/menuIcon_sidebar_open.svg",
+    iconClose: "../../assets/menuIcon_sidebar_close.svg",
   });
+  setupSidebarReservationBadges({ storage: reservationStorage, timeZone });
   setupPricingWeekdayChips();
   const classStorage = initClassStorage();
   const roomStorage = initHotelRoomStorage();

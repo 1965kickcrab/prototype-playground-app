@@ -1,4 +1,4 @@
-﻿# DECISIONS.md
+# DECISIONS.md
 
 Decision Registry (append-only). Each entry records a stable rule or policy derived from the historical logs.
 
@@ -66,3 +66,18 @@ Decision Registry (append-only). Each entry records a stable rule or policy deri
 - What: `memberList` 카운트 맵은 티켓 집계 결과를 단일 소스로 사용한다: `totalReservableCountByType = Σ reservableCount`, `remainingCountByType = Σ(totalCount-usedCount)`.
 - Rationale: 상태/발급 이벤트에서 멤버 맵을 델타로 직접 갱신하면 `tickets` 기반 수치와 분리되어 불일치가 반복 발생했다.
 - Implication: `applyIssueToMembers`/`applyReservationStatusChange`는 멤버 맵 직접 증감하지 않고, 이벤트 후 `recalculateTicketCounts()`로만 동기화한다. `remaining` 계산에는 `reservedCount`를 반영하지 않는다.
+
+## DR-014 (2026-02-04) [ticket][reservation][count]
+- What: `memberList.totalReservedCountByType`는 티켓 연결 여부와 무관하게 non-canceled 예약 엔트리를 타입별로 집계한다(초과 예약 포함).
+- Rationale: `ticketUsages`가 없는 초과 예약은 기존 티켓 기반 `reservedCount` 합산만으로는 누락되어 실제 예약량과 카운트 맵이 불일치했다.
+- Implication: `recalculateTicketCounts()`는 예약 엔트리 기준 집계를 추가로 수행해야 하며, hoteling은 `checkout` 엔트리를 제외하고 pickdrop은 hoteling 예약 단위로 `oneway/roundtrip` 1회만 반영한다.
+
+## DR-015 (2026-02-04) [ticket][storage][count]
+- What: `totalReservableCountByType`는 `Σ(ticket.totalCount by type) - totalReservedCountByType`로 계산하고, 멤버 매칭은 `dogName/owner`와 `petName/guardianName`을 모두 허용한다.
+- Rationale: 티켓이 없거나 초과 예약이 있는 회원은 기존 `Σ(reservableCount)` 기준에서 실제 예약량이 반영되지 않았고, 레거시 멤버 키(`petName`, `guardianName`) 때문에 예약-회원 매칭이 누락되었다.
+- Implication: 초과 예약은 `totalReservable` 음수로 표현되며, recount 로직은 멤버 키 fallback을 포함해 예약 데이터를 안정적으로 회원 카운트에 반영해야 한다.
+
+## DR-016 (2026-02-04) [reservation][pickdrop][ticket]
+- What: School/daycare 예약에서 같은 날짜에 서비스와 픽드랍이 동시에 선택되면 `dates[].ticketUsages`에 서비스 usage와 pickdrop usage를 함께 저장한다.
+- Rationale: 기존에는 같은 날짜 entry에 서비스 usage만 저장되어 pickdrop 티켓 `reservedCount/reservableCount` 집계가 누락되었다.
+- Implication: 저장 시 usage 병합/중복 제거가 필요하며, 과거 데이터는 자동 마이그레이션하지 않고 수동 보정 유틸로만 복구한다.

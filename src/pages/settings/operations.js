@@ -1,4 +1,4 @@
-﻿import { initOperationsStorage } from "../../storage/operations-storage.js";
+import { initOperationsStorage } from "../../storage/operations-storage.js";
 import { initHotelOperationsStorage } from "../../storage/hotel-operations-storage.js";
 import { getTimeZone } from "../../utils/timezone.js";
 import { getMonthLabel, getZonedTodayParts } from "../../utils/date.js";
@@ -26,7 +26,7 @@ function getTodayKey(timeZone) {
 }
 
 function setupOperations() {
-  setupSidebarGroups();
+  setupSidebarGroups({ navigateToFirstItemOnToggle: true });
   const isHotel = document.body?.dataset?.settingsScope === "hotel";
   const storage = isHotel ? initHotelOperationsStorage() : initOperationsStorage();
   const timeZone = getTimeZone();

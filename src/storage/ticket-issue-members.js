@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ticket-issue-members.js
  * - Update `memberList` in localStorage when tickets are issued or reservation status changes
  * - Maintain remaining / total counts per service type
@@ -234,7 +234,7 @@ function cloneMember(member) {
 
 function parseCount(value) {
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function normalizeCountMap(source) {
@@ -245,9 +245,7 @@ function normalizeCountMap(source) {
     });
   }
   SERVICE_TYPES.forEach((type) => {
-    if (!Object.prototype.hasOwnProperty.call(map, type)) {
-      map[type] = null;
-    }
+    map[type] = Number.isFinite(Number(map[type])) ? Number(map[type]) : 0;
   });
   return map;
 }
@@ -273,6 +271,9 @@ function normalizeMember(item) {
   const remainingCountByType = normalizeCountMap(
     source.remainingCountByType
   );
+  const totalReservedCountByType = normalizeCountMap(
+    source.totalReservedCountByType
+  );
 
   return {
     id: String(id),
@@ -281,6 +282,7 @@ function normalizeMember(item) {
     owner,
     totalReservableCountByType,
     remainingCountByType,
+    totalReservedCountByType,
     tickets,
   };
 }

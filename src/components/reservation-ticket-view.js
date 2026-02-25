@@ -1,4 +1,4 @@
-﻿import { formatTicketDisplayName, formatTicketType } from "../services/ticket-service.js";
+import { formatTicketDisplayName, formatTicketType } from "../services/ticket-service.js";
 
 export function renderTicketOptions(
   container,
@@ -8,7 +8,8 @@ export function renderTicketOptions(
   allocations,
   hasMember,
   selectedCount,
-  disabledIds = new Set()
+  disabledIds = new Set(),
+  forceDisabled = false
 ) {
   if (!container || !placeholder) {
     return;
@@ -29,7 +30,7 @@ export function renderTicketOptions(
     const row = document.createElement("label");
     row.className = "reservation-ticket-row";
     row.dataset.ticketId = ticket.id;
-    const isDisabled = disabledIds.has(ticket.id);
+    const isDisabled = forceDisabled || disabledIds.has(ticket.id);
     if (selectedSet.has(ticket.id)) {
       row.classList.add("is-selected");
     }
@@ -82,13 +83,13 @@ export function renderTicketOptions(
         ? Number(allocation.remainingAfter) || 0
         : remainingBefore;
       const beforeValue = document.createElement("span");
-      beforeValue.className = "reservation-ticket-row__meta-value";
+      beforeValue.className = "as-is";
       if (appliedBefore <= 2) {
         beforeValue.classList.add("is-low");
       }
       beforeValue.textContent = `${appliedBefore}${unitLabel}`;
       const afterValue = document.createElement("span");
-      afterValue.className = "reservation-ticket-row__meta-value";
+      afterValue.className = "to-be";
       if (appliedAfter <= 2) {
         afterValue.classList.add("is-low");
       }

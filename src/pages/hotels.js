@@ -9,11 +9,13 @@ import { renderHotelingFeeBreakdown, renderPickdropTickets, renderPricingBreakdo
 import { showToast } from "../components/toast.js";
 import { syncFilterChip } from "../utils/dom.js";
 import { syncReservationFeeTotal } from "../utils/reservation-fee-total.js";
+import { setupReservationFeeDropdowns } from "../utils/reservation-fee-dropdown.js";
 import { renderSelectableChips, setSelectedChip } from "../components/selection-chips.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
 import { initClassStorage } from "../storage/class-storage.js";
+import { formatTicketPrice } from "../services/ticket-service.js";
 import {
   ensureMemberDefaults,
   loadIssueMembers,
@@ -35,16 +37,22 @@ import {
   getHotelingNightKeys,
 } from "../services/hoteling-reservation-service.js";
 import {
-  getMemberHotelingReservationSummary,
+  getMemberRoomHotelingReservationSummary,
 } from "../services/member-reservation-summary.js";
-import { allocateTicketUsage, getIssuedTicketOptions } from "../services/ticket-reservation-service.js";
+import {
+  allocateTicketUsage,
+  buildPickdropUsagePlan,
+  getIssuedTicketOptions,
+} from "../services/ticket-reservation-service.js";
+import { repairReservationPickdropUsages } from "../services/pickdrop-usage-repair-service.js";
+import { buildPickdropRepairContext } from "../services/pickdrop-detail-sync.js";
 import {
   buildDateTicketUsageMap,
   buildDateTicketUsagesMap,
   buildTicketUsageCountMap,
   buildTicketUsageEntries,
   getEntryTicketUsages,
-  getPrimaryTicketUsage,
+  mergeTicketUsagesForDate,
   buildTicketUsageMapFromEntries,
   mergeTicketUsageCountMap,
 } from "../services/ticket-usage-service.js";
@@ -52,9 +60,23 @@ import { initState } from "../services/state.js";
 import { setupReservationModal } from "./reservation.js";
 import { getDatePartsFromKey } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
+import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
 import { createId } from "../utils/id.js";
 import { initReservationStorage } from "/src/storage/reservation-storage.js";
 import { getPickdropReservableTotal } from "../services/pickdrop-policy.js";
+import {
+  PAYMENT_METHODS,
+  parsePaymentAmount,
+  normalizeReservationPayment,
+  shouldClearTicketPaymentOnCancellation,
+} from "../services/reservation-payment.js";
+import {
+  buildReservationWithBilling,
+  sumBillingAllocationsExpected,
+} from "../services/reservation-billing.js";
+import {
+  getReservationPaymentStatus,
+} from "../services/reservation-payment-status.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const timeZone = getTimeZone();
@@ -65,6 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const classStorage = initClassStorage();
 
   const allReservations = reservationStorage.loadReservations();
+  const sidebarReservationBadges = setupSidebarReservationBadges({
+    storage: reservationStorage,
+    timeZone,
+  });
 
   const rooms = roomStorage.ensureDefaults();
   const getTotalRoomCapacity = (items) =>
@@ -73,9 +99,57 @@ document.addEventListener("DOMContentLoaded", () => {
       return sum + (Number.isFinite(value) ? value : 0);
     }, 0);
   const tickets = ticketStorage.ensureDefaults();
-  const pricingItems = pricingStorage.loadPricingItems();
   ensureMemberDefaults();
   const classes = classStorage.ensureDefaults();
+  const repairHotelingBillingIfNeeded = () => {
+    const pricingItems = pricingStorage.loadPricingItems();
+    if (!Array.isArray(pricingItems) || pricingItems.length === 0) {
+      return;
+    }
+    const members = loadIssueMembers();
+    let changed = false;
+    const repairedReservations = allReservations.map((reservation) => {
+      if (reservation?.type !== "hoteling") {
+        return reservation;
+      }
+      const expected = Number(reservation?.billing?.totals?.expected);
+      const charges = Array.isArray(reservation?.billing?.charges)
+        ? reservation.billing.charges
+        : [];
+      const allocationsExpected = sumBillingAllocationsExpected(reservation?.billing);
+      const hasEmptyBilling =
+        charges.length === 0
+        && allocationsExpected === 0
+        && (!Number.isFinite(expected) || expected === 0);
+      if (!hasEmptyBilling) {
+        return reservation;
+      }
+      const memberId = String(reservation?.memberId || "").trim();
+      const member = members.find(
+        (item) => String(item?.id || "") === memberId
+      ) || null;
+      const parsedWeight = Number(member?.weight);
+      const memberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
+      const rebuilt = buildReservationWithBilling(reservation, {
+        pricingItems,
+        memberWeight,
+        timeZone,
+        payment: reservation.payment,
+      });
+      const rebuiltExpected = Number(rebuilt?.billing?.totals?.expected);
+      if (Number.isFinite(rebuiltExpected) && rebuiltExpected > 0) {
+        changed = true;
+        return rebuilt;
+      }
+      return reservation;
+    });
+    if (!changed) {
+      return;
+    }
+    const saved = reservationStorage.saveReservations(repairedReservations);
+    allReservations.splice(0, allReservations.length, ...saved);
+  };
+  repairHotelingBillingIfNeeded();
   const classNames = classes
     .map((item) => item.name)
     .filter((name) => typeof name === "string" && name.trim().length > 0);
@@ -97,6 +171,30 @@ document.addEventListener("DOMContentLoaded", () => {
     options: [],
     selected: new Set(),
   };
+  const paymentFilterState = {
+    options: [
+      { value: "paid", label: "완료" },
+      { value: "unpaid", label: "미결제" },
+    ],
+    selected: new Set(["paid", "unpaid"]),
+  };
+
+  const formatFilterButtonLabel = (selectedValues, options, allLabel, labelMap = null) => {
+    const selected = Array.isArray(selectedValues) ? selectedValues : [];
+    const total = Array.isArray(options) ? options.length : 0;
+    if (total === 0 || selected.length === total) {
+      return allLabel;
+    }
+    const labels = selected.map((value) => labelMap?.get(value) || value);
+    if (labels.length === 1) {
+      return labels[0];
+    }
+    if (labels.length > 1) {
+      const sorted = [...labels].sort((a, b) => a.localeCompare(b, "ko"));
+      return `${sorted[0]} 외 ${labels.length - 1}`;
+    }
+    return allLabel;
+  };
 
   const setupHotelingFilterPanel = (roomsList, onChange) => {
     const panel = document.querySelector(".filter-panel-wrap");
@@ -105,33 +203,65 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     const toggle = panel.querySelector("[data-filter-toggle]");
     const body = panel.querySelector("[data-filter-panel-body]");
-    const menu = panel.querySelector("[data-filter-menu='room']");
-    const button = panel.querySelector("[data-filter-button='room']");
-    const reset = panel.querySelector("[data-filter-reset]");
+    const roomMenu = panel.querySelector("[data-filter-menu='room']");
+    const roomButton = panel.querySelector("[data-filter-button='room']");
+    const paymentMenu = panel.querySelector("[data-filter-menu='payment']");
+    const paymentButton = panel.querySelector("[data-filter-button='payment']");
     const badge = panel.querySelector("[data-filter-badge]");
-    if (!menu || !button) {
+    if (!roomMenu || !roomButton || !paymentMenu || !paymentButton) {
       return;
     }
+
     const roomOptions = (Array.isArray(roomsList) ? roomsList : [])
       .map((room) => room?.name)
       .filter((name) => typeof name === "string" && name.trim().length > 0);
     const options = roomOptions.length ? roomOptions : ["호실"];
     roomFilterState.options = options.slice();
     roomFilterState.selected = new Set(options);
-    const selectedMap = {};
+    const selectedRoomMap = {};
     options.forEach((name) => {
-      selectedMap[name] = true;
+      selectedRoomMap[name] = true;
     });
 
-    const renderMenu = () => {
-      menu.innerHTML = "";
+    const selectedPaymentMap = {};
+    paymentFilterState.options.forEach(({ value }) => {
+      selectedPaymentMap[value] = true;
+    });
+
+    const roomLabelMap = new Map(options.map((name) => [name, name]));
+    const paymentLabelMap = new Map(
+      paymentFilterState.options.map((item) => [item.value, item.label])
+    );
+
+    const closeMenu = (menu, button) => {
+      if (!menu || !button) return;
+      menu.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+    };
+
+    const closeAllMenus = () => {
+      closeMenu(roomMenu, roomButton);
+      closeMenu(paymentMenu, paymentButton);
+    };
+
+    const openExclusiveMenu = (menu, button) => {
+      const isOpen = menu.hasAttribute("hidden") === false;
+      closeAllMenus();
+      if (!isOpen) {
+        menu.hidden = false;
+        button.setAttribute("aria-expanded", "true");
+      }
+    };
+
+    const renderRoomMenu = () => {
+      roomMenu.innerHTML = "";
       options.forEach((name) => {
         const label = document.createElement("label");
-        label.className = "menu-option is-selected";
+        label.className = "menu-option";
         const input = document.createElement("input");
         input.type = "checkbox";
         input.value = name;
-        input.checked = selectedMap[name] !== false;
+        input.checked = selectedRoomMap[name] !== false;
         input.setAttribute("data-room-filter", "");
         const text = document.createElement("div");
         const title = document.createElement("div");
@@ -140,38 +270,75 @@ document.addEventListener("DOMContentLoaded", () => {
         text.appendChild(title);
         label.appendChild(input);
         label.appendChild(text);
-        menu.appendChild(label);
+        label.classList.toggle("is-selected", input.checked);
+        roomMenu.appendChild(label);
+      });
+    };
+
+    const renderPaymentMenu = () => {
+      paymentMenu.innerHTML = "";
+      paymentFilterState.options.forEach(({ value, label: labelText }) => {
+        const label = document.createElement("label");
+        label.className = "menu-option";
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = value;
+        input.checked = selectedPaymentMap[value] !== false;
+        input.setAttribute("data-payment-filter", "");
+        const title = document.createElement("span");
+        title.className = "menu-option__title";
+        title.textContent = labelText;
+        label.appendChild(input);
+        label.appendChild(title);
+        label.classList.toggle("is-selected", input.checked);
+        paymentMenu.appendChild(label);
       });
     };
 
     const updateSummary = (skipChange = false) => {
-      const selected = Object.keys(selectedMap).filter((key) => selectedMap[key] !== false);
-      if (selected.length === options.length) {
-        button.textContent = "전체 호실";
-      } else if (selected.length === 1) {
-        button.textContent = selected[0];
-      } else if (selected.length > 1) {
-        const sorted = [...selected].sort((a, b) => a.localeCompare(b, "ko"));
-        button.textContent = `${sorted[0]} 외 ${selected.length - 1}`;
-      } else {
-        button.textContent = "전체 호실";
-      }
+      const selectedRooms = Object.keys(selectedRoomMap).filter((key) => selectedRoomMap[key] !== false);
+      const selectedPayments = Object.keys(selectedPaymentMap).filter((key) => selectedPaymentMap[key] !== false);
+
+      roomButton.textContent = formatFilterButtonLabel(
+        selectedRooms,
+        options,
+        "전체 호실",
+        roomLabelMap
+      );
+      paymentButton.textContent = formatFilterButtonLabel(
+        selectedPayments,
+        paymentFilterState.options.map((item) => item.value),
+        "결제 여부",
+        paymentLabelMap
+      );
+
       if (badge) {
-        const activeCount = selected.length === options.length ? 0 : 1;
+        let activeCount = 0;
+        if (selectedRooms.length !== options.length) {
+          activeCount += 1;
+        }
+        if (selectedPayments.length !== paymentFilterState.options.length) {
+          activeCount += 1;
+        }
         badge.textContent = String(activeCount);
         badge.hidden = activeCount === 0;
       }
-      roomFilterState.selected = new Set(selected);
+
+      roomFilterState.selected = new Set(selectedRooms);
+      paymentFilterState.selected = new Set(selectedPayments);
+
       if (!skipChange && typeof onChange === "function") {
         onChange();
       }
     };
 
-    renderMenu();
+    renderRoomMenu();
+    renderPaymentMenu();
     updateSummary(true);
     if (body) {
       body.hidden = true;
     }
+    closeAllMenus();
 
     toggle?.addEventListener("click", () => {
       const isOpen = body?.hasAttribute("hidden") === false;
@@ -179,27 +346,39 @@ document.addEventListener("DOMContentLoaded", () => {
         body.hidden = isOpen;
       }
       toggle.setAttribute("aria-expanded", String(!isOpen));
-      if (isOpen && menu) {
-        menu.hidden = true;
-        button.setAttribute("aria-expanded", "false");
+      if (isOpen) {
+        closeAllMenus();
       }
     });
 
     panel.addEventListener("click", (event) => {
       const target = event.target instanceof HTMLElement ? event.target : null;
-      const dropdownButton = target?.closest("[data-filter-button='room']");
-      if (dropdownButton) {
-        const isOpen = menu.hasAttribute("hidden") === false;
-        menu.hidden = isOpen;
-        dropdownButton.setAttribute("aria-expanded", String(!isOpen));
+      if (!target) {
         return;
       }
-      const resetButton = target?.closest("[data-filter-reset]");
+
+      const roomDropdownButton = target.closest("[data-filter-button='room']");
+      if (roomDropdownButton) {
+        openExclusiveMenu(roomMenu, roomButton);
+        return;
+      }
+
+      const paymentDropdownButton = target.closest("[data-filter-button='payment']");
+      if (paymentDropdownButton) {
+        openExclusiveMenu(paymentMenu, paymentButton);
+        return;
+      }
+
+      const resetButton = target.closest("[data-filter-reset]");
       if (resetButton) {
         options.forEach((name) => {
-          selectedMap[name] = true;
+          selectedRoomMap[name] = true;
         });
-        renderMenu();
+        paymentFilterState.options.forEach(({ value }) => {
+          selectedPaymentMap[value] = true;
+        });
+        renderRoomMenu();
+        renderPaymentMenu();
         updateSummary();
       }
     });
@@ -209,11 +388,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!(input instanceof HTMLInputElement)) {
         return;
       }
+
       if (input.matches("[data-room-filter]")) {
-        selectedMap[input.value] = input.checked;
-        const hasActive = Object.values(selectedMap).some(Boolean);
+        selectedRoomMap[input.value] = input.checked;
+        const hasActive = Object.values(selectedRoomMap).some(Boolean);
         if (!hasActive) {
-          selectedMap[input.value] = true;
+          selectedRoomMap[input.value] = true;
+          input.checked = true;
+        }
+        input.closest(".menu-option")?.classList.toggle("is-selected", input.checked);
+        updateSummary();
+        return;
+      }
+
+      if (input.matches("[data-payment-filter]")) {
+        selectedPaymentMap[input.value] = input.checked;
+        const hasActive = Object.values(selectedPaymentMap).some(Boolean);
+        if (!hasActive) {
+          selectedPaymentMap[input.value] = true;
           input.checked = true;
         }
         input.closest(".menu-option")?.classList.toggle("is-selected", input.checked);
@@ -223,8 +415,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("click", (event) => {
       if (!panel.contains(event.target)) {
-        menu.hidden = true;
-        button.setAttribute("aria-expanded", "false");
+        closeAllMenus();
       }
     });
   };
@@ -239,14 +430,28 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getFilteredReservations = () => {
-    const selected = roomFilterState.selected;
-    const total = roomFilterState.options.length;
-    if (!selected || selected.size === 0 || selected.size === total) {
-      return reservationState.reservations;
-    }
-    return reservationState.reservations.filter((item) =>
-      selected.has(getRoomNameFromReservation(item))
-    );
+    const selectedRooms = roomFilterState.selected;
+    const totalRooms = roomFilterState.options.length;
+    const selectedPayments = paymentFilterState.selected;
+    const totalPayments = paymentFilterState.options.length;
+
+    return reservationState.reservations.filter((item) => {
+      const roomMatched = !selectedRooms
+        || selectedRooms.size === 0
+        || selectedRooms.size === totalRooms
+        || selectedRooms.has(getRoomNameFromReservation(item));
+      if (!roomMatched) {
+        return false;
+      }
+
+      const paymentStatus = getReservationPaymentStatus(item);
+      const paymentMatched = !selectedPayments
+        || selectedPayments.size === 0
+        || selectedPayments.size === totalPayments
+        || selectedPayments.has(paymentStatus);
+
+      return paymentMatched;
+    });
   };
 
   const reservationState = {
@@ -261,7 +466,7 @@ document.addEventListener("DOMContentLoaded", () => {
     hotelingCalendar?.refresh?.();
   };
 
-  const onRoomFilterChange = () => {
+  const onFilterChange = () => {
     refreshCalendarStats();
     if (reservationState.selectedDateKey) {
       renderListForKey(reservationState.selectedDateKey);
@@ -274,7 +479,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  setupHotelingFilterPanel(rooms, onRoomFilterChange);
+  setupHotelingFilterPanel(rooms, onFilterChange);
 
   setupSidebarToggle({
     iconOpen: "../../assets/menuIcon_sidebar_open.svg",
@@ -323,6 +528,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailCheckoutTimeEl = document.querySelector("[data-hoteling-detail-checkout-time]");
   const detailPickdropOptions = document.querySelector("[data-hoteling-detail-pickdrop-options]");
   const detailMemoEl = document.querySelector("[data-hoteling-detail-memo]");
+  const detailDeleteButton = document.querySelector("[data-hoteling-detail-delete]");
   const detailSaveButton = document.querySelector("[data-hoteling-detail-save]");
   const detailTabButtons = document.querySelectorAll("[data-hoteling-detail-tab]");
   const detailTabPanels = document.querySelectorAll("[data-hoteling-detail-panel]");
@@ -333,6 +539,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const detailPaymentTicketRow = document.querySelector(
     "[data-hoteling-detail-payment-ticket]"
   );
+  const detailPaymentAmountRow = document.querySelector(
+    "[data-hoteling-detail-payment-amount-row]"
+  );
+  const detailPaymentAmountInput = document.querySelector(
+    "[data-hoteling-detail-payment-amount]"
+  );
+  const detailTotalAmount = document.querySelector("[data-hoteling-detail-total]");
+  const detailFeeLines = document.querySelector("[data-hoteling-detail-fee-lines]");
+  const detailPaymentTotal = document.querySelector("[data-hoteling-detail-payment-total]");
+  const detailBalanceRow = document.querySelector("[data-hoteling-detail-fee-balance-row]");
+  const detailBalanceTotal = document.querySelector("[data-hoteling-detail-fee-balance-total]");
   const headerBadgeValue = document.querySelector(".hoteling-header__badge-value");
 
   const detailState = {
@@ -342,7 +559,7 @@ document.addEventListener("DOMContentLoaded", () => {
     statusDateKey: "",
     statusKind: "",
   };
-  let activePaymentMethod = "ticket";
+  let activePaymentMethod = "";
   const detailRoomDataKey = "hotelingDetailRoom";
   const getSelectedDetailRoomId = () =>
     detailRoomChips
@@ -426,6 +643,94 @@ document.addEventListener("DOMContentLoaded", () => {
     cancelOpenButton.classList.toggle("button-secondary--disabled", !hasSelection);
   };
 
+  const listTimePicker = document.createElement("input");
+  listTimePicker.type = "time";
+  listTimePicker.className = "hoteling-time-editor";
+  listTimePicker.setAttribute("aria-label", "시간 선택");
+  listTimePicker.style.position = "fixed";
+  listTimePicker.style.left = "0";
+  listTimePicker.style.top = "0";
+  document.body.appendChild(listTimePicker);
+
+  let activeTimeEdit = null;
+
+  const closeListTimePicker = () => {
+    activeTimeEdit = null;
+  };
+
+  const updateListEntryTime = ({ reservationId, entryDate, entryKind, nextTime }) => {
+    if (!reservationId || !entryDate || (entryKind !== "checkin" && entryKind !== "checkout")) {
+      return;
+    }
+    reservationState.reservations = reservationStorage.updateReservation(
+      reservationId,
+      (item) => ({
+        ...item,
+        dates: (Array.isArray(item?.dates) ? item.dates : []).map((entry) => {
+          if (entry?.date !== entryDate || entry?.kind !== entryKind) {
+            return entry;
+          }
+          if (entryKind === "checkin") {
+            return {
+              ...entry,
+              checkinTime: nextTime || null,
+              time: nextTime || null,
+            };
+          }
+          return {
+            ...entry,
+            checkoutTime: nextTime || null,
+            time: nextTime || null,
+          };
+        }),
+      })
+    );
+    renderListForKey(reservationState.selectedDateKey);
+  };
+
+  const openListTimePicker = ({ cell, reservationId, entryDate, entryKind }) => {
+    if (!(cell instanceof HTMLElement)) {
+      return;
+    }
+    if (!reservationId || !entryDate || (entryKind !== "checkin" && entryKind !== "checkout")) {
+      return;
+    }
+    if (activeTimeEdit) {
+      const nextTime = listTimePicker.value || activeTimeEdit.previousValue || "";
+      if (nextTime && nextTime !== activeTimeEdit.previousValue) {
+        updateListEntryTime({
+          reservationId: activeTimeEdit.reservationId,
+          entryDate: activeTimeEdit.entryDate,
+          entryKind: activeTimeEdit.entryKind,
+          nextTime,
+        });
+      }
+      closeListTimePicker();
+    }
+    const currentValue = (cell.textContent || "").trim();
+    const initialValue = /^\d{2}:\d{2}$/.test(currentValue) ? currentValue : "10:00";
+    activeTimeEdit = {
+      reservationId,
+      entryDate,
+      entryKind,
+      previousValue: initialValue,
+    };
+    listTimePicker.value = initialValue;
+    const rect = cell.getBoundingClientRect();
+    const nextLeft = Math.max(8, Math.round(rect.left));
+    const nextTop = Math.max(8, Math.round(rect.bottom + 6));
+    listTimePicker.style.left = `${nextLeft}px`;
+    listTimePicker.style.top = `${nextTop}px`;
+    listTimePicker.focus();
+    if (typeof listTimePicker.showPicker === "function") {
+      try {
+        listTimePicker.showPicker();
+      } catch (error) {
+        // Some browsers block programmatic picker open without direct gesture.
+      }
+    }
+  };
+
   const openCancelModal = () => {
     if (!cancelModal) {
       return;
@@ -442,6 +747,16 @@ document.addEventListener("DOMContentLoaded", () => {
     cancelModal.classList.remove("is-open");
   };
 
+  const clearTicketPaymentIfCanceledReservation = (reservation) => {
+    if (!shouldClearTicketPaymentOnCancellation(reservation)) {
+      return reservation;
+    }
+    return {
+      ...reservation,
+      payment: null,
+    };
+  };
+
   const cancelSelectedReservations = () => {
     const idsToCancel = new Set(getSelectedReservationIds());
     if (idsToCancel.size === 0) {
@@ -449,16 +764,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const usageByMember = new Map();
-
-    allReservations.forEach(reservation => {
+    const latestReservations = reservationStorage.loadReservations();
+    latestReservations.forEach((reservation) => {
+      if (reservation?.type !== "hoteling") {
+        return;
+      }
       if (!idsToCancel.has(reservation.id)) {
         return;
       }
-      
+
       // Keep status source-of-truth on baseStatusKey for ticket recount.
       reservation.dates.forEach(entry => {
         entry.baseStatusKey = "CANCELED";
-        entry.statusText = reservationStorage.STATUS.CANCELED;
         entry.status = reservationStorage.STATUS.CANCELED;
       });
 
@@ -472,12 +789,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
     });
-    
-    // Save the whole updated list
-    reservationStorage.saveReservations(allReservations);
-    
-    // Update local state and re-render
-    reservationState.reservations = allReservations.filter(r => r.type === 'hoteling');
+    const nextReservations = latestReservations.map((reservation) => {
+      if (reservation?.type !== "hoteling" || !idsToCancel.has(reservation.id)) {
+        return reservation;
+      }
+      const canceledReservation = {
+        ...reservation,
+        dates: (Array.isArray(reservation.dates) ? reservation.dates : []).map((entry) => ({
+          ...entry,
+          baseStatusKey: "CANCELED",
+          status: reservationStorage.STATUS.CANCELED,
+        })),
+      };
+      const paymentCleared = clearTicketPaymentIfCanceledReservation(canceledReservation);
+      const member = getMemberByReservation(paymentCleared);
+      const parsedWeight = Number(member?.weight);
+      const memberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
+      return applyHotelingDateFees(paymentCleared, memberWeight);
+    });
+    const savedReservations = reservationStorage.saveReservations(nextReservations);
+    allReservations.splice(0, allReservations.length, ...savedReservations);
+    reservationState.reservations = allReservations.filter((r) => r.type === "hoteling");
 
     usageByMember.forEach((usageMap, memberId) => {
       rollbackReservationMemberTickets(memberId, usageMap);
@@ -485,21 +817,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
     refreshCalendarStats();
     renderListForKey(reservationState.selectedDateKey);
+    document.dispatchEvent(new CustomEvent("reservation:updated"));
   };
 
   const getMemberIdFromReservation = (reservation) => {
-    if (!reservation) {
-      return "";
+    return String(reservation?.memberId || "").trim();
+  };
+
+  const getMemberByReservation = (reservation, members = null) => {
+    const memberId = getMemberIdFromReservation(reservation);
+    if (!memberId) {
+      return null;
     }
-    const dogName = reservation.dogName || "";
-    const owner = reservation.owner || "";
-    const breed = reservation.breed || "";
-    const match = loadIssueMembers().find((member) =>
-      member.dogName === dogName
-      && member.owner === owner
-      && (!breed || member.breed === breed)
-    );
-    return match?.id || "";
+    const targetMembers = Array.isArray(members) ? members : loadIssueMembers();
+    return targetMembers.find((member) => String(member?.id || "") === memberId) || null;
   };
 
   const closeDetailModal = () => {
@@ -526,15 +857,98 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const setPaymentMethod = (value) => {
-    activePaymentMethod = value || "ticket";
+    activePaymentMethod = String(value || "").trim();
     detailPaymentButtons.forEach((button) => {
       const isSelected =
         button.dataset.hotelingDetailPaymentMethod === activePaymentMethod;
       button.classList.toggle("is-selected", isSelected);
     });
-    if (detailPaymentTicketRow) {
-      detailPaymentTicketRow.hidden = activePaymentMethod !== "ticket";
+    if (!activePaymentMethod) {
+      if (detailPaymentTicketRow) {
+        detailPaymentTicketRow.hidden = false;
+      }
+      if (detailPaymentAmountRow) {
+        detailPaymentAmountRow.hidden = true;
+      }
+      if (detailPaymentAmountInput instanceof HTMLInputElement) {
+        detailPaymentAmountInput.value = "";
+        detailPaymentAmountInput.disabled = true;
+      }
+      syncDetailPaymentSummary();
+      return;
     }
+    const isTicket = activePaymentMethod === PAYMENT_METHODS.TICKET;
+    if (detailPaymentTicketRow) {
+      detailPaymentTicketRow.hidden = !isTicket;
+    }
+    if (detailPaymentAmountRow) {
+      detailPaymentAmountRow.hidden = isTicket;
+    }
+    if (detailPaymentAmountInput instanceof HTMLInputElement) {
+      detailPaymentAmountInput.disabled = isTicket;
+    }
+    syncDetailPaymentSummary();
+  };
+
+  const normalizeDetailPaymentAmountInput = () => {
+    if (!(detailPaymentAmountInput instanceof HTMLInputElement)) {
+      return;
+    }
+    if (!activePaymentMethod) {
+      detailPaymentAmountInput.value = "";
+      syncDetailPaymentSummary();
+      return;
+    }
+    if (activePaymentMethod === PAYMENT_METHODS.TICKET) {
+      detailPaymentAmountInput.value = "0";
+      syncDetailPaymentSummary();
+      return;
+    }
+    const amount = parsePaymentAmount(detailPaymentAmountInput.value);
+    detailPaymentAmountInput.value = amount > 0 ? amount.toLocaleString() : "";
+    syncDetailPaymentSummary();
+  };
+
+  const getDetailReservation = () =>
+    reservationState.reservations.find(
+      (item) => item.id === detailState.reservationId
+    ) || null;
+
+  const getDetailExpectedTotalAmount = () => {
+    const reservation = getDetailReservation();
+    if (!reservation) {
+      return 0;
+    }
+    const expected = Number(reservation?.billing?.totals?.expected);
+    if (Number.isFinite(expected) && expected >= 0) {
+      return Math.round(expected);
+    }
+    return sumBillingAllocationsExpected(reservation?.billing);
+  };
+
+  const syncDetailPaymentSummary = () => {
+    const totalAmount = getDetailExpectedTotalAmount();
+    let paidAmount = 0;
+    if (detailTotalAmount) {
+      detailTotalAmount.textContent = formatTicketPrice(totalAmount);
+    }
+    if (activePaymentMethod === PAYMENT_METHODS.TICKET) {
+      paidAmount = totalAmount;
+    } else if (activePaymentMethod) {
+      paidAmount = parsePaymentAmount(
+        detailPaymentAmountInput instanceof HTMLInputElement
+          ? detailPaymentAmountInput.value
+          : 0
+      );
+    }
+    if (detailPaymentTotal) {
+      detailPaymentTotal.textContent = formatTicketPrice(paidAmount);
+    }
+    const balance = totalAmount - paidAmount;
+    if (detailBalanceTotal) {
+      detailBalanceTotal.textContent = formatTicketPrice(balance);
+    }
+    detailBalanceRow?.classList.toggle("is-positive", balance > 0);
   };
 
   const HOTELING_DETAIL_STATUS_ORDER = [
@@ -629,61 +1043,167 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!detailTicketInfo) {
       return;
     }
-    detailTicketInfo.textContent = "";
-    const memberId = getMemberIdFromReservation(reservation);
-    const member = loadIssueMembers().find(
-      (item) => String(item.id) === String(memberId)
+    const member = getMemberByReservation(reservation);
+    const ticketMap = new Map(
+      (Array.isArray(member?.tickets) ? member.tickets : []).map((ticket) => [
+        String(ticket?.id || ""),
+        ticket,
+      ])
     );
-    const usageEntry = Array.isArray(reservation?.dates)
-      ? reservation.dates.find((entry) => getEntryTicketUsages(entry).length > 0)
-      : null;
-    const usage = getPrimaryTicketUsage(usageEntry || {}) || null;
-    if (!memberId || !usage?.ticketId || !usage?.sequence) {
+    const rows = [];
+    (Array.isArray(reservation?.dates) ? reservation.dates : []).forEach((entry) => {
+      const usages = getEntryTicketUsages(entry);
+      usages.forEach((usage) => {
+        const ticket = ticketMap.get(String(usage?.ticketId || ""));
+        rows.push({
+          ticketName: ticket?.name || "-",
+          sequence: Number(usage?.sequence) || 0,
+          totalCount: Number(ticket?.totalCount) || 0,
+        });
+      });
+    });
+    detailTicketInfo.textContent = "";
+    if (rows.length === 0) {
+      detailTicketInfo.innerHTML = `
+        <p class="reservation-ticket-placeholder">예약에 사용한 이용권이 없습니다.</p>
+      `;
+      return;
+    }
+    rows.forEach((item) => {
       const card = document.createElement("div");
-      card.className =
-        "reservation-detail__ticket-card reservation-detail__ticket-card--empty";
+      card.className = "reservation-detail__ticket-card";
       card.innerHTML = `
         <div class="reservation-detail__ticket-col reservation-detail__ticket-col--name">
-          <span class="reservation-detail__ticket-value" data-ticket-cell="name">-</span>
+          <span class="reservation-detail__ticket-value">${item.ticketName}</span>
         </div>
         <div class="reservation-detail__ticket-col reservation-detail__ticket-col--sequence">
           <span class="reservation-detail__ticket-label">회차</span>
-          <span class="reservation-detail__ticket-value" data-ticket-cell="sequence">-</span>
+          <span class="reservation-detail__ticket-value">${item.sequence || "-"}</span>
         </div>
         <div class="reservation-detail__ticket-col reservation-detail__ticket-col--total">
           <span class="reservation-detail__ticket-label">총횟수</span>
-          <span class="reservation-detail__ticket-value" data-ticket-cell="total">-</span>
+          <span class="reservation-detail__ticket-value">${item.totalCount > 0 ? item.totalCount : "-"}</span>
         </div>
       `;
       detailTicketInfo.appendChild(card);
+    });
+  };
+
+  const createReservationFeeLine = (labelText, calcText) => {
+    const line = document.createElement("div");
+    line.className = "reservation-fee-line";
+    const label = document.createElement("span");
+    label.className = "reservation-fee-line__label";
+    label.textContent = labelText;
+    const calc = document.createElement("span");
+    calc.className = "reservation-fee-line__calc";
+    calc.textContent = calcText;
+    line.append(label, calc);
+    return line;
+  };
+
+  const renderHotelingDetailFeeLines = (reservation) => {
+    if (!detailFeeLines) {
       return;
     }
-    const options = getIssuedTicketOptions(
-      tickets,
-      Array.isArray(member?.tickets) ? member.tickets : []
+    detailFeeLines.innerHTML = "";
+    const charges = Array.isArray(reservation?.billing?.charges)
+      ? reservation.billing.charges
+      : [];
+    if (charges.length > 0) {
+      const groups = new Map();
+      charges.forEach((charge) => {
+        const type = String(charge?.serviceType || "");
+        if (!groups.has(type)) {
+          groups.set(type, {
+            amount: 0,
+            qty: 0,
+            unitPrice: 0,
+          });
+        }
+        const current = groups.get(type);
+        current.amount += Number(charge?.amount) || 0;
+        current.qty += Number(charge?.qty) || 1;
+        if (!current.unitPrice && Number(charge?.unitPrice) > 0) {
+          current.unitPrice = Number(charge.unitPrice);
+        }
+      });
+      const rows = [];
+      if (groups.has("hoteling")) {
+        const row = groups.get("hoteling");
+        const qty = Math.max(Number(row.qty) || 0, 0);
+        const unit = Number(row.unitPrice) > 0
+          ? formatTicketPrice(row.unitPrice)
+          : null;
+        rows.push({
+          label: "호텔링",
+          calc: unit && qty > 0
+            ? `${unit} x ${qty}박`
+            : formatTicketPrice(row.amount),
+        });
+      }
+      if (groups.has("oneway")) {
+        const row = groups.get("oneway");
+        const qty = Math.max(Number(row.qty) || 0, 0);
+        const unit = Number(row.unitPrice) > 0
+          ? formatTicketPrice(row.unitPrice)
+          : null;
+        rows.push({
+          label: "픽드랍(편도)",
+          calc: unit && qty > 0
+            ? `${unit} x ${qty}회`
+            : formatTicketPrice(row.amount),
+        });
+      }
+      if (groups.has("roundtrip")) {
+        const row = groups.get("roundtrip");
+        const qty = Math.max(Number(row.qty) || 0, 0);
+        const unit = Number(row.unitPrice) > 0
+          ? formatTicketPrice(row.unitPrice)
+          : null;
+        rows.push({
+          label: "픽드랍(왕복)",
+          calc: unit && qty > 0
+            ? `${unit} x ${qty}회`
+            : formatTicketPrice(row.amount),
+        });
+      }
+      if (rows.length > 0) {
+        rows.forEach((row) => {
+          detailFeeLines.appendChild(createReservationFeeLine(row.label, row.calc));
+        });
+        return;
+      }
+    }
+
+    const allocations =
+      reservation?.billing && typeof reservation.billing.allocationsByDate === "object"
+        ? reservation.billing.allocationsByDate
+        : {};
+    const totals = Object.values(allocations).reduce(
+      (acc, fee) => ({
+        hoteling: acc.hoteling + (Number(fee?.hoteling) || 0),
+        oneway: acc.oneway + (Number(fee?.oneway) || 0),
+        roundtrip: acc.roundtrip + (Number(fee?.roundtrip) || 0),
+      }),
+      { hoteling: 0, oneway: 0, roundtrip: 0 }
     );
-    const optionMap = new Map(options.map((option) => [option.id, option]));
-    const ticketName = optionMap.get(String(usage.ticketId))?.name || "-";
-    const totalCount = optionMap.get(String(usage.ticketId))?.totalCount;
-    const totalText = Number.isFinite(Number(totalCount)) && Number(totalCount) > 0
-      ? `${Number(totalCount)}`
-      : "-";
-    const card = document.createElement("div");
-    card.className = "reservation-detail__ticket-card";
-    card.innerHTML = `
-      <div class="reservation-detail__ticket-col reservation-detail__ticket-col--name">
-        <span class="reservation-detail__ticket-value" data-ticket-cell="name">${ticketName}</span>
-      </div>
-      <div class="reservation-detail__ticket-col reservation-detail__ticket-col--sequence">
-        <span class="reservation-detail__ticket-label">회차</span>
-        <span class="reservation-detail__ticket-value" data-ticket-cell="sequence">${usage.sequence}</span>
-      </div>
-      <div class="reservation-detail__ticket-col reservation-detail__ticket-col--total">
-        <span class="reservation-detail__ticket-label">총횟수</span>
-        <span class="reservation-detail__ticket-value" data-ticket-cell="total">${totalText}</span>
-      </div>
-    `;
-    detailTicketInfo.appendChild(card);
+    const rows = [];
+    if (totals.hoteling > 0) {
+      rows.push({ label: "호텔링", calc: formatTicketPrice(totals.hoteling) });
+    }
+    if (totals.oneway > 0) {
+      rows.push({ label: "픽드랍(편도)", calc: formatTicketPrice(totals.oneway) });
+    }
+    if (totals.roundtrip > 0) {
+      rows.push({ label: "픽드랍(왕복)", calc: formatTicketPrice(totals.roundtrip) });
+    }
+    if (rows.length === 0) {
+      rows.push({ label: "요금 정보", calc: "-" });
+    }
+    rows.forEach((row) => {
+      detailFeeLines.appendChild(createReservationFeeLine(row.label, row.calc));
+    });
   };
 
   const getDetailPickdropFlags = () => {
@@ -704,6 +1224,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const schedule = getHotelingScheduleSnapshot(reservation);
+    renderHotelingDetailFeeLines(reservation);
     const status = getHotelingDetailStatus(reservation, context);
     const pickdropFlags = getHotelingPickdropFlags(reservation);
     detailState.reservationId = reservation.id || "";
@@ -717,12 +1238,19 @@ document.addEventListener("DOMContentLoaded", () => {
       memo: reservation.memo || "",
       pickup: pickdropFlags.hasPickup,
       dropoff: pickdropFlags.hasDropoff,
+      paymentMethod: PAYMENT_METHODS.CASH,
+      paymentAmount: "0",
     };
-    const owner = reservation.owner || "-";
-    const dogName = reservation.dogName || "-";
-    const breed = reservation.breed || "-";
+    const member = getMemberByReservation(reservation);
+    const owner = member?.owner || reservation.owner || "-";
+    const dogName = member?.dogName || reservation.dogName || "-";
+    const breed = member?.breed || reservation.breed || "-";
     const weight =
-      reservation.weight || reservation.memberWeight || reservation.petWeight || "-";
+      member?.weight
+      || reservation.weight
+      || reservation.memberWeight
+      || reservation.petWeight
+      || "-";
     const roomId = String(reservation.room || "");
     const roomName = roomId
       ? (rooms.find((item) => String(item.id) === roomId)?.name || roomId)
@@ -732,7 +1260,7 @@ document.addEventListener("DOMContentLoaded", () => {
       detailOwnerEl.textContent = owner;
     }
     if (detailPhoneEl) {
-      detailPhoneEl.textContent = "-";
+      detailPhoneEl.textContent = member?.phone || member?.ownerPhone || "-";
     }
     if (detailDogNameEl) {
       detailDogNameEl.textContent = dogName;
@@ -802,11 +1330,31 @@ document.addEventListener("DOMContentLoaded", () => {
         detailMemoEl.textContent = memoValue || "-";
       }
     }
-    renderDetailTicketInfo(reservation);
-    const hasTicketUsage = Array.isArray(reservation?.dates)
-      ? reservation.dates.some((entry) => getEntryTicketUsages(entry).length > 0)
-      : false;
-    setPaymentMethod(hasTicketUsage ? "ticket" : "cash");
+    const hasPersistedPayment = reservation?.payment && typeof reservation.payment === "object";
+    const payment = hasPersistedPayment
+      ? normalizeReservationPayment(reservation.payment, reservation)
+      : null;
+    setPaymentMethod(payment?.method || "");
+    if (detailPaymentAmountInput instanceof HTMLInputElement) {
+      detailPaymentAmountInput.value =
+        payment?.method === PAYMENT_METHODS.TICKET
+          ? "0"
+          : (Number(payment?.amount) > 0 ? Number(payment.amount).toLocaleString() : "");
+    }
+    if (!payment) {
+      if (detailTicketInfo) {
+        detailTicketInfo.innerHTML = `
+          <p class="reservation-ticket-placeholder">예약에 사용한 이용권이 없습니다.</p>
+        `;
+      }
+    } else {
+      renderDetailTicketInfo(reservation);
+    }
+    syncDetailPaymentSummary();
+    detailState.initial.paymentMethod = payment?.method || "";
+    detailState.initial.paymentAmount = payment
+      ? String(payment.amount || 0)
+      : "";
     setActiveDetailTab("product");
     if (detailSaveButton) {
       detailSaveButton.disabled = true;
@@ -842,6 +1390,14 @@ document.addEventListener("DOMContentLoaded", () => {
       memo: detailMemoEl instanceof HTMLTextAreaElement
         ? detailMemoEl.value.trim()
         : detailState.initial.memo || "",
+      paymentMethod: activePaymentMethod || "",
+      paymentAmount: activePaymentMethod === PAYMENT_METHODS.TICKET
+        ? "0"
+        : activePaymentMethod
+          ? (detailPaymentAmountInput instanceof HTMLInputElement
+            ? String(parsePaymentAmount(detailPaymentAmountInput.value))
+            : "0")
+          : "",
       ...getDetailPickdropFlags(),
     };
     const hasChanges =
@@ -852,6 +1408,8 @@ document.addEventListener("DOMContentLoaded", () => {
       || next.checkoutTime !== detailState.initial.checkoutTime
       || next.statusKey !== (detailState.initial.statusKey || "PLANNED")
       || next.memo !== (detailState.initial.memo || "")
+      || next.paymentMethod !== (detailState.initial.paymentMethod || "")
+      || next.paymentAmount !== (detailState.initial.paymentAmount || "")
       || next.pickup !== Boolean(detailState.initial.pickup)
       || next.dropoff !== Boolean(detailState.initial.dropoff);
     detailSaveButton.disabled = !hasChanges;
@@ -871,12 +1429,27 @@ document.addEventListener("DOMContentLoaded", () => {
       memo: detailMemoEl instanceof HTMLTextAreaElement
         ? detailMemoEl.value.trim()
         : "",
+      paymentMethod: activePaymentMethod || "",
+      paymentAmount: activePaymentMethod === PAYMENT_METHODS.TICKET
+        ? 0
+        : activePaymentMethod
+          ? parsePaymentAmount(
+            detailPaymentAmountInput instanceof HTMLInputElement
+              ? detailPaymentAmountInput.value
+              : 0
+          )
+          : 0,
       ...getDetailPickdropFlags(),
     };
-    reservationState.reservations = reservationStorage.updateReservation(
+    const nextReservations = reservationStorage.updateReservation(
       detailState.reservationId,
       (item) => {
-        const { statusKey, ...nextPayload } = payload;
+        const {
+          statusKey,
+          paymentMethod,
+          paymentAmount,
+          ...nextPayload
+        } = payload;
         const nextDates = buildHotelingDateEntries(
           payload.checkinDate,
           payload.checkoutDate,
@@ -889,7 +1462,7 @@ document.addEventListener("DOMContentLoaded", () => {
             getEntryTicketUsages(entry),
           ])
         );
-        return {
+        let updatedReservation = {
           ...item,
           ...nextPayload,
           dates: nextDates.map((entry) => {
@@ -898,7 +1471,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return {
               ...entry,
               baseStatusKey: nextStatusKey,
-              statusText: getHotelingStatusLabel(nextStatusKey),
               status: getHotelingStatusLabel(nextStatusKey),
               ticketUsages: usageMap.get(key) || [],
               pickup: entry.kind === "checkin" ? payload.pickup : false,
@@ -908,8 +1480,69 @@ document.addEventListener("DOMContentLoaded", () => {
           hasPickup: Boolean(payload.pickup),
           hasDropoff: Boolean(payload.dropoff),
         };
+        const memberId = getMemberIdFromReservation(updatedReservation);
+        const repairContext = buildPickdropRepairContext({
+          reservation: updatedReservation,
+          memberId,
+          tickets: ticketStorage.ensureDefaults(),
+          members: loadIssueMembers(),
+        });
+        if (repairContext.skipReason) {
+          console.debug(
+            `[hoteling-detail] pickdrop usage repair skipped: ${repairContext.skipReason}`
+          );
+          const member = loadIssueMembers().find(
+            (value) => String(value?.id || "") === String(memberId || "")
+          );
+          const parsedWeight = Number(member?.weight);
+          const memberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
+          const nextPayment = paymentMethod
+            ? normalizeReservationPayment(
+              { method: paymentMethod, amount: paymentAmount },
+              updatedReservation
+            )
+            : null;
+          const reservationWithPayment = clearTicketPaymentIfCanceledReservation({
+            ...updatedReservation,
+            payment: nextPayment,
+          });
+          return applyHotelingDateFees(
+            reservationWithPayment,
+            memberWeight
+          );
+        }
+        updatedReservation = repairReservationPickdropUsages({
+          reservation: updatedReservation,
+          pickdropOptions: repairContext.pickdropOptions,
+          selectionOrder: repairContext.selectionOrder,
+        });
+        const member = loadIssueMembers().find(
+          (value) => String(value?.id || "") === String(memberId || "")
+        );
+        const parsedWeight = Number(member?.weight);
+        const memberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
+        const nextPayment = paymentMethod
+          ? normalizeReservationPayment(
+            { method: paymentMethod, amount: paymentAmount },
+            updatedReservation
+          )
+          : null;
+        const reservationWithPayment = clearTicketPaymentIfCanceledReservation({
+          ...updatedReservation,
+          payment: nextPayment,
+        });
+        return applyHotelingDateFees(
+          reservationWithPayment,
+          memberWeight
+        );
       }
     );
+    reservationState.reservations = nextReservations;
+    const updatedReservation = nextReservations.find(
+      (item) => item.id === detailState.reservationId
+    );
+    const memberId = getMemberIdFromReservation(updatedReservation);
+    applyReservationToMemberTickets(memberId || "", new Map());
     detailState.initial = { ...payload };
     syncDetailSaveState();
     refreshCalendarStats();
@@ -923,6 +1556,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const groups = buildHotelingEntriesForDate(
       getFilteredReservations(),
       reservationState.selectedDateKey
+    );
+    const members = loadIssueMembers();
+    const memberById = new Map(
+      members.map((member) => [String(member?.id || ""), member])
+    );
+    const roomNameById = new Map(
+      roomStorage.ensureDefaults().map((room) => [
+        String(room?.id ?? ""),
+        String(room?.name ?? "").trim() || String(room?.id ?? ""),
+      ])
     );
     renderHotelingList(
       {
@@ -941,8 +1584,10 @@ document.addEventListener("DOMContentLoaded", () => {
         stayCountEl,
         listEmptyEl,
       },
-      groups
+      groups,
+      { roomNameById, memberById }
     );
+    sidebarReservationBadges.refresh();
     syncTableHeaderCheckbox(checkinTable);
     syncTableHeaderCheckbox(checkoutTable);
     syncTableHeaderCheckbox(stayTable);
@@ -999,6 +1644,17 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!(target instanceof HTMLElement)) {
         return;
       }
+      const timeCell = target.closest("[data-hoteling-time-edit='true']");
+      if (timeCell && listCard.contains(timeCell)) {
+        const row = timeCell.closest(".hoteling-table__row--data");
+        openListTimePicker({
+          cell: timeCell,
+          reservationId: row?.dataset?.reservationId || "",
+          entryDate: row?.dataset?.entryDate || "",
+          entryKind: row?.dataset?.entryKind || "",
+        });
+        return;
+      }
       const button = target.closest("[data-hoteling-detail-open]");
       if (!button) {
         return;
@@ -1019,7 +1675,41 @@ document.addEventListener("DOMContentLoaded", () => {
         kind: row?.dataset?.entryKind || "",
       });
     });
+
+    listCard.addEventListener("keydown", (event) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!target || !target.matches("[data-hoteling-time-edit='true']")) {
+        return;
+      }
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      event.preventDefault();
+      const row = target.closest(".hoteling-table__row--data");
+      openListTimePicker({
+        cell: target,
+        reservationId: row?.dataset?.reservationId || "",
+        entryDate: row?.dataset?.entryDate || "",
+        entryKind: row?.dataset?.entryKind || "",
+      });
+    });
   }
+
+  listTimePicker.addEventListener("blur", () => {
+    if (!activeTimeEdit) {
+      return;
+    }
+    const nextTime = listTimePicker.value || activeTimeEdit.previousValue || "";
+    if (nextTime && nextTime !== activeTimeEdit.previousValue) {
+      updateListEntryTime({
+        reservationId: activeTimeEdit.reservationId,
+        entryDate: activeTimeEdit.entryDate,
+        entryKind: activeTimeEdit.entryKind,
+        nextTime,
+      });
+    }
+    closeListTimePicker();
+  });
 
   if (cancelOpenButton) {
     cancelOpenButton.addEventListener("click", () => {
@@ -1053,59 +1743,60 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (detailCloseButtons.length > 0) {
-  detailCloseButtons.forEach((button) => {
-    button.addEventListener("click", closeDetailModal);
-  });
+    detailCloseButtons.forEach((button) => {
+      button.addEventListener("click", closeDetailModal);
+    });
 
-  detailModal?.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const statusTrigger = target?.closest("[data-hoteling-detail-status-trigger]");
-    if (statusTrigger && detailStatusTrigger?.contains(statusTrigger)) {
-      toggleDetailStatusMenu();
-      return;
-    }
-    const statusOption = target?.closest("[data-hoteling-detail-status-option]");
-    if (statusOption && detailStatusMenu?.contains(statusOption)) {
-      updateDetailStatusDisplay(statusOption.dataset.hotelingDetailStatusOption || "PLANNED");
-      closeDetailStatusMenu();
-      syncDetailSaveState();
-      return;
-    }
-    const tabButton = target?.closest("[data-hoteling-detail-tab]");
-    if (tabButton && detailModal.contains(tabButton)) {
-      setActiveDetailTab(tabButton.dataset.hotelingDetailTab);
-      return;
-    }
-    const roomChip = target?.closest("[data-hoteling-detail-room]");
-    if (roomChip && detailRoomChips?.contains(roomChip)) {
-      setSelectedChip(
-        detailRoomChips,
-        detailRoomDataKey,
-        roomChip.dataset.hotelingDetailRoom
-      );
-      syncDetailSaveState();
-      return;
-    }
-    const pickdropChip = target?.closest("[data-hoteling-detail-pickdrop]");
-    if (pickdropChip && detailPickdropOptions?.contains(pickdropChip)) {
-      pickdropChip.classList.toggle("is-selected");
-      syncDetailSaveState();
-      return;
-    }
-    const paymentButton = target?.closest("[data-hoteling-detail-payment-method]");
-    if (paymentButton && detailModal.contains(paymentButton)) {
-      setPaymentMethod(paymentButton.dataset.hotelingDetailPaymentMethod);
-      return;
-    }
-    if (
-      detailStatusMenu
-      && !detailStatusMenu.hidden
-      && !target?.closest("[data-hoteling-detail-status-menu]")
-      && !target?.closest("[data-hoteling-detail-status-trigger]")
-    ) {
-      closeDetailStatusMenu();
-    }
-  });
+    detailModal?.addEventListener("click", (event) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const statusTrigger = target?.closest("[data-hoteling-detail-status-trigger]");
+      if (statusTrigger && detailStatusTrigger?.contains(statusTrigger)) {
+        toggleDetailStatusMenu();
+        return;
+      }
+      const statusOption = target?.closest("[data-hoteling-detail-status-option]");
+      if (statusOption && detailStatusMenu?.contains(statusOption)) {
+        updateDetailStatusDisplay(statusOption.dataset.hotelingDetailStatusOption || "PLANNED");
+        closeDetailStatusMenu();
+        syncDetailSaveState();
+        return;
+      }
+      const tabButton = target?.closest("[data-hoteling-detail-tab]");
+      if (tabButton && detailModal.contains(tabButton)) {
+        setActiveDetailTab(tabButton.dataset.hotelingDetailTab);
+        return;
+      }
+      const roomChip = target?.closest("[data-hoteling-detail-room]");
+      if (roomChip && detailRoomChips?.contains(roomChip)) {
+        setSelectedChip(
+          detailRoomChips,
+          detailRoomDataKey,
+          roomChip.dataset.hotelingDetailRoom
+        );
+        syncDetailSaveState();
+        return;
+      }
+      const pickdropChip = target?.closest("[data-hoteling-detail-pickdrop]");
+      if (pickdropChip && detailPickdropOptions?.contains(pickdropChip)) {
+        pickdropChip.classList.toggle("is-selected");
+        syncDetailSaveState();
+        return;
+      }
+      const paymentButton = target?.closest("[data-hoteling-detail-payment-method]");
+      if (paymentButton && detailModal.contains(paymentButton)) {
+        setPaymentMethod(paymentButton.dataset.hotelingDetailPaymentMethod);
+        syncDetailSaveState();
+        return;
+      }
+      if (
+        detailStatusMenu
+        && !detailStatusMenu.hidden
+        && !target?.closest("[data-hoteling-detail-status-menu]")
+        && !target?.closest("[data-hoteling-detail-status-trigger]")
+      ) {
+        closeDetailStatusMenu();
+      }
+    });
   }
 
   [
@@ -1127,6 +1818,43 @@ document.addEventListener("DOMContentLoaded", () => {
   if (detailSaveButton) {
     detailSaveButton.addEventListener("click", saveDetailChanges);
   }
+  if (detailDeleteButton) {
+    detailDeleteButton.addEventListener("click", () => {
+      const reservationId = detailState.reservationId;
+      if (!reservationId) {
+        return;
+      }
+      if (!window.confirm("예약을 삭제할까요?")) {
+        return;
+      }
+      const latestReservations = reservationStorage.loadReservations();
+      const target = latestReservations.find((item) => item.id === reservationId) || null;
+      if (!target) {
+        closeDetailModal();
+        return;
+      }
+      const memberId = getMemberIdFromReservation(target);
+      const usageMap = buildTicketUsageCountMap(Array.isArray(target.dates) ? target.dates : []);
+      const nextReservations = latestReservations.filter((item) => item.id !== reservationId);
+      const savedReservations = reservationStorage.saveReservations(nextReservations);
+      allReservations.splice(0, allReservations.length, ...savedReservations);
+      reservationState.reservations = allReservations.filter((item) => item.type === "hoteling");
+      if (memberId && usageMap.size > 0) {
+        rollbackReservationMemberTickets(memberId, usageMap);
+      } else {
+        applyReservationToMemberTickets(memberId || "", new Map());
+      }
+      refreshCalendarStats();
+      renderListForKey(reservationState.selectedDateKey);
+      closeDetailModal();
+      showToast("삭제되었습니다.");
+      document.dispatchEvent(new CustomEvent("reservation:updated"));
+    });
+  }
+  detailPaymentAmountInput?.addEventListener("input", () => {
+    normalizeDetailPaymentAmountInput();
+    syncDetailSaveState();
+  });
 
   const hotelingCalendar = setupHotelingCalendar({
     gridSelector: "[data-hoteling-calendar-grid]",
@@ -1166,21 +1894,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const memberResults = document.querySelector("[data-hoteling-member-results]");
   const memberClear = document.querySelector("[data-hoteling-member-clear]");
   const hotelingMemoInput = reservationModal?.querySelector("[data-hoteling-memo]");
-  const ticketList = document.querySelector("[data-hoteling-tickets]");
-  const ticketEmpty = document.querySelector("[data-hoteling-tickets-empty]");
-  const hotelingFeeList = document.querySelector("[data-hoteling-fee-list]");
-  const hotelingTotalValue = document.querySelector("[data-hoteling-hoteling-total]");
-  const pickdropFeeList = document.querySelector("[data-hoteling-pickdrop-fee-list]");
-  const pickdropTotalValue = document.querySelector("[data-hoteling-pickdrop-total]");
-  const hotelingTotalAll = document.querySelector("[data-hoteling-total]");
+  const ticketList = reservationModal?.querySelector("[data-hoteling-tickets]");
+  const ticketEmpty = reservationModal?.querySelector("[data-hoteling-tickets-empty]");
+  const hotelingFeeList = reservationModal?.querySelector("[data-hoteling-fee-list]");
+  const hotelingFeeTotal = reservationModal?.querySelector("[data-hoteling-hoteling-total]");
+  const hotelingTicketTotal = reservationModal?.querySelector("[data-hoteling-ticket-total]");
+  const pickdropFeeList = reservationModal?.querySelector("[data-hoteling-pickdrop-fee-list]");
+  const pickdropFeeTotal = reservationModal?.querySelector("[data-hoteling-pickdrop-total]");
+  const pickdropTicketTotal = reservationModal?.querySelector("[data-hoteling-pickdrop-ticket-total]");
+  const paymentTotalAll = reservationModal?.querySelector("[data-payment-total-all]");
+  const reservationPaymentTypeInput = reservationModal?.querySelector("[data-reservation-payment-type], [data-reservation-other-type]");
+  const reservationOtherAmountInput = reservationModal?.querySelector("[data-reservation-other-amount]");
+  const hotelingTotalAll = reservationModal?.querySelector("[data-hoteling-total]");
   const hotelingFeeStep = reservationModal?.querySelector(".reservation-step--fee.hoteling-fee-card");
-  const hotelingFeeSection = hotelingFeeList?.closest(".reservation-fee-section");
   const hotelingFeeCard = reservationModal?.querySelector("[data-hoteling-fee-hoteling]");
   const pickdropFeeCard = reservationModal?.querySelector("[data-hoteling-fee-pickdrop]");
   const pickdropTicketField = reservationModal?.querySelector("[data-hoteling-pickdrop-tickets]");
   const pickdropTicketEmpty = reservationModal?.querySelector("[data-hoteling-pickdrop-tickets-empty]");
   const pickdropInputs = reservationModal?.querySelectorAll("[data-hoteling-pickdrop-option]");
   const submitButton = reservationModal?.querySelector(".hoteling-modal__submit");
+  const balanceRow = reservationModal?.querySelector("[data-hoteling-fee-balance-row]");
+  const balanceTotal = reservationModal?.querySelector("[data-hoteling-fee-balance-total]");
+  const feeDropdownController = setupReservationFeeDropdowns(reservationModal, {
+    iconOpen: "../../assets/iconDropdown.svg",
+    iconFold: "../../assets/iconDropdown_fold.svg",
+    onTabChanged: () => {
+      syncHotelingFees();
+    },
+  });
 
   const modalState = {
     currentDate: new Date(),
@@ -1194,12 +1935,74 @@ document.addEventListener("DOMContentLoaded", () => {
     pickdrops: new Set(),
     availableRoomIds: null,
     reservationSummary: null,
+    nearestCheckoutSelectionKeys: {
+      pastCheckout: "",
+      futureCheckin: "",
+    },
+  };
+
+  const getNearestCheckoutSelectionKeys = (baseKey, checkoutKeys, checkinKeys) => {
+    if (
+      !baseKey
+      || !(checkoutKeys instanceof Set)
+      || !(checkinKeys instanceof Set)
+    ) {
+      return { pastCheckout: "", futureCheckin: "" };
+    }
+    let pastCheckout = "";
+    let futureCheckin = "";
+    checkoutKeys.forEach((key) => {
+      if (!key || key === baseKey) {
+        return;
+      }
+      if (key < baseKey) {
+        if (!pastCheckout || key > pastCheckout) {
+          pastCheckout = key;
+        }
+      }
+    });
+    checkinKeys.forEach((key) => {
+      if (!key || key === baseKey) {
+        return;
+      }
+      if (key > baseKey) {
+        if (!futureCheckin || key < futureCheckin) {
+          futureCheckin = key;
+        }
+      }
+    });
+    return { pastCheckout, futureCheckin };
   };
 
   const getSelectedTicketMetaElement = (container) =>
     container?.querySelector?.(
       ".reservation-ticket-row.is-selected .reservation-ticket-row__meta"
     );
+
+  const setAmountRange = (amountEl, before, after, unitLabel = "회") => {
+    if (!amountEl) {
+      return;
+    }
+
+    const beforeVal = `${before}${unitLabel}`;
+    let afterVal = `${after}${unitLabel}`;
+    if (after < 0) {
+      afterVal = `초과 ${Math.abs(after)}${unitLabel}`;
+    }
+    const isBeforeLow = Number(before) <= 2;
+    const isAfterLow = Number(after) <= 2;
+
+    amountEl.innerHTML = `
+      <span class="reservation-ticket-row__meta">
+        <span class="as-is ${isBeforeLow ? "is-low" : ""}">${beforeVal}</span>
+        →
+        <span class="to-be ${isAfterLow ? "is-low" : ""}">${afterVal}</span>
+      </span>
+    `;
+
+    amountEl.classList.toggle("is-empty", false);
+    delete amountEl.dataset.feeAmount;
+  };
 
   const applyTicketMetaAmount = (amountEl, metaEl) => {
     if (!amountEl || !metaEl) {
@@ -1357,6 +2160,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const getNightKeys = () =>
     getHotelingNightKeys(modalState.checkin, modalState.checkout, timeZone);
 
+  const applyHotelingDateFees = (reservation, memberWeight = null) => {
+    if (!reservation || !Array.isArray(reservation.dates)) {
+      return reservation;
+    }
+    return buildReservationWithBilling(reservation, {
+      pricingItems: pricingStorage.loadPricingItems(),
+      memberWeight,
+      timeZone,
+      payment: reservation.payment,
+    });
+  };
+
   const getSelectedRoomId = () => {
     if (!reservationModal) {
       return "";
@@ -1422,6 +2237,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const applyMemberSelection = (member) => {
+    const previousMemberId = String(modalState.selectedMember?.id || "");
+    const nextMemberId = String(member?.id || "");
+    const hasMemberChanged = previousMemberId !== nextMemberId;
+    if (hasMemberChanged) {
+      modalState.checkin = null;
+      modalState.checkout = null;
+    }
+
     modalState.selectedMember = member || null;
     modalState.ticketSelections = [];
     modalState.ticketOptions = member
@@ -1429,8 +2252,8 @@ document.addEventListener("DOMContentLoaded", () => {
       : [];
     modalState.pickdropTicketOptions = member
       ? getIssuedTicketOptions(tickets, member.tickets).filter(
-          (option) => option.type === "pickdrop"
-        )
+        (option) => option.type === "pickdrop"
+      )
       : [];
     modalState.pickdropTicketSelections = [];
     renderHotelingTickets();
@@ -1449,69 +2272,42 @@ document.addEventListener("DOMContentLoaded", () => {
     const hasDropoff = modalState.pickdrops.has("dropoff");
     const hasCheckin = Boolean(modalState.checkin);
     const hasCheckout = Boolean(modalState.checkout);
-    if (hasPickup && hasDropoff) {
-      return hasCheckin || hasCheckout ? 1 : 0;
+
+    if ((hasPickup && hasCheckin) || (hasDropoff && hasCheckout)) {
+      return 1;
     }
-    let count = 0;
-    if (hasPickup && hasCheckin) {
-      count += 1;
-    }
-    if (hasDropoff && hasCheckout) {
-      count += 1;
-    }
-    return count;
+    return 0;
   };
 
   const syncHotelingFees = () => {
-    if (!hotelingFeeList || !hotelingTotalAll) {
+    if (!hotelingTotalAll || !paymentTotalAll) {
       return;
     }
+    const currentPricingItems = pricingStorage.loadPricingItems();
     const roomId = getSelectedRoomId();
+    const nightKeys = getNightKeys();
+    const nightCount = getNightCount(modalState.checkin, modalState.checkout) || 0;
+    const pickdropCount = getPickdropDateCount();
+
+    // 1. Fee breakdown (Area 1: Total Estimated Amount)
     renderHotelingFeeBreakdown({
       hotelingFeeContainer: hotelingFeeList,
-      hotelingTotalEl: hotelingTotalValue,
-      totalEl: hotelingTotalAll,
-      pricingItems,
+      hotelingTotalEl: hotelingFeeTotal,
+      totalEl: null,
+      pricingItems: currentPricingItems,
       rooms,
       roomId,
-      nightKeys: getNightKeys(),
+      nightKeys,
       timeZone,
     });
-    const pickdropCount = getPickdropDateCount();
-    const pickdropMap = new Map(
-      modalState.pickdropTicketOptions.map((option) => [option.id, option])
-    );
-    modalState.pickdropTicketSelections = modalState.pickdropTicketSelections.filter(
-      (id) => pickdropMap.has(id)
-    );
-    const pickdropLimit = getPickdropReservableTotal(
-      modalState.selectedMember?.totalReservableCountByType
-    );
-    const hasNoPickdropTickets = Number.isFinite(pickdropLimit) && pickdropLimit <= 0;
-    if (hasNoPickdropTickets) {
-      modalState.pickdropTicketSelections = [];
-    }
-    const pickdropAllocation = allocateTicketUsage(
-      modalState.pickdropTicketSelections,
-      pickdropMap,
-      pickdropCount
-    );
-    const nightCount = getNightCount(modalState.checkin, modalState.checkout) || 0;
-    const hotelingOptionMap = new Map(
-      modalState.ticketOptions.map((option) => [option.id, option])
-    );
-    const hotelingAllocation = allocateTicketUsage(
-      modalState.ticketSelections,
-      hotelingOptionMap,
-      nightCount
-    );
+
     renderPricingBreakdown({
       schoolFeeContainer: null,
       pickdropFeeContainer: pickdropFeeList,
       schoolTotalEl: null,
-      pickdropTotalEl: pickdropTotalValue,
-      totalEl: hotelingTotalAll,
-      pricingItems,
+      pickdropTotalEl: pickdropFeeTotal,
+      totalEl: null,
+      pricingItems: currentPricingItems,
       classes,
       services: new Set(),
       pickdrops: modalState.pickdrops,
@@ -1521,6 +2317,26 @@ document.addEventListener("DOMContentLoaded", () => {
       selectedWeekdayCounts: new Map(),
       memberWeight: modalState.selectedMember?.weight,
     });
+
+    // Sum Area 1 Totals
+    const feeTotalGroup = reservationModal?.querySelector('[data-fee-group="total"]');
+    if (feeTotalGroup) {
+      const hotelingAmt = parseInt(hotelingFeeTotal?.dataset.feeAmount || "0", 10);
+      const pickdropAmt = parseInt(pickdropFeeTotal?.dataset.feeAmount || "0", 10);
+      const total = hotelingAmt + pickdropAmt;
+      if (hotelingTotalAll) {
+        hotelingTotalAll.textContent = total > 0 ? `${total.toLocaleString()}원` : "-";
+        hotelingTotalAll.dataset.feeAmount = String(total);
+      }
+    }
+
+    // 2. Ticket allocation (Area 2: Payment - Ticket panel)
+    const pickdropMap = new Map(modalState.pickdropTicketOptions.map((o) => [o.id, o]));
+    const pickdropAllocation = allocateTicketUsage(modalState.pickdropTicketSelections, pickdropMap, pickdropCount);
+
+    const hotelingOptionMap = new Map(modalState.ticketOptions.map((o) => [o.id, o]));
+    const hotelingAllocation = allocateTicketUsage(modalState.ticketSelections, hotelingOptionMap, nightCount);
+
     renderPickdropTickets(
       pickdropTicketField,
       modalState.pickdropTicketOptions,
@@ -1529,96 +2345,97 @@ document.addEventListener("DOMContentLoaded", () => {
       Boolean(modalState.selectedMember),
       true,
       pickdropTicketEmpty,
-      hasNoPickdropTickets || pickdropCount === 0
+      pickdropCount === 0
     );
-    if (hotelingFeeCard) {
-      hotelingFeeCard.classList.toggle(
-        "is-overbooked",
-        hasOverbookedAllocations(hotelingAllocation.allocations)
-      );
+
+    // 3. Payment Totals (Area 2)
+    const activeTab = reservationModal?.querySelector(".reservation-fee-tab.is-active")?.dataset.feeTab;
+
+    if (activeTab === "ticket") {
+      const hasTicketSelection = modalState.ticketSelections.length > 0;
+      const hasPickdropSelection = modalState.pickdropTicketSelections.length > 0;
+
+      if (hasTicketSelection) {
+        const meta = getSelectedTicketMetaElement(ticketList);
+        if (meta) {
+          applyTicketMetaAmount(hotelingTicketTotal, meta);
+          const total = modalState.selectedMember?.totalReservableCountByType?.hoteling || 0;
+          setAmountRange(hotelingTicketTotal, total, total - nightCount, "박");
+        }
+      } else {
+        if (hotelingTicketTotal) {
+          hotelingTicketTotal.innerHTML = `
+            <span class="reservation-ticket-row__meta">
+              <span class="as-is">-</span>
+            </span>
+          `;
+        }
+      }
+
+      if (hasPickdropSelection) {
+        const meta = getSelectedTicketMetaElement(pickdropTicketField);
+        if (meta) {
+          applyTicketMetaAmount(pickdropTicketTotal, meta);
+          const total = getPickdropReservableTotal(modalState.selectedMember?.totalReservableCountByType);
+          setAmountRange(pickdropTicketTotal, total, total - pickdropCount, "회");
+        }
+      } else {
+        if (pickdropTicketTotal) {
+          pickdropTicketTotal.innerHTML = `
+            <span class="reservation-ticket-row__meta">
+              <span class="as-is">-</span>
+            </span>
+          `;
+        }
+      }
+
+      if (hasTicketSelection || hasPickdropSelection) {
+        paymentTotalAll.textContent = "이용권 사용";
+      } else {
+        paymentTotalAll.textContent = "-";
+      }
+
+    } else if (activeTab === "other") {
+      const otherInput = reservationModal?.querySelector("[data-reservation-other-amount]");
+      const otherValue = otherInput?.value.replace(/,/g, "") || "0";
+      if (paymentTotalAll) {
+        paymentTotalAll.textContent = `${Number(otherValue).toLocaleString()}원`;
+      }
     }
-    if (pickdropFeeCard) {
-      pickdropFeeCard.classList.toggle(
-        "is-overbooked",
+
+    // 4. Sync Balance (잔여)
+    if (balanceTotal) {
+      let totalPricing = parseInt(hotelingTotalAll?.dataset.feeAmount || "0", 10);
+      const paymentText = paymentTotalAll?.textContent || "-";
+
+      if (paymentText === "이용권 사용") {
+        balanceTotal.textContent = "이용권 사용";
+        balanceRow?.classList.remove("is-positive");
+      } else if (paymentText === "-") {
+        balanceTotal.textContent = totalPricing > 0 ? `${totalPricing.toLocaleString()}원` : "0원";
+        if (totalPricing > 0) {
+          balanceRow?.classList.add("is-positive");
+        } else {
+          balanceRow?.classList.remove("is-positive");
+        }
+      } else {
+        const paymentAmount = parseInt(paymentText.replace(/[^0-9]/g, "") || "0", 10);
+        const balance = totalPricing - paymentAmount;
+        balanceTotal.textContent = `${balance.toLocaleString()}원`;
+        if (balance > 0) {
+          balanceRow?.classList.add("is-positive");
+        } else {
+          balanceRow?.classList.remove("is-positive");
+        }
+      }
+    }
+
+    if (hotelingFeeStep) {
+      hotelingFeeStep.classList.toggle("is-overbooked",
+        hasOverbookedAllocations(hotelingAllocation.allocations) ||
         hasOverbookedAllocations(pickdropAllocation.allocations)
       );
     }
-    const hasTicketSelection = modalState.ticketSelections.length > 0;
-    const hasPickdropSelection = modalState.pickdropTicketSelections.length > 0;
-    if (hotelingFeeCard) {
-      hotelingFeeCard.classList.remove("is-disabled");
-    }
-    if (pickdropFeeCard) {
-      pickdropFeeCard.classList.remove("is-disabled");
-    }
-    if (hotelingFeeSection) {
-      hotelingFeeSection.classList.toggle("is-disabled", hasTicketSelection);
-    }
-    if (hotelingFeeStep && hasTicketSelection) {
-      const metaElement = getSelectedTicketMetaElement(ticketList);
-      const hotelingAmount = hotelingFeeCard
-        ?.querySelector(".reservation-fee-card__amount");
-      if (metaElement) {
-        applyTicketMetaAmount(hotelingAmount, metaElement);
-        applyTicketMetaAmount(hotelingTotalValue, metaElement);
-
-        const usage = modalState.ticketSelections.reduce((sum, id) => {
-          const alloc = hotelingAllocation.allocations.get(id);
-          return sum + (Number(alloc?.remainingBefore || 0) - Number(alloc?.remainingAfter || 0));
-        }, 0);
-        const total = modalState.selectedMember?.totalReservableCountByType?.hoteling;
-        const fallbackBefore = modalState.ticketSelections.reduce((sum, id) => {
-          const alloc = hotelingAllocation.allocations.get(id);
-          return sum + (Number(alloc?.remainingBefore) || 0);
-        }, 0);
-        const realBefore = Number.isFinite(Number(total)) ? Number(total) : fallbackBefore;
-
-        const updateValues = (el) => {
-          if (!el) return;
-          const vals = el.querySelectorAll(".reservation-ticket-row__meta-value");
-          if (vals.length >= 2) {
-            vals[0].textContent = `${realBefore}박`;
-            vals[1].textContent = `${realBefore - usage}박`;
-            vals[0].classList.toggle("is-low", realBefore <= 2);
-            vals[1].classList.toggle("is-low", (realBefore - usage) <= 2);
-          }
-        };
-        updateValues(hotelingAmount);
-        updateValues(hotelingTotalValue);
-      }
-    }
-    if (hotelingFeeStep && hasPickdropSelection) {
-      const metaElement = getSelectedTicketMetaElement(pickdropTicketField);
-      if (metaElement) {
-        applyTicketMetaAmount(pickdropTotalValue, metaElement);
-
-        const usage = modalState.pickdropTicketSelections.reduce((sum, id) => {
-          const alloc = pickdropAllocation.allocations.get(id);
-          return sum + (Number(alloc?.remainingBefore || 0) - Number(alloc?.remainingAfter || 0));
-        }, 0);
-        const total = getPickdropReservableTotal(
-          modalState.selectedMember?.totalReservableCountByType
-        );
-        const fallbackBefore = modalState.pickdropTicketSelections.reduce((sum, id) => {
-          const alloc = pickdropAllocation.allocations.get(id);
-          return sum + (Number(alloc?.remainingBefore) || 0);
-        }, 0);
-        const realBefore = Number.isFinite(Number(total)) ? Number(total) : fallbackBefore;
-
-        const updateValues = (el) => {
-          if (!el) return;
-          const vals = el.querySelectorAll(".reservation-ticket-row__meta-value");
-          if (vals.length >= 2) {
-            vals[0].textContent = `${realBefore}회`;
-            vals[1].textContent = `${realBefore - usage}회`;
-            vals[0].classList.toggle("is-low", realBefore <= 2);
-            vals[1].classList.toggle("is-low", (realBefore - usage) <= 2);
-          }
-        };
-        updateValues(pickdropTotalValue);
-      }
-    }
-    syncReservationFeeTotal(reservationModal, hotelingTotalAll);
   };
 
   const buildModalCells = (viewDate) => {
@@ -1684,14 +2501,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const checkinKey = modalState.checkin ? getDateKey(modalState.checkin) : "";
     const checkoutKey = modalState.checkout ? getDateKey(modalState.checkout) : "";
-    const summary = getMemberHotelingReservationSummary(
+    const selectedRoomId = getSelectedRoomId();
+    const isRoomUnselected = selectedRoomId.length === 0;
+    const summary = getMemberRoomHotelingReservationSummary(
       reservationState.reservations,
-      modalState.selectedMember
+      modalState.selectedMember,
+      selectedRoomId
     );
     modalState.reservationSummary = summary;
+    const nearestCheckoutSelectionKeys = getNearestCheckoutSelectionKeys(
+      checkinKey,
+      summary.checkoutKeys,
+      summary.checkinKeys
+    );
+    modalState.nearestCheckoutSelectionKeys = nearestCheckoutSelectionKeys;
     const nextCheckinKey = checkinKey
       ? getNextHotelingCheckinKey(checkinKey, summary.checkinKeys)
       : "";
+    const isSelectingCheckout = Boolean(checkinKey) && !checkoutKey;
 
     cells.forEach((cellData) => {
       const cell = document.createElement("div");
@@ -1716,7 +2543,20 @@ document.addEventListener("DOMContentLoaded", () => {
         checkoutKey,
         nextCheckinKey,
       });
-      if (isDisabled) {
+      const isNearestCheckoutException = isSelectingCheckout
+        && (
+          dateKey === nearestCheckoutSelectionKeys.pastCheckout
+          || dateKey === nearestCheckoutSelectionKeys.futureCheckin
+        );
+      const isPastReservedCheckinBlocked = isSelectingCheckout
+        && Boolean(checkinKey)
+        && Boolean(dateKey)
+        && dateKey < checkinKey
+        && summary.checkinKeys.has(dateKey);
+      if (
+        isPastReservedCheckinBlocked
+        || (((isDisabled || isRoomUnselected) && !isNearestCheckoutException))
+      ) {
         cell.classList.add("mini-calendar__cell--disabled");
         cell.setAttribute("aria-disabled", "true");
       }
@@ -1848,7 +2688,10 @@ document.addEventListener("DOMContentLoaded", () => {
             syncFilterChip(input);
           }
         });
+
+      feeDropdownController.reset();
     }
+
     applyMemberSelection(null);
     renderModalCalendar();
     syncSubmitState();
@@ -1953,20 +2796,37 @@ document.addEventListener("DOMContentLoaded", () => {
       const summary = modalState.reservationSummary;
       const reservedCheckin = Boolean(summary?.checkinKeys?.has?.(value));
       const reservedCheckout = Boolean(summary?.checkoutKeys?.has?.(value));
+      const nearestCheckoutSelectionKeys = modalState.nearestCheckoutSelectionKeys || {
+        pastCheckout: "",
+        futureCheckin: "",
+      };
       const nextDate = getDateFromKey(value);
       if (!nextDate) {
         return;
       }
       const isSelectingCheckin = !modalState.checkin || Boolean(modalState.checkout);
       const isSelectingCheckout = Boolean(modalState.checkin) && !modalState.checkout;
+      const isNearestCheckoutException = isSelectingCheckout
+        && (
+          value === nearestCheckoutSelectionKeys.pastCheckout
+          || value === nearestCheckoutSelectionKeys.futureCheckin
+        );
       if (isSelectingCheckin && reservedCheckin && !reservedCheckout) {
         return;
       }
-      if (isSelectingCheckout && reservedCheckout && !reservedCheckin) {
+      if (isSelectingCheckout && reservedCheckout && !reservedCheckin && !isNearestCheckoutException) {
         return;
       }
       const nextKey = getDateKey(nextDate);
       const checkinKey = modalState.checkin ? getDateKey(modalState.checkin) : "";
+      const isPastReservedCheckinBlocked = isSelectingCheckout
+        && Boolean(checkinKey)
+        && Boolean(nextKey)
+        && nextKey < checkinKey
+        && reservedCheckin;
+      if (isPastReservedCheckinBlocked) {
+        return;
+      }
       if (modalState.checkin && !modalState.checkout) {
         if (nextKey && nextKey === checkinKey) {
           return;
@@ -2009,6 +2869,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     applyMemberSelection(null);
     memberResults?.classList.remove("is-open");
+  });
+
+  const syncOtherAmountInput = (inputEl) => {
+    if (!(inputEl instanceof HTMLInputElement)) {
+      return;
+    }
+    let value = inputEl.value.replace(/[^0-9]/g, "");
+    if (value) {
+      inputEl.value = parseInt(value, 10).toLocaleString();
+    } else {
+      inputEl.value = "";
+    }
+    syncHotelingFees();
+  };
+
+  reservationModal?.addEventListener("input", (event) => {
+    const input = event.target instanceof HTMLInputElement ? event.target : null;
+    if (!input) {
+      return;
+    }
+    if (input.matches("[data-reservation-other-amount]")) {
+      syncOtherAmountInput(input);
+    }
   });
 
   reservationModal?.addEventListener("change", (event) => {
@@ -2057,13 +2940,17 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     if (input.matches("[data-hoteling-room]")) {
+      modalState.checkin = null;
+      modalState.checkout = null;
       reservationModal
         ?.querySelectorAll?.("[data-hoteling-room]")
         ?.forEach?.((roomInput) => {
           syncFilterChip(roomInput);
         });
-      syncHotelingFees();
-      syncSubmitState();
+      renderModalCalendar();
+    }
+    if (input.matches("[data-reservation-other-amount]")) {
+      syncOtherAmountInput(input);
     }
   });
 
@@ -2080,82 +2967,171 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-    if (reservationModal) {
-      reservationModal.addEventListener("click", (event) => {
-        const target = event.target;
-        if (!(target instanceof Element)) return;
-        if (!target.closest(".hoteling-modal__submit")) return;
+  if (reservationModal) {
+    reservationModal.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest(".hoteling-modal__submit")) return;
 
-        const formData = collectHotelingReservationFormData(reservationModal, modalState);
-        const { checkinDate, checkoutDate, checkinTime, checkoutTime } = formData;
-        if (!formData.room || !checkinDate || !checkoutDate) {
-            return;
+      const formData = collectHotelingReservationFormData(reservationModal, modalState);
+      const { checkinDate, checkoutDate, checkinTime, checkoutTime } = formData;
+      if (!formData.room || !checkinDate || !checkoutDate) {
+        return;
+      }
+
+      const activePaymentTab =
+        reservationModal?.querySelector(".reservation-fee-tab.is-active")?.dataset?.feeTab || "ticket";
+      const rawPaymentMethod = activePaymentTab === "other"
+        ? (reservationPaymentTypeInput instanceof HTMLSelectElement
+          ? reservationPaymentTypeInput.value
+          : PAYMENT_METHODS.CASH)
+        : PAYMENT_METHODS.TICKET;
+      const paymentMethod = rawPaymentMethod === "bank"
+        ? PAYMENT_METHODS.TRANSFER
+        : rawPaymentMethod;
+      const paymentAmount = activePaymentTab === "other"
+        ? parsePaymentAmount(
+          reservationOtherAmountInput instanceof HTMLInputElement
+            ? reservationOtherAmountInput.value
+            : 0
+        )
+        : 0;
+
+      // Build the new unified reservation object
+      const newReservation = {
+        id: createId(), // Assuming createId is available or imported
+        type: 'hoteling',
+        memberId: String(formData.memberId || modalState.selectedMember?.id || ""),
+        room: formData.room,
+        memo: formData.memo,
+        dates: buildHotelingDateEntries(checkinDate, checkoutDate, checkinTime, checkoutTime),
+      };
+      const hasPickup = modalState.pickdrops.has("pickup");
+      const hasDropoff = modalState.pickdrops.has("dropoff");
+      newReservation.hasPickup = hasPickup;
+      newReservation.hasDropoff = hasDropoff;
+      const nights = getNightCount(modalState.checkin, modalState.checkout) || 0;
+      const dateTicketUsageMap = new Map();
+      if (modalState.selectedMember?.id && modalState.ticketSelections.length > 0 && nights > 0) {
+        const optionMap = new Map(modalState.ticketOptions.map((option) => [option.id, option]));
+        const allocationResult = allocateTicketUsage(modalState.ticketSelections, optionMap, nights);
+        const nightKeys = getNightKeys();
+        const builtUsageMap = buildDateTicketUsageMap(
+          nightKeys,
+          modalState.ticketSelections,
+          allocationResult.allocations,
+          optionMap
+        );
+        builtUsageMap.forEach((usage, dateKey) => {
+          dateTicketUsageMap.set(dateKey, usage);
+        });
+      }
+
+      const pickdropUsageByEntry = new Map();
+      if (
+        modalState.selectedMember?.id
+        && modalState.pickdropTicketSelections.length > 0
+        && (hasPickup || hasDropoff)
+      ) {
+        const pickdropOptionMap = new Map(
+          modalState.pickdropTicketOptions.map((option) => [option.id, option])
+        );
+        const planDateKeys = hasPickup ? [checkinDate] : [checkoutDate];
+        const builtPlan = buildPickdropUsagePlan({
+          dateKeys: planDateKeys,
+          pickdropFlags: { hasPickup, hasDropoff },
+          selectionOrder: modalState.pickdropTicketSelections,
+          optionMap: pickdropOptionMap,
+        });
+        const pickdropDateUsageMap = buildDateTicketUsagesMap(
+          planDateKeys,
+          builtPlan.planByDate,
+          pickdropOptionMap
+        );
+
+        if (hasPickup && hasDropoff) {
+          const combinedUsages = pickdropDateUsageMap.get(checkinDate) || [];
+          const checkinUsages = combinedUsages.length > 1
+            ? [combinedUsages[0]]
+            : combinedUsages;
+          const checkoutUsages = combinedUsages.length > 1
+            ? combinedUsages.slice(1, 2)
+            : [];
+          if (checkinUsages.length > 0) {
+            pickdropUsageByEntry.set(`${checkinDate}-checkin`, checkinUsages);
+          }
+          if (checkoutUsages.length > 0) {
+            pickdropUsageByEntry.set(`${checkoutDate}-checkout`, checkoutUsages);
+          }
+        } else if (hasPickup) {
+          const pickupUsages = pickdropDateUsageMap.get(checkinDate) || [];
+          if (pickupUsages.length > 0) {
+            pickdropUsageByEntry.set(`${checkinDate}-checkin`, pickupUsages);
+          }
+        } else if (hasDropoff) {
+          const dropoffUsages = pickdropDateUsageMap.get(checkoutDate) || [];
+          if (dropoffUsages.length > 0) {
+            pickdropUsageByEntry.set(`${checkoutDate}-checkout`, dropoffUsages);
+          }
         }
+      }
 
-        // Build the new unified reservation object
-        const newReservation = {
-            id: createId(), // Assuming createId is available or imported
-            type: 'hoteling',
-            dogName: formData.dogName,
-            owner: formData.owner,
-            breed: formData.breed,
-            room: formData.room,
-            memo: formData.memo,
-            dates: buildHotelingDateEntries(checkinDate, checkoutDate, checkinTime, checkoutTime),
-        };
-        const hasPickup = modalState.pickdrops.has("pickup");
-        const hasDropoff = modalState.pickdrops.has("dropoff");
-        newReservation.hasPickup = hasPickup;
-        newReservation.hasDropoff = hasDropoff;
-        newReservation.dates = newReservation.dates.map((entry) => ({
+      newReservation.dates = newReservation.dates.map((entry) => {
+        const entryKey = `${entry.date}-${entry.kind}`;
+        const serviceUsage = dateTicketUsageMap.get(entry.date) || null;
+        const pickdropUsages = pickdropUsageByEntry.get(entryKey) || [];
+        return {
           ...entry,
           pickup: entry.kind === "checkin" ? hasPickup : false,
           dropoff: entry.kind === "checkout" ? hasDropoff : false,
-        }));
-
-        const nights = getNightCount(modalState.checkin, modalState.checkout) || 0;
-        
-        // Logic for applying tickets remains similar, but will be applied to the new object
-        let dateTicketUsageMap = null;
-        if (modalState.selectedMember?.id && modalState.ticketSelections.length > 0 && nights > 0) {
-            const optionMap = new Map(modalState.ticketOptions.map(o => [o.id, o]));
-            const allocationResult = allocateTicketUsage(modalState.ticketSelections, optionMap, nights);
-            const nightKeys = getNightKeys();
-            dateTicketUsageMap = buildDateTicketUsageMap(nightKeys, modalState.ticketSelections, allocationResult.allocations, optionMap);
-
-            newReservation.dates.forEach(entry => {
-                if (dateTicketUsageMap.has(entry.date)) {
-                    const usage = dateTicketUsageMap.get(entry.date);
-                    entry.ticketUsages = usage ? [usage] : [];
-                }
-            });
-        }
-        
-        reservationStorage.addReservation(newReservation);
-        allReservations.push(newReservation);
-        reservationState.reservations = allReservations.filter(r => r.type === 'hoteling');
-        refreshCalendarStats();
-
-        // Recalculate counts which is now handled by applyReservationToMemberTickets
-        const usageMap = buildTicketUsageCountMap(newReservation.dates);
-        if (modalState.selectedMember?.id && nights > 0) {
-            applyReservationToMember(modalState.selectedMember.id, nights, "hoteling");
-        }
-        if (modalState.selectedMember?.id && hasPickup && hasDropoff) {
-            applyReservationToMember(modalState.selectedMember.id, 1, "roundtrip");
-        } else if (modalState.selectedMember?.id && (hasPickup || hasDropoff)) {
-            applyReservationToMember(modalState.selectedMember.id, 1, "oneway");
-        }
-        if (modalState.selectedMember?.id && usageMap.size > 0) {
-            applyReservationToMemberTickets(modalState.selectedMember.id, usageMap);
-        }
-
-        if (reservationState.selectedDateKey) {
-            renderListForKey(reservationState.selectedDateKey);
-        }
-        resetModalState();
-        closeModal();
-        showToast("예약이 등록되었습니다.");
+          ticketUsages: mergeTicketUsagesForDate(serviceUsage, pickdropUsages),
+        };
       });
-    }
+      const hasTicketPaymentUsage = newReservation.dates.some(
+        (entry) => getEntryTicketUsages(entry).length > 0
+      );
+      newReservation.payment =
+        !hasTicketPaymentUsage && paymentAmount <= 0
+          ? null
+          : normalizeReservationPayment(
+            { method: paymentMethod, amount: paymentAmount },
+            newReservation
+          );
+      const parsedWeight = Number(modalState.selectedMember?.weight);
+      const memberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
+      const reservationWithBilling = applyHotelingDateFees(
+        newReservation,
+        memberWeight
+      );
+
+      const savedReservations = reservationStorage.addReservation(reservationWithBilling);
+      allReservations.splice(0, allReservations.length, ...savedReservations);
+      reservationState.reservations = allReservations.filter((r) => r.type === "hoteling");
+      refreshCalendarStats();
+
+      // Recalculate counts which is now handled by applyReservationToMemberTickets
+      const usageMap = buildTicketUsageCountMap(reservationWithBilling.dates);
+      if (modalState.selectedMember?.id && nights > 0) {
+        applyReservationToMember(modalState.selectedMember.id, nights, "hoteling");
+      }
+      if (modalState.selectedMember?.id && hasPickup && hasDropoff) {
+        applyReservationToMember(modalState.selectedMember.id, 1, "roundtrip");
+      } else if (modalState.selectedMember?.id && (hasPickup || hasDropoff)) {
+        applyReservationToMember(modalState.selectedMember.id, 1, "oneway");
+      }
+      if (modalState.selectedMember?.id && usageMap.size > 0) {
+        applyReservationToMemberTickets(modalState.selectedMember.id, usageMap);
+      }
+
+      if (reservationState.selectedDateKey) {
+        renderListForKey(reservationState.selectedDateKey);
+      }
+      resetModalState();
+      closeModal();
+      showToast("예약이 등록되었습니다.");
+    });
+  }
+
 });
+
+

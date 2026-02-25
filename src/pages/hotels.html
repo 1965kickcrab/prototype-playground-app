@@ -32,10 +32,12 @@
         <a class="sidebar__nav-item" href="../../public/index.html">
           <img src="../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
           <span>유치원</span>
+          <span class="sidebar__nav-badge" data-sidebar-school-count>0</span>
         </a>
         <a class="sidebar__nav-item sidebar__nav-item--active" href="hotels.html">
           <img src="../../assets/menuIcon_hotel_on.svg" alt="" aria-hidden="true">
           <span>호텔링</span>
+          <span class="sidebar__nav-badge" data-sidebar-hoteling-count>0</span>
         </a>
         <a class="sidebar__nav-item" href="#">
           <img src="../../assets/menuIcon_report.svg" alt="" aria-hidden="true">
@@ -66,9 +68,12 @@
     <main class="main">
       <header class="topbar">
         <div class="topbar__left">
-          <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
-            <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
-          </button>
+          <div class="topbar__toggle-wrap">
+            <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
+              <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
+            </button>
+            <span class="sidebar__nav-badge topbar__today-badge" data-topbar-today-badge hidden data-topbar-today-count>0</span>
+          </div>
         </div>
         <div class="topbar__actions">
           <a class="icon-button" aria-label="설정" href="settings/school/operations.html">
@@ -82,8 +87,8 @@
           </a>
         </div>
       </header>
-
-      <section class="filter-panel-wrap">
+      <div class="main__content">
+        <section class="filter-panel-wrap">
         <section class="page-header hoteling-header">
           <div class="hoteling-header__title">
             <div class="page-filters" aria-label="필터">
@@ -108,6 +113,10 @@
             <div class="filter-dropdown">
               <button class="filter-select" type="button" data-filter-button="room" aria-expanded="false">전체 호실</button>
               <div class="filter-menu" data-filter-menu="room" hidden></div>
+            </div>
+            <div class="filter-dropdown">
+              <button class="filter-select" type="button" data-filter-button="payment" aria-expanded="false">결제 여부</button>
+              <div class="filter-menu" data-filter-menu="payment" hidden></div>
             </div>
             <button class="filter-reset" type="button" data-filter-reset="">
               <img src="../../assets/iconInitial.svg" alt="" aria-hidden="true">
@@ -144,7 +153,7 @@
           <section class="list-card hoteling-list-card">
           <div class="hoteling-list-toggle-row">
             <button class="hoteling-list-toggle" type="button" data-hoteling-list-toggle aria-expanded="true" aria-label="숙박 목록 숨기기">
-              <img src="../../assets/iconFold.svg" alt="" aria-hidden="true">
+              <img src="../../assets/iconFold_right.svg" alt="" aria-hidden="true">
             </button>
           </div>
           <div class="hoteling-list-header">
@@ -168,6 +177,7 @@
                 <span role="columnheader" class="hoteling-table__check">
                   <input type="checkbox" aria-label="전체 선택">
                 </span>
+                <span role="columnheader">호실</span>
                 <span role="columnheader">반려견</span>
                 <span role="columnheader">시간</span>
                 <span role="columnheader" aria-hidden="true"></span>
@@ -187,6 +197,7 @@
                 <span role="columnheader" class="hoteling-table__check">
                   <input type="checkbox" aria-label="전체 선택">
                 </span>
+                <span role="columnheader">호실</span>
                 <span role="columnheader">반려견</span>
                 <span role="columnheader">시간</span>
                 <span role="columnheader" aria-hidden="true"></span>
@@ -206,6 +217,7 @@
                 <span role="columnheader" class="hoteling-table__check">
                   <input type="checkbox" aria-label="전체 선택">
                 </span>
+                <span role="columnheader">호실</span>
                 <span role="columnheader">반려견</span>
                 <span role="columnheader">시간</span>
                 <span role="columnheader" aria-hidden="true"></span>
@@ -218,6 +230,7 @@
           </section>
         </div>
       </section>
+      </div>
     </main>
   </div>
   <div class="modal" data-hoteling-reservation-modal aria-hidden="true">
@@ -296,65 +309,124 @@
                 </div>
               </div>
             </section>
-          </div>
-          <div class="reservation-form__right">
-            <div class="reservation-step reservation-step--fee hoteling-fee-card">
-              <div class="reservation-fee-total">
-                <span class="reservation-fee-total__label">총 예상 금액</span>
-                <span class="reservation-fee-total__value" data-hoteling-total>-</span>
-              </div>
-              <div class="reservation-fee-panel">
-                <details class="reservation-fee-card" data-hoteling-fee-hoteling open>
-                  <summary class="reservation-fee-card__summary">
-                    <span class="reservation-fee-card__title">호텔링</span>
-                    <span class="reservation-fee-card__amount" data-hoteling-hoteling-total>-</span>
-                    <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true">
-                  </summary>
-                  <div class="reservation-fee-card__body">
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">이용권</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-ticket-list" data-hoteling-tickets></div>
-                        <p class="reservation-ticket-placeholder" data-hoteling-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
-                      </div>
-                    </div>
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">요금</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-fee-list" data-hoteling-fee-list>-</div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-                <details class="reservation-fee-card" data-hoteling-fee-pickdrop>
-                  <summary class="reservation-fee-card__summary">
-                    <span class="reservation-fee-card__title">픽드랍</span>
-                    <span class="reservation-fee-card__amount" data-hoteling-pickdrop-total>-</span>
-                    <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true">
-                  </summary>
-                  <div class="reservation-fee-card__body">
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">이용권</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-pickdrop-ticket-list" data-hoteling-pickdrop-tickets></div>
-                        <p class="reservation-ticket-placeholder" data-hoteling-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
-                      </div>
-                    </div>
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">요금</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-fee-list" data-hoteling-pickdrop-fee-list>-</div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </div>
             <div class="reservation-memo-card">
               <div class="reservation-memo-card__title">메모</div>
               <div class="reservation-memo-card__body">
                 <textarea class="form-field__control" data-hoteling-memo placeholder="메모를 입력하세요" rows="3"></textarea>
               </div>
+            </div>
+          </div>
+          <div class="reservation-form__right">
+            <div class="reservation-step reservation-step--fee hoteling-fee-card">
+              <div class="reservation-fee-group" data-fee-group="total">
+                <div class="reservation-fee-group__header" data-fee-group-toggle>
+                  <span class="reservation-fee-group__title">총 예상 금액</span>
+                  <span class="reservation-fee-group__amount" data-hoteling-total>
+                    <span class="reservation-ticket-row__meta">
+                      <span class="as-is">-</span>
+                    </span>
+                  </span>
+                  <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-group__arrow">
+                </div>
+                <div class="reservation-fee-group__body">
+                  <div class="reservation-fee-segments">
+                    <div class="reservation-fee-segment" data-hoteling-fee-hoteling>
+                      <div class="reservation-fee-segment__header" data-fee-toggle>
+                        <span class="reservation-fee-segment__title">호텔링</span>
+                        <span class="reservation-fee-segment__amount" data-hoteling-hoteling-total>
+                          <span class="reservation-ticket-row__meta">
+                            <span class="as-is">-</span>
+                          </span>
+                        </span>
+                        <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                      </div>
+                      <div class="reservation-fee-segment__body" data-hoteling-fee-list></div>
+                    </div>
+                    <div class="reservation-fee-segment" data-hoteling-fee-pickdrop>
+                      <div class="reservation-fee-segment__header" data-fee-toggle>
+                        <span class="reservation-fee-segment__title">픽드랍</span>
+                        <span class="reservation-fee-segment__amount" data-hoteling-pickdrop-total>
+                          <span class="reservation-ticket-row__meta">
+                            <span class="as-is">-</span>
+                          </span>
+                        </span>
+                        <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                      </div>
+                      <div class="reservation-fee-segment__body" data-hoteling-pickdrop-fee-list hidden></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="reservation-fee-group" data-fee-group="payment">
+                <div class="reservation-fee-group__header" data-fee-group-toggle>
+                  <span class="reservation-fee-group__title">결제 금액</span>
+                  <span class="reservation-fee-group__amount" data-payment-total-all data-hoteling-payment-total>
+                    <span class="reservation-ticket-row__meta">
+                      <span class="as-is">-</span>
+                    </span>
+                  </span>
+                  <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-group__arrow">
+                </div>
+                <div class="reservation-fee-group__body">
+                  <div class="reservation-fee-tabs">
+                    <div class="reservation-fee-tab-list" role="tablist">
+                      <button class="reservation-fee-tab is-active" type="button" role="tab" data-fee-tab="ticket">이용권</button>
+                      <button class="reservation-fee-tab" type="button" role="tab" data-fee-tab="other">현장 결제</button>
+                    </div>
+                    <div class="reservation-fee-tab-panel is-active" data-fee-panel="ticket">
+                      <div class="reservation-fee-segments">
+                        <div class="reservation-fee-segment">
+                          <div class="reservation-fee-segment__header" data-fee-toggle>
+                            <span class="reservation-fee-segment__title">호텔링</span>
+                            <span class="reservation-fee-segment__amount" data-hoteling-ticket-total data-hoteling-hoteling-ticket-total>
+                              <span class="reservation-ticket-row__meta">
+                                <span class="as-is">-</span>
+                              </span>
+                            </span>
+                            <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                          </div>
+                          <div class="reservation-fee-segment__body">
+                            <div class="reservation-ticket-list" data-hoteling-tickets></div>
+                            <p class="reservation-ticket-placeholder" data-hoteling-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                          </div>
+                        </div>
+                        <div class="reservation-fee-segment">
+                          <div class="reservation-fee-segment__header" data-fee-toggle>
+                            <span class="reservation-fee-segment__title">픽드랍</span>
+                            <span class="reservation-fee-segment__amount" data-hoteling-pickdrop-ticket-total>
+                              <span class="reservation-ticket-row__meta">
+                                <span class="as-is">-</span>
+                              </span>
+                            </span>
+                            <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                          </div>
+                          <div class="reservation-fee-segment__body" hidden>
+                            <div class="reservation-pickdrop-ticket-list" data-hoteling-pickdrop-tickets></div>
+                            <p class="reservation-ticket-placeholder" data-hoteling-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="reservation-fee-tab-panel" data-fee-panel="other" hidden>
+                      <div class="reservation-fee-other">
+                        <select class="form-field__control" data-reservation-other-type>
+                          <option value="cash">현금</option>
+                          <option value="bank">계좌이체</option>
+                          <option value="card">카드</option>
+                        </select>
+                        <div class="reservation-fee-other__input-wrapper">
+                          <input type="text" class="form-field__control" placeholder="0" data-reservation-other-amount>
+                          <span class="reservation-fee-other__suffix">원</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="reservation-fee-balance" data-hoteling-fee-balance-row>
+              <span class="reservation-fee-balance__title">잔액</span>
+              <span class="reservation-fee-balance__price" data-hoteling-fee-balance-total>0원</span>
             </div>
           </div>
         </div>
@@ -492,24 +564,41 @@
         </div>
       </div>
       <div class="modal-tab-panel" role="tabpanel" data-hoteling-detail-panel="payment" hidden>
-        <div class="hoteling-detail__section">
-          <div class="form-field form-field--full">
-            <span class="form-field__label">결제 수단</span>
-            <div class="form-field__chips hoteling-detail__payment-options">
-              <button class="filter-chip" type="button" data-hoteling-detail-payment-method="ticket">이용권</button>
-              <button class="filter-chip" type="button" data-hoteling-detail-payment-method="cash">현금</button>
-              <button class="filter-chip" type="button" data-hoteling-detail-payment-method="card">카드</button>
-              <button class="filter-chip" type="button" data-hoteling-detail-payment-method="transfer">계좌 이체</button>
+        <div class="form-grid reservation-detail reservation-detail-fee-layout">
+          <div class="reservation-fee-group reservation-detail-fee-card" data-hoteling-detail-fee-total>
+            <div class="reservation-fee-group__header">
+              <span class="reservation-fee-group__title">총 예상 금액</span>
+              <strong class="reservation-fee-group__amount reservation-detail-fee-card__amount" data-hoteling-detail-total>0원</strong>
+            </div>
+            <div class="reservation-fee-group__body" data-hoteling-detail-fee-lines></div>
+          </div>
+          <div class="reservation-fee-group reservation-detail-fee-card" data-hoteling-detail-fee-payment>
+            <div class="form-field form-field--full">
+              <span class="form-field__label">결제 수단</span>
+              <div class="form-field__chips hoteling-detail__payment-options chip-group--compact-scroll">
+                <button class="filter-chip" type="button" data-hoteling-detail-payment-method="ticket">이용권</button>
+                <button class="filter-chip" type="button" data-hoteling-detail-payment-method="cash">현금</button>
+                <button class="filter-chip" type="button" data-hoteling-detail-payment-method="card">카드</button>
+                <button class="filter-chip" type="button" data-hoteling-detail-payment-method="transfer">계좌 이체</button>
+              </div>
+            </div>
+            <label class="form-field form-field--full" data-hoteling-detail-payment-amount-row hidden>
+              <span class="form-field__label">결제 금액</span>
+              <input class="form-field__control" type="text" inputmode="numeric" data-hoteling-detail-payment-amount placeholder="0">
+            </label>
+            <div class="form-field form-field--full" data-hoteling-detail-payment-ticket>
+              <span class="form-field__label">이용권 정보</span>
+              <div class="form-field__chips reservation-detail__ticket-cards" data-hoteling-detail-ticket-info></div>
             </div>
           </div>
-          <div class="form-field form-field--full" data-hoteling-detail-payment-ticket>
-            <span class="form-field__label">이용권 정보</span>
-            <div class="form-field__chips reservation-detail__ticket-cards" data-hoteling-detail-ticket-info></div>
+          <div class="reservation-fee-balance" data-hoteling-detail-fee-balance-row>
+            <span class="reservation-fee-balance__title">잔액</span>
+            <span class="reservation-fee-balance__price" data-hoteling-detail-fee-balance-total>0원</span>
           </div>
         </div>
       </div>
       <div class="hoteling-detail__actions reservation-submit">
-        <button class="primary-button primary-button--danger" type="button">삭제</button>
+        <button class="primary-button primary-button--danger" type="button" data-hoteling-detail-delete>삭제</button>
         <button class="primary-button" type="button" data-hoteling-detail-save disabled>저장</button>
       </div>
     </div>
@@ -637,73 +726,112 @@
                 </div>
               </div>
             </div>
-          </div>
-          <div class="reservation-form__right">
-            <div class="reservation-step reservation-step--fee" data-reservation-step="2">
-              <div class="reservation-fee-total">
-                <span class="reservation-fee-total__label">총 예상 금액</span>
-                <span class="reservation-fee-total__value" data-reservation-total>-</span>
-              </div>
-              <div class="reservation-fee-panel">
-                <details class="reservation-fee-card" data-reservation-fee-school open>
-                  <summary class="reservation-fee-card__summary">
-                    <span class="reservation-fee-card__title">유치원</span>
-                    <span class="reservation-fee-card__amount is-empty" data-reservation-school-total>
-                      <span class="reservation-ticket-row__meta-value">-</span>
-                      <span class="reservation-fee-card__amount-arrow" aria-hidden="true">→</span>
-                      <span class="reservation-ticket-row__meta-value">-</span>
-                    </span>
-                    <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true">
-                  </summary>
-                  <div class="reservation-fee-card__body">
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">이용권</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-ticket-list" data-reservation-tickets></div>
-                        <p class="reservation-ticket-placeholder" data-reservation-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
-                      </div>
-                    </div>
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">요금</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-fee-list" data-reservation-fee-school-list>-</div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-                <details class="reservation-fee-card" data-reservation-fee-pickdrop>
-                  <summary class="reservation-fee-card__summary">
-                    <span class="reservation-fee-card__title">픽드랍</span>
-                    <span class="reservation-fee-card__amount is-empty" data-reservation-pickdrop-total>
-                      <span class="reservation-ticket-row__meta-value">-</span>
-                      <span class="reservation-fee-card__amount-arrow" aria-hidden="true">→</span>
-                      <span class="reservation-ticket-row__meta-value">-</span>
-                    </span>
-                    <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true">
-                  </summary>
-                  <div class="reservation-fee-card__body">
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">이용권</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-pickdrop-ticket-list" data-reservation-pickdrop-tickets></div>
-                        <p class="reservation-ticket-placeholder" data-reservation-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
-                      </div>
-                    </div>
-                    <div class="reservation-fee-section">
-                      <div class="reservation-fee-section__label">요금</div>
-                      <div class="reservation-fee-section__body">
-                        <div class="reservation-fee-list" data-reservation-fee-pickdrop-list>-</div>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-              </div>
-            </div>
             <div class="reservation-memo-card">
               <div class="reservation-memo-card__title">메모</div>
               <div class="reservation-memo-card__body">
                 <textarea class="form-field__control" data-reservation-memo placeholder="메모를 입력하세요" rows="3"></textarea>
               </div>
+            </div>
+          </div>
+          <div class="reservation-form__right">
+            <div class="reservation-step reservation-step--fee" data-reservation-step="2">
+              <div class="reservation-fee-group" data-fee-group="total">
+                <div class="reservation-fee-group__header" data-fee-group-toggle>
+                  <span class="reservation-fee-group__title">총 예상 금액</span>
+                  <span class="reservation-fee-group__amount" data-reservation-total>
+                    <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                  </span>
+                  <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-group__arrow">
+                </div>
+                <div class="reservation-fee-group__body">
+                  <div class="reservation-fee-segments">
+                    <div class="reservation-fee-segment">
+                      <div class="reservation-fee-segment__header" data-fee-toggle>
+                        <span class="reservation-fee-segment__title">유치원</span>
+                        <span class="reservation-fee-segment__amount" data-reservation-school-fee-total>
+                          <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                        </span>
+                        <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                      </div>
+                      <div class="reservation-fee-segment__body" data-reservation-fee-school-list></div>
+                    </div>
+                    <div class="reservation-fee-segment">
+                      <div class="reservation-fee-segment__header" data-fee-toggle>
+                        <span class="reservation-fee-segment__title">픽드랍</span>
+                        <span class="reservation-fee-segment__amount" data-reservation-pickdrop-fee-total>
+                          <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                        </span>
+                        <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                      </div>
+                      <div class="reservation-fee-segment__body" data-reservation-fee-pickdrop-list hidden></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="reservation-fee-group" data-fee-group="payment">
+                <div class="reservation-fee-group__header" data-fee-group-toggle>
+                  <span class="reservation-fee-group__title">결제 금액</span>
+                  <span class="reservation-fee-group__amount" data-reservation-payment-total>
+                    <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                  </span>
+                  <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-group__arrow">
+                </div>
+                <div class="reservation-fee-group__body">
+                  <div class="reservation-fee-tabs">
+                    <div class="reservation-fee-tab-list" role="tablist">
+                      <button class="reservation-fee-tab is-active" type="button" role="tab" data-fee-tab="ticket">이용권</button>
+                      <button class="reservation-fee-tab" type="button" role="tab" data-fee-tab="other">현장 결제</button>
+                    </div>
+                    <div class="reservation-fee-tab-panel is-active" data-fee-panel="ticket">
+                      <div class="reservation-fee-segments">
+                        <div class="reservation-fee-segment">
+                          <div class="reservation-fee-segment__header" data-fee-toggle>
+                            <span class="reservation-fee-segment__title">유치원</span>
+                            <span class="reservation-fee-segment__amount" data-reservation-school-ticket-total>
+                              <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                            </span>
+                            <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                          </div>
+                          <div class="reservation-fee-segment__body">
+                            <div class="reservation-ticket-list" data-reservation-tickets></div>
+                            <p class="reservation-ticket-placeholder" data-reservation-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                          </div>
+                        </div>
+                        <div class="reservation-fee-segment">
+                          <div class="reservation-fee-segment__header" data-fee-toggle>
+                            <span class="reservation-fee-segment__title">픽드랍</span>
+                            <span class="reservation-fee-segment__amount" data-reservation-pickdrop-ticket-total>
+                              <span class="reservation-ticket-row__meta"><span class="as-is">-</span></span>
+                            </span>
+                            <img src="../../assets/iconDropdown.svg" alt="" aria-hidden="true" class="reservation-fee-segment__arrow">
+                          </div>
+                          <div class="reservation-fee-segment__body" hidden>
+                            <div class="reservation-pickdrop-ticket-list" data-reservation-pickdrop-tickets></div>
+                            <p class="reservation-ticket-placeholder" data-reservation-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="reservation-fee-tab-panel" data-fee-panel="other" hidden>
+                      <div class="reservation-fee-other">
+                        <select class="form-field__control" data-reservation-other-type>
+                          <option value="cash">현금</option>
+                          <option value="bank">계좌이체</option>
+                          <option value="card">카드</option>
+                        </select>
+                        <div class="reservation-fee-other__input-wrapper">
+                          <input type="text" class="form-field__control" placeholder="0" data-reservation-other-amount>
+                          <span class="reservation-fee-other__suffix">원</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="reservation-fee-balance" data-reservation-fee-balance-row>
+              <span class="reservation-fee-balance__title">잔액</span>
+              <span class="reservation-fee-balance__price" data-reservation-fee-balance-total>0원</span>
             </div>
           </div>
         </div>
@@ -717,3 +845,5 @@
   <script type="module" src="./hotels.js"></script>
 </body>
 </html>
+
+

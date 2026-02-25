@@ -1,4 +1,4 @@
-﻿/**
+/**
  * reservation-fee-total.js
  * Responsibility:
  * - Calculate and render the total of reservation fee items within a given scope
@@ -33,7 +33,8 @@ export function sumReservationFeeAmounts(root) {
   if (!root) {
     return null;
   }
-  const amountElements = root.querySelectorAll(".reservation-fee-card__amount");
+  // Target both old card styles and new segment styles
+  const amountElements = root.querySelectorAll(".reservation-fee-segment__amount, .reservation-fee-card__amount");
   let hasAmount = false;
   let total = 0;
   amountElements.forEach((element) => {

@@ -1,4 +1,4 @@
-﻿import {
+import {
   formatPrice,
   formatVat,
   formatWeightRange,

@@ -1,4 +1,4 @@
-﻿import { syncFilterChip } from "../utils/dom.js";
+import { syncFilterChip } from "../utils/dom.js";
 
 const UNKNOWN_TEACHER = "미지정";
 

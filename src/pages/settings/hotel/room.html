@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -58,25 +58,27 @@
     </aside>
 
     <main class="main">
-      <section class="page-header class-registration__header">
-        <div class="class-registration__title">
-          <h1>호실 목록</h1>
-          <p>운영 중인 호실을 관리하세요.</p>
-        </div>
-        <div class="page-actions">
-          <button class="primary-button" type="button" data-class-modal-open>호실 등록</button>
-        </div>
-      </section>
-      <section class="list-card class-registration__card">
-        <div class="list-table list-table--class list-table--room" role="table" aria-label="호실 목록">
-          <div class="list-table__header" role="row">
-            <span role="columnheader">호실 이름</span>
-            <span role="columnheader">정원</span>
-            <span role="columnheader">예약 가능한 이용권</span>
+      <div class="main__content">
+        <section class="page-header class-registration__header">
+          <div class="class-registration__title">
+            <h1>호실 목록</h1>
+            <p>운영 중인 호실을 관리하세요.</p>
           </div>
-          <div class="list-table__body" data-class-rows></div>
-        </div>
-      </section>
+          <div class="page-actions">
+            <button class="primary-button" type="button" data-class-modal-open>호실 등록</button>
+          </div>
+        </section>
+        <section class="list-card class-registration__card">
+          <div class="list-table list-table--class list-table--room" role="table" aria-label="호실 목록">
+            <div class="list-table__header" role="row">
+              <span role="columnheader">호실 이름</span>
+              <span role="columnheader">정원</span>
+              <span role="columnheader">예약 가능한 이용권</span>
+            </div>
+            <div class="list-table__body" data-class-rows></div>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
   <div class="modal" data-class-modal aria-hidden="true">

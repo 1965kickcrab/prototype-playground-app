@@ -1,4 +1,4 @@
-﻿import {
+import {
   formatTicketCount,
   formatTicketDisplayName,
   formatTicketPrice,

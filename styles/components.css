@@ -1,8 +1,8 @@
-﻿.primary-button {
+.primary-button {
   background: var(--color-primary);
   color: #fff;
   padding: var(--spacing-3) var(--spacing-6);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   font-weight: 700;
   cursor: pointer;
 }
@@ -21,7 +21,7 @@
   background: var(--color-hover);
   color: var(--color-text);
   padding: var(--spacing-3) var(--spacing-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   cursor: pointer;
   font-weight: 700;
   border: 1px solid transparent;
@@ -47,7 +47,7 @@
   background: #fff;
   color: #111;
   padding: var(--spacing-3) var(--spacing-5);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   cursor: pointer;
   font-weight: 700;
   border: 1px solid var(--color-border);
@@ -109,6 +109,18 @@
 .menu-option__meta {
   font-size: 12px;
   color: var(--color-secondary);
+}
+
+.list-table__service-cell {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+}
+
+.list-table__service-time {
+  font-size: 12px;
+  color: var(--color-secondary);
+  line-height: 1.2;
 }
 
 .ticket-modal {
@@ -412,7 +424,7 @@
   color: var(--color-secondary);
 }
 
-.ticket-radio input:checked + span {
+.ticket-radio input:checked+span {
   color: var(--color-primary);
   font-weight: 700;
 }
@@ -488,6 +500,21 @@
   outline: none;
 }
 
+.chip-group--compact-scroll {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chip-group--compact-scroll > .filter-chip {
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .toggle-row {
   display: flex;
   align-items: center;
@@ -541,11 +568,11 @@
   transition: transform 0.2s ease;
 }
 
-.toggle-row input[type="checkbox"]:checked + .toggle-switch {
+.toggle-row input[type="checkbox"]:checked+.toggle-switch {
   background: var(--color-primary);
 }
 
-.toggle-row input[type="checkbox"]:checked + .toggle-switch::after {
+.toggle-row input[type="checkbox"]:checked+.toggle-switch::after {
   transform: translateX(18px);
 }
 
@@ -606,12 +633,12 @@
   opacity: 0;
 }
 
-.checkbox-row input[type="checkbox"]:checked + .checkbox-row__box {
+.checkbox-row input[type="checkbox"]:checked+.checkbox-row__box {
   background: var(--color-primary);
   border-color: var(--color-primary);
 }
 
-.checkbox-row input[type="checkbox"]:checked + .checkbox-row__box::after {
+.checkbox-row input[type="checkbox"]:checked+.checkbox-row__box::after {
   opacity: 1;
 }
 
@@ -640,7 +667,7 @@
   border-radius: var(--radius-lg);
   padding: var(--spacing-5);
   box-shadow: var(--shadow-card);
-  width: min(720px, 95vw);
+  width: min(800px, 95vw);
   display: grid;
   gap: var(--spacing-4);
   z-index: 1;
@@ -754,8 +781,41 @@
 .modal__date-controls input[type="date"] {
   padding: 8px 10px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   font-family: inherit;
+}
+
+.reservation-entry {
+  position: relative;
+}
+
+.service-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: auto;
+  min-width: 160px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+  display: grid;
+  gap: 6px;
+  z-index: 10;
+}
+
+.service-menu .menu-option {
+  grid-template-columns: 1fr;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+}
+
+.service-menu .menu-option:hover,
+.service-menu .menu-option:focus-visible {
+  background: var(--color-hover);
+  outline: none;
 }
 
 .modal__body {
@@ -1121,7 +1181,7 @@
   width: 100%;
   padding: 10px 14px;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   background: #fff;
   font-size: 14px;
 }
@@ -1157,7 +1217,7 @@ textarea.form-field__control {
   gap: var(--spacing-2);
   padding: var(--spacing-2);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   background: #fff;
   max-height: 220px;
   overflow-y: auto;
@@ -1171,7 +1231,7 @@ textarea.form-field__control {
 .settings-selection-item {
   padding: var(--settings-selection-item-padding, 8px 10px);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   cursor: pointer;
 }
 
@@ -1260,9 +1320,11 @@ textarea.form-field__control {
   .form-grid {
     grid-template-columns: 1fr;
   }
+
   .class-form__inline-fields {
     grid-template-columns: 1fr;
   }
+
   .reservation-form {
     grid-template-columns: 1fr;
   }
@@ -1316,20 +1378,89 @@ textarea.form-field__control {
 }
 
 .reservation-detail__ticket-cards {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-2);
 }
 
-.reservation-detail__ticket-card {
+.reservation-detail-fee-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-4);
+}
+
+.reservation-detail-fee-card {
+  align-self: start;
+  display: grid;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
+}
+
+.reservation-detail-fee-card .reservation-fee-group__header {
+  padding: 0;
+  gap: var(--spacing-2);
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.reservation-detail-fee-card .reservation-fee-group__title {
+  font-weight: 700;
+  color: var(--color-secondary);
+}
+
+.reservation-detail-fee-card .form-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.reservation-detail-fee-card .form-field__chips {
+  min-width: 0;
+  flex: 1;
+}
+
+.reservation-detail-fee-layout .reservation-fee-balance {
+  grid-column: 1 / -1;
+}
+
+.reservation-fee-line {
   display: flex;
-  width: fit-content;
-  padding: 10px;
-  justify-content: space-between;
   align-items: flex-start;
+  gap: 8px;
+}
+
+.reservation-fee-line__calc {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.reservation-fee-line__item {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.reservation-fee-line__item--empty {
+  color: var(--color-secondary);
+}
+
+.reservation-detail__ticket-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  max-width: 100%;
+  padding: 10px;
+  align-items: stretch;
   border-radius: 14px;
   border: 1px solid var(--color-border);
   background: #fff;
   gap: var(--spacing-3);
+}
+
+@media (max-width: 840px) {
+  .reservation-detail-fee-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .reservation-detail__ticket-col {
@@ -1340,13 +1471,13 @@ textarea.form-field__control {
 }
 
 .reservation-detail__ticket-col--name {
-  max-width: 260px;
-  flex-shrink: 0;
+  grid-column: 1 / -1;
+  max-width: none;
 }
 
 .reservation-detail__ticket-col--sequence,
 .reservation-detail__ticket-col--total {
-  width: 87px;
+  width: 100%;
   align-items: center;
 }
 
@@ -1366,7 +1497,8 @@ textarea.form-field__control {
 
 .reservation-detail__ticket-col--sequence .reservation-detail__ticket-value,
 .reservation-detail__ticket-col--total .reservation-detail__ticket-value {
-  width: 70px;
+  width: 100%;
+  min-width: 0;
   height: 70px;
   display: inline-flex;
   align-items: center;
@@ -1557,6 +1689,7 @@ textarea.form-field__control {
   border-color: rgba(255, 83, 83, 0.3);
   color: var(--color-holiday);
 }
+
 .reservation-row--calendar {
   grid-template-columns: 1fr;
 }
@@ -1623,7 +1756,7 @@ textarea.form-field__control {
   gap: 12px;
   align-items: center;
   padding: 12px 14px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   border: 1px solid var(--color-border);
   cursor: pointer;
   background: #fff;
@@ -1713,12 +1846,14 @@ textarea.form-field__control {
   white-space: nowrap;
 }
 
-.reservation-ticket-row__meta-value {
+.as-is,
+.to-be {
   font-weight: 700;
   color: var(--color-text);
 }
 
-.reservation-ticket-row__meta-value.is-low {
+.as-is.is-low,
+.to-be.is-low {
   color: var(--color-holiday);
 }
 
@@ -1739,6 +1874,7 @@ textarea.form-field__control {
   position: relative;
   display: grid;
   gap: var(--spacing-2);
+  z-index: 40;
 }
 
 .member-search__input {
@@ -1779,7 +1915,7 @@ textarea.form-field__control {
   overflow-y: auto;
   display: none;
   background: #fff;
-  z-index: 5;
+  z-index: 120;
 }
 
 .member-search__results.is-open {
@@ -1826,7 +1962,7 @@ textarea.form-field__control {
 
 .mini-calendar {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   overflow: hidden;
 }
 
@@ -1924,6 +2060,10 @@ textarea.form-field__control {
   font-weight: 700;
 }
 
+.reservation-counts.is-over-limit {
+  color: var(--color-holiday);
+}
+
 .reservation-counts [data-reservation-count-limit].is-over-limit {
   color: var(--color-holiday);
 }
@@ -1954,12 +2094,12 @@ textarea.form-field__control {
   font-weight: 600;
 }
 
-.checkbox-inline input[data-reservation-override] + span {
+.checkbox-inline input[data-reservation-override]+span {
   font-size: 13px;
   color: var(--color-holiday);
 }
 
-.checkbox-inline input[data-reservation-override]:disabled + span {
+.checkbox-inline input[data-reservation-override]:disabled+span {
   opacity: 0.5;
 }
 
@@ -2135,7 +2275,7 @@ textarea.form-field__control {
 
 .hoteling-modal-calendar {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   overflow: hidden;
   width: 100%;
 }
@@ -2154,6 +2294,7 @@ textarea.form-field__control {
 .hoteling-modal-calendar .mini-calendar__cell--muted {
   background: #fafbfd;
 }
+
 .hoteling-calendar__mark {
   position: absolute;
   right: 10px;
@@ -2566,7 +2707,7 @@ textarea.form-field__control {
 .hoteling-table__header,
 .hoteling-table__row {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 120px 28px;
+  grid-template-columns: 36px 72px minmax(0, 1fr) 68px 28px;
   align-items: center;
   text-align: center;
   gap: var(--spacing-3);
@@ -2589,6 +2730,11 @@ textarea.form-field__control {
   justify-content: center;
 }
 
+.hoteling-table__room {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
 .hoteling-table__name-wrap {
   display: grid;
   gap: 2px;
@@ -2607,6 +2753,19 @@ textarea.form-field__control {
 .hoteling-table__time {
   font-weight: 700;
   color: var(--color-text);
+}
+
+.hoteling-table__time[data-hoteling-time-edit="true"] {
+  cursor: pointer;
+}
+
+.hoteling-time-editor {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  pointer-events: none;
 }
 
 .hoteling-table__more {
@@ -2675,7 +2834,7 @@ textarea.form-field__control {
   font-size: 14px;
   padding: 12px 16px;
   min-width: 320px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
   opacity: 0;
   pointer-events: none;
@@ -2693,7 +2852,7 @@ textarea.form-field__control {
 .month-button {
   background: none;
   color: var(--color-text);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-base);
   cursor: pointer;
   font-weight: 600;
   border: 1px solid var(--color-border);

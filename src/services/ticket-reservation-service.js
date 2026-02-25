@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ticket-reservation-service.js
  * - Resolve issued ticket options and allocation results
  * - Calculate usage, overbooking, and auto-selected dates
@@ -9,6 +9,7 @@ import { getTimeZone } from "../utils/timezone.js";
 import { formatTicketDisplayName, normalizePickdropType } from "./ticket-service.js";
 import { WEEKDAY_KEYS } from "../utils/weekday.js";
 import { isDayoffDate } from "../utils/dayoff.js";
+import { resolvePickdropTicketCountType } from "./pickdrop-policy.js";
 
 export function getIssuedTicketOptions(tickets, memberTickets) {
   const ticketMap = new Map(
@@ -115,6 +116,84 @@ export function getDefaultTicketSelection(classes, selectedServices, options) {
   });
 
   return defaults;
+}
+
+export function buildPickdropUsagePlan({
+  dateKeys,
+  pickdropFlags,
+  selectionOrder,
+  optionMap,
+}) {
+  const planByDate = [];
+  const usedByTicket = new Map();
+  const mutableRemaining = new Map();
+  const roundtripTickets = [];
+  const onewayTickets = [];
+  const orderedSelection = Array.isArray(selectionOrder) ? selectionOrder : [];
+
+  orderedSelection.forEach((ticketId) => {
+    const option = optionMap.get(ticketId);
+    if (!option) {
+      return;
+    }
+    const remaining = Number(option.reservableCount ?? option.remainingCount) || 0;
+    if (remaining <= 0) {
+      return;
+    }
+    mutableRemaining.set(ticketId, remaining);
+    const countType = resolvePickdropTicketCountType(option);
+    if (countType === "roundtrip") {
+      roundtripTickets.push(ticketId);
+      return;
+    }
+    onewayTickets.push(ticketId);
+  });
+
+  const pickFrom = (pool, quantity = 1) => {
+    const selected = [];
+    for (let i = 0; i < quantity; i += 1) {
+      const ticketId = pool.find((id) => (mutableRemaining.get(id) || 0) > 0);
+      if (!ticketId) {
+        break;
+      }
+      const before = mutableRemaining.get(ticketId) || 0;
+      mutableRemaining.set(ticketId, Math.max(before - 1, 0));
+      selected.push(ticketId);
+      usedByTicket.set(ticketId, (usedByTicket.get(ticketId) || 0) + 1);
+    }
+    return selected;
+  };
+
+  const dates = Array.isArray(dateKeys) ? dateKeys : [];
+  dates.forEach(() => {
+    const { hasPickup, hasDropoff } = pickdropFlags;
+    if (!hasPickup && !hasDropoff) {
+      planByDate.push([]);
+      return;
+    }
+    if (hasPickup && hasDropoff) {
+      const roundtrip = pickFrom(roundtripTickets, 1);
+      if (roundtrip.length === 1) {
+        planByDate.push(roundtrip);
+        return;
+      }
+      const oneway = pickFrom(onewayTickets, 2);
+      planByDate.push(oneway);
+      return;
+    }
+    const oneway = pickFrom(onewayTickets, 1);
+    if (oneway.length === 1) {
+      planByDate.push(oneway);
+      return;
+    }
+    const fallbackRoundtrip = pickFrom(roundtripTickets, 1);
+    planByDate.push(fallbackRoundtrip);
+  });
+
+  return {
+    planByDate,
+    usedByTicket,
+  };
 }
 
 export function allocateTicketUsage(selectionOrder, ticketMap, selectedCount) {

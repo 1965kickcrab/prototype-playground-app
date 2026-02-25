@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -32,10 +32,12 @@
         <a class="sidebar__nav-item" href="../../public/index.html">
           <img src="../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
           <span>유치원</span>
+          <span class="sidebar__nav-badge" data-sidebar-school-count>0</span>
         </a>
         <a class="sidebar__nav-item" href="hotels.html">
           <img src="../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
           <span>호텔링</span>
+          <span class="sidebar__nav-badge" data-sidebar-hoteling-count>0</span>
         </a>
         <a class="sidebar__nav-item" href="#">
           <img src="../../assets/menuIcon_report.svg" alt="" aria-hidden="true">
@@ -66,9 +68,12 @@
     <main class="main">
       <header class="topbar">
         <div class="topbar__left">
-          <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
-            <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
-          </button>
+          <div class="topbar__toggle-wrap">
+            <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
+              <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
+            </button>
+            <span class="sidebar__nav-badge topbar__today-badge" data-topbar-today-badge hidden data-topbar-today-count>0</span>
+          </div>
         </div>
         <div class="topbar__actions">
           <a class="icon-button" aria-label="설정" href="settings/school/operations.html">
@@ -82,8 +87,8 @@
           </a>
         </div>
       </header>
-
-      <section class="page-header class-registration__header">
+      <div class="main__content">
+        <section class="page-header class-registration__header">
         <div class="class-registration__title">
           <h1>요금 등록</h1>
         </div>
@@ -207,7 +212,8 @@
             <button class="button-neutral" type="button" data-pricing-add-row>추가</button>
           </div>
         </div>
-      </section>
+        </section>
+      </div>
     </main>
     <div class="modal" data-pricing-detail-modal aria-hidden="true">
       <div class="modal__overlay" data-pricing-detail-overlay></div>

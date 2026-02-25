@@ -25,6 +25,29 @@ export function getPrimaryTicketUsage(entry = {}) {
   return usages[0] || null;
 }
 
+export function mergeTicketUsagesForDate(serviceUsage, pickdropUsages = []) {
+  const merged = [];
+  const seen = new Set();
+  const appendUsage = (usage) => {
+    const normalized = normalizeUsage(usage);
+    if (!normalized) {
+      return;
+    }
+    const key = `${normalized.ticketId}|${normalized.sequence}`;
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(normalized);
+  };
+
+  appendUsage(serviceUsage);
+  if (Array.isArray(pickdropUsages)) {
+    pickdropUsages.forEach((usage) => appendUsage(usage));
+  }
+  return merged;
+}
+
 export function addTicketUsageCount(map, usage, count = 1) {
   if (!(map instanceof Map)) {
     return map;

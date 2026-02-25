@@ -1,4 +1,4 @@
-﻿export function renderMemberOptions(root, members) {
+export function renderMemberOptions(root, members) {
   const container = root.querySelector("[data-class-members]");
   if (!container) {
     return;

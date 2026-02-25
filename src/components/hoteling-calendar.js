@@ -1,4 +1,4 @@
-﻿function formatDateISO(date) {
+function formatDateISO(date) {
   const target = date instanceof Date ? date : new Date(date);
   if (Number.isNaN(target.getTime())) {
     return "";

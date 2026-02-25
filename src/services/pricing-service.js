@@ -1,4 +1,4 @@
-﻿/**
+/**
  * pricing-service.js
  * - Normalize, serialize, and format pricing rows
  * - Convert DOM input rows into pricing data objects

@@ -1,7 +1,8 @@
-﻿export function setupSidebarToggle(options = {}) {
+export function setupSidebarToggle(options = {}) {
   const app = document.querySelector(".app");
   const toggleButton = document.querySelector("[data-sidebar-toggle]");
   const toggleIcon = toggleButton?.querySelector("[data-sidebar-toggle-icon]");
+  const todayBadge = document.querySelector("[data-topbar-today-badge]");
   const iconOpen = options.iconOpen || "assets/menuIcon_sidebar_open.svg";
   const iconClose = options.iconClose || "assets/menuIcon_sidebar_close.svg";
 
@@ -19,6 +20,9 @@
 
     if (toggleIcon) {
       toggleIcon.src = collapsed ? iconOpen : iconClose;
+    }
+    if (todayBadge) {
+      todayBadge.hidden = !collapsed;
     }
   };
 

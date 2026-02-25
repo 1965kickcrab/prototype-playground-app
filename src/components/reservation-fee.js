@@ -5,6 +5,7 @@ import {
 } from "../services/ticket-service.js";
 import { normalizeNumericInput } from "../utils/number.js";
 import { getDatePartsFromKey, getWeekdayIndex } from "../utils/date.js";
+import { calculateDateEntryFee } from "../services/reservation-date-fee.js";
 
 function parsePriceValue(value) {
   const digits = normalizeNumericInput(value);
@@ -63,9 +64,9 @@ function setFeeAmountValue(element, value) {
   if (!element) {
     return;
   }
-  const values = element.querySelectorAll(".reservation-ticket-row__meta-value");
-  const before = values[0] || null;
-  const after = values[1] || null;
+  const values = element.querySelectorAll(".as-is, .to-be");
+  const before = element.querySelector(".as-is") || values[0] || null;
+  const after = element.querySelector(".to-be") || values[1] || null;
   const arrow = element.querySelector(".reservation-fee-card__amount-arrow");
   if (!before || !after || !arrow) {
     element.textContent = value ?? "-";
@@ -268,9 +269,6 @@ export function renderHotelingFeeBreakdown({
   nightKeys,
   timeZone,
 }) {
-  if (!totalEl) {
-    return;
-  }
   const nightsCount = Array.isArray(nightKeys) ? nightKeys.length : 0;
   if (!roomId || nightsCount <= 0) {
     if (hotelingFeeContainer) {
@@ -339,7 +337,9 @@ export function renderHotelingFeeBreakdown({
   });
 
   const hasLines = lines.length > 0;
-  setFeeAmountValue(totalEl, hasLines ? formatTicketPrice(total) : "-");
+  if (totalEl) {
+    setFeeAmountValue(totalEl, hasLines ? formatTicketPrice(total) : "-");
+  }
   if (hotelingTotalEl) {
     if (hasLines) {
       setFeeAmountValue(hotelingTotalEl, formatTicketPrice(total));
@@ -350,7 +350,7 @@ export function renderHotelingFeeBreakdown({
     }
   }
   if (hotelingFeeContainer && lines.length === 0) {
-    hotelingFeeContainer.textContent = "-";
+    hotelingFeeContainer.textContent = "등록된 요금이 없습니다.";
   }
 }
 
@@ -369,10 +369,10 @@ export function renderPricingBreakdown({
   pickdropDateCount = null,
   selectedWeekdayCounts,
   memberWeight = null,
+  timeZone = undefined,
+  serviceTimeRange = null,
+  serviceLabelOverride = "",
 }) {
-  if (!totalEl) {
-    return;
-  }
   const serviceCount = Number.isFinite(Number(serviceDateCount))
     ? Number(serviceDateCount)
     : Number(dateCount);
@@ -425,6 +425,59 @@ export function renderPricingBreakdown({
       return;
     }
     const classType = classInfo.type || "school";
+    if (classType === "daycare") {
+      const dateKeys = [];
+      if (selectedWeekdayCounts instanceof Map) {
+        const weekdayToIndex = new Map([
+          ["일", 0], ["월", 1], ["화", 2], ["수", 3], ["목", 4], ["금", 5], ["토", 6],
+        ]);
+        selectedWeekdayCounts.forEach((count, label) => {
+          const repeats = Number(count) || 0;
+          for (let i = 0; i < repeats; i += 1) {
+            dateKeys.push(`weekday:${weekdayToIndex.get(label) ?? -1}:${i}`);
+          }
+        });
+      }
+      const fallbackCount = Math.max(serviceCount, 0);
+      const pricingList = pricingByType.get("daycare") || [];
+      let daycareTotal = 0;
+      let daycareLineCount = 0;
+      const syntheticDateKeys = dateKeys.length > 0
+        ? dateKeys
+        : Array.from({ length: fallbackCount }, (_, index) => `count:${index}`);
+      syntheticDateKeys.forEach((key) => {
+        const fee = calculateDateEntryFee({
+          dateKey: key.startsWith("weekday:") ? "" : "",
+          serviceType: "daycare",
+          classId: String(classInfo.id || ""),
+          checkinTime: serviceTimeRange?.checkinTime || "",
+          checkoutTime: serviceTimeRange?.checkoutTime || "",
+          pickup: false,
+          dropoff: false,
+          pricingItems: pricingList,
+          memberWeight: weightValue,
+          timeZone,
+        });
+        const amount = Number(fee?.daycare) || 0;
+        if (amount > 0) {
+          daycareTotal += amount;
+          daycareLineCount += 1;
+        }
+      });
+      if (daycareLineCount > 0) {
+        serviceLines.push({
+          label: serviceLabelOverride || service,
+          lineLabel: service,
+          priceValue: null,
+          count: daycareLineCount,
+          matchedWeekdays: true,
+          unit: "회",
+          fixedTotal: daycareTotal,
+          isDaycare: true,
+        });
+      }
+      return;
+    }
     const candidates = (pricingByType.get(classType) || []).filter((item) => {
       const classIds = Array.isArray(item.classIds) ? item.classIds : [];
       if (classIds.length > 0 && !classIds.includes(classInfo.id)) {
@@ -446,7 +499,8 @@ export function renderPricingBreakdown({
         return;
       }
       serviceLines.push({
-        label: service,
+        label: serviceLabelOverride || service,
+        lineLabel: service,
         priceValue,
         count: weekdayResult.count,
         matchedWeekdays: weekdayResult.matched,
@@ -498,13 +552,17 @@ export function renderPricingBreakdown({
   let pickdropTotal = 0;
   serviceLines.forEach((line) => {
     const shouldApplyPrice = line.matchedWeekdays !== false;
-    const lineTotal = shouldApplyPrice ? line.priceValue * line.count : 0;
+    const lineTotal = Number.isFinite(Number(line.fixedTotal))
+      ? Number(line.fixedTotal)
+      : (shouldApplyPrice ? line.priceValue * line.count : 0);
     serviceTotal += lineTotal;
     if (schoolFeeContainer) {
       schoolFeeContainer.appendChild(
         createFeeLine(
-          line.label,
-          line.matchedWeekdays === false
+          line.lineLabel || line.label,
+          line.isDaycare
+            ? `${formatTicketPrice(lineTotal)}`
+            : line.matchedWeekdays === false
             ? `${line.count}${line.unit}`
             : `${formatTicketPrice(line.priceValue)} x ${line.count}${line.unit}`
         )
@@ -526,7 +584,9 @@ export function renderPricingBreakdown({
 
   const hasAnyLines = serviceLines.length + pickdropLines.length > 0;
   const total = serviceTotal + pickdropTotal;
-  setFeeAmountValue(totalEl, hasAnyLines ? formatTicketPrice(total) : "-");
+  if (totalEl) {
+    setFeeAmountValue(totalEl, hasAnyLines ? formatTicketPrice(total) : "-");
+  }
   if (schoolTotalEl) {
     if (serviceLines.length > 0) {
       setFeeAmountValue(schoolTotalEl, formatTicketPrice(serviceTotal));
@@ -546,14 +606,12 @@ export function renderPricingBreakdown({
     }
   }
   if (schoolFeeContainer && serviceLines.length === 0) {
-    schoolFeeContainer.textContent = "-";
+    schoolFeeContainer.textContent = "등록된 요금이 없습니다.";
   }
   if (pickdropFeeContainer && pickdropLines.length === 0) {
-    pickdropFeeContainer.textContent = "-";
+    pickdropFeeContainer.textContent = "등록된 요금이 없습니다.";
   }
 }
-
-
 
 
 

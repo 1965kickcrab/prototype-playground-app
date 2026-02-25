@@ -1,4 +1,4 @@
-import { markReady, syncFilterChip } from "../utils/dom.js";
+﻿import { markReady, syncFilterChip } from "../utils/dom.js";
 import {
   getActiveServices,
   getDefaultService,
@@ -11,21 +11,21 @@ import {
 import { isCanceledStatus } from "../utils/status.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { initOperationsStorage } from "../storage/operations-storage.js";
+import { initPricingStorage } from "../storage/pricing-storage.js";
 import { isDayoffDate } from "../utils/dayoff.js";
 import { notifyReservationUpdated } from "../utils/reservation-events.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import { formatTicketPrice } from "../services/ticket-service.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
-import { getIssuedTicketOptions } from "../services/ticket-reservation-service.js";
 import { renderSelectableChips, setSelectedChip } from "./selection-chips.js";
 import {
   addTicketUsageCount,
   addTicketUsagesCount,
   getEntryTicketUsages,
-  getPrimaryTicketUsage,
 } from "../services/ticket-usage-service.js";
 import {
   applyReservationStatusChange,
+  applyReservationToMemberTickets,
   loadIssueMembers,
   rollbackReservationMemberTickets,
 } from "../storage/ticket-issue-members.js";
@@ -35,6 +35,30 @@ import {
   updateReservationDateEntry,
 } from "../services/reservation-entries.js";
 import { getPickdropCountType } from "../services/pickdrop-policy.js";
+import { repairReservationPickdropUsages } from "../services/pickdrop-usage-repair-service.js";
+import { buildPickdropRepairContext } from "../services/pickdrop-detail-sync.js";
+import {
+  PAYMENT_METHODS,
+  parsePaymentAmount,
+  normalizeReservationPayment,
+  shouldClearTicketPaymentOnCancellation,
+} from "../services/reservation-payment.js";
+import {
+  getReservationPaymentStatus,
+} from "../services/reservation-payment-status.js";
+import {
+  calculateDateEntryFee,
+  getDateEntryFeeExpected,
+} from "../services/reservation-date-fee.js";
+import {
+  buildReservationWithBilling,
+} from "../services/reservation-billing.js";
+import {
+  hasMemberDaycareTimeConflict,
+} from "../services/member-reservation-summary.js";
+import {
+  getDaycareDurationMinutes,
+} from "../services/daycare-duration.js";
 
 const STATUS_CLASSES = [
   "list-table__status--primary",
@@ -52,11 +76,12 @@ const PICKDROP_TYPES = {
 
 const STATUS_MENU_ORDER = ["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT", "CANCELED"];
 
+const SERVICE_RESERVATION_TYPES = new Set(["school", "daycare"]);
 const SCHOOL_RESERVATION_TYPE = "school";
 
 const filterSchoolReservations = (reservations) =>
   (Array.isArray(reservations) ? reservations : []).filter(
-    (item) => item?.type === SCHOOL_RESERVATION_TYPE
+    (item) => SERVICE_RESERVATION_TYPES.has(String(item?.type || ""))
   );
 
 const loadSchoolReservationsFromStorage = (storage) =>
@@ -70,6 +95,18 @@ const resolveSchoolReservations = (storage, reservations) => {
     return stored;
   }
   return filterSchoolReservations(reservations);
+};
+
+const mergeSchoolReservations = (storage, nextSchoolReservations, fallbackReservations) => {
+  const nextSchool = filterSchoolReservations(nextSchoolReservations);
+  const allReservations =
+    storage && typeof storage.loadReservations === "function"
+      ? storage.loadReservations()
+      : (Array.isArray(fallbackReservations) ? fallbackReservations : []);
+  const nonSchool = (Array.isArray(allReservations) ? allReservations : []).filter(
+    (item) => !SERVICE_RESERVATION_TYPES.has(String(item?.type || ""))
+  );
+  return [...nonSchool, ...nextSchool];
 };
 
 function formatDateKey(date) {
@@ -97,33 +134,6 @@ function getCurrentTimeString(timeZone) {
     hour12: false,
   });
   return formatter.format(new Date());
-}
-
-function parseTimeToMinutes(value) {
-  if (!value) {
-    return null;
-  }
-  const [hour, minute] = value.split(":").map((part) => Number.parseInt(part, 10));
-  if (Number.isNaN(hour) || Number.isNaN(minute)) {
-    return null;
-  }
-  return hour * 60 + minute;
-}
-
-function calculateDaycareFee(startTime, endTime, pricing) {
-  const startMinutes = parseTimeToMinutes(startTime);
-  const endMinutes = parseTimeToMinutes(endTime);
-  if (startMinutes === null || endMinutes === null) {
-    return 0;
-  }
-  const duration = endMinutes - startMinutes;
-  if (duration <= 0) {
-    return 0;
-  }
-  const unit = pricing.billingUnit || 60;
-  const units = Math.ceil(duration / unit);
-  const fee = units * (pricing.hourlyRate || 0) * (unit / 60);
-  return Math.round(fee);
 }
 
 const TARGET_TO_BASE_STATUS = {
@@ -353,15 +363,30 @@ function applyStatusToRows(rows, storage) {
     .forEach(({ row }) => parent.appendChild(row));
 }
 
+function getActivePaymentStatuses(state) {
+  const paymentMap = state?.selectedPaymentStatuses;
+  if (!paymentMap || typeof paymentMap !== "object") {
+    return new Set(["paid", "unpaid"]);
+  }
+  const selected = Object.entries(paymentMap)
+    .filter(([, checked]) => checked === true)
+    .map(([status]) => status);
+  return selected.length > 0 ? new Set(selected) : new Set(["paid", "unpaid"]);
+}
+
 function applyServiceFilter(rows, state) {
   const activeServices = new Set(getActiveServices(state));
   const activeTeachers = new Set(getActiveTeachers(state));
+  const activePayments = getActivePaymentStatuses(state);
   const visibleRows = [];
 
   rows.forEach((row) => {
     const service = normalizeService(row.dataset.service, state);
     const teacher = normalizeTeacher(service, state);
-    const isActive = activeServices.has(service) && activeTeachers.has(teacher);
+    const paymentStatus = row.dataset.paymentStatus || "unpaid";
+    const isActive = activeServices.has(service)
+      && activeTeachers.has(teacher)
+      && activePayments.has(paymentStatus);
     row.hidden = !isActive;
 
     if (isActive) {
@@ -413,6 +438,10 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
   body.innerHTML = "";
 
   state.reservations = filterSchoolReservations(state.reservations);
+  const classes = initClassStorage().ensureDefaults();
+  const classMap = new Map(
+    classes.map((item) => [String(item?.name || ""), item])
+  );
 
   const activeServices = new Set(getActiveServices(state));
   const targetDateKey = formatDateKey(state.selectedDate);
@@ -421,9 +450,11 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
     const service = normalizeService(entry.className, state);
     return dateKey === targetDateKey && activeServices.has(service);
   });
+  const members = loadIssueMembers();
 
   reservations.forEach((entry) => {
     const { reservation } = entry;
+    const member = getMemberByReservation(reservation, members);
     const pickupChecked = entry.pickup === true;
     const dropoffChecked = entry.dropoff === true;
     const hasPickup = pickupChecked;
@@ -441,20 +472,32 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
     row.dataset.pickupChecked = pickupChecked ? "true" : "false";
     row.dataset.dropoffChecked = dropoffChecked ? "true" : "false";
     row.dataset.address = reservation.address || "";
-    row.dataset.owner = reservation.owner || "";
+    row.dataset.owner = member?.owner || reservation.owner || "";
     const service = normalizeService(entry.className, state);
     const teacher = normalizeTeacher(service, state);
     const hasService = typeof entry.className === "string" && entry.className.trim().length > 0;
     const displayService = hasService ? service : "-";
+    const reservationType = String(reservation?.type || "school");
+    const classInfo = classMap.get(String(entry.className || reservation?.class || reservation?.service || ""));
+    const schoolStart = String(classInfo?.startTime || "").trim();
+    const schoolEnd = String(classInfo?.endTime || "").trim();
+    const daycareStart = String(entry.checkinTime || "").trim();
+    const daycareEnd = String(entry.checkoutTime || "").trim();
+    const plannedTimeText = reservationType === "daycare"
+      ? ((daycareStart && daycareEnd) ? `${daycareStart} ~ ${daycareEnd}` : "")
+      : ((schoolStart && schoolEnd) ? `${schoolStart} ~ ${schoolEnd}` : "");
     row.dataset.service = service;
     row.dataset.teacher = teacher;
+    row.dataset.paymentStatus = getReservationPaymentStatus(reservation);
     row.dataset.checkinTime = entry.checkinTime || "";
     row.dataset.checkoutTime = entry.checkoutTime || "";
     row.dataset.date = formatDateKey(entry.date);
 
     row.innerHTML = `
         <span role="cell" class="list-table__check-cell"><input type="checkbox" aria-label="예약 선택" data-reservation-select></span>
-        <span role="cell">${displayService}</span>
+        <span role="cell" class="list-table__service-cell">
+          <span>${displayService}</span>
+        </span>
         <span role="cell">
         <span class="list-table__tags">
           ${
@@ -474,8 +517,9 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
           }
         </span>
         </span>
-        <span role="cell" class="list-table__status">${entry.statusText || ""}</span>
-        <span role="cell">${reservation.dogName || ""}</span>
+        <span role="cell" class="list-table__status">${storage?.STATUS?.[entry.baseStatusKey || "PLANNED"] || entry.statusText || ""}</span>
+        <span role="cell">${member?.dogName || reservation.dogName || "-"}</span>
+        <span role="cell">${plannedTimeText || "-"}</span>
         <span role="cell" class="list-table__memo" data-reservation-memo>${reservation.memo ? reservation.memo : "-"}</span>
         <span role="cell" class="list-table__more-cell">
           <button class="icon-button reservation-more-button" type="button" data-reservation-detail-open aria-label="예약 상세 열기">
@@ -574,6 +618,7 @@ function setupPickdropModal(list, state, getRows) {
     const activeTeachers = new Set(getActiveTeachers(state));
     const targetDateKey = getActiveDateKey();
     const reservations = getReservationEntries(state.reservations);
+    const members = loadIssueMembers();
     const items = reservations
       .filter((entry) => formatDateKey(entry.date) === targetDateKey)
       .filter((entry) => {
@@ -583,11 +628,12 @@ function setupPickdropModal(list, state, getRows) {
       })
       .flatMap((entry) => {
         const reservation = entry.reservation;
+        const member = getMemberByReservation(reservation, members);
         const pickupChecked = entry.pickup === true;
         const dropoffChecked = entry.dropoff === true;
-        const ownerName = reservation.owner || "";
+        const ownerName = member?.owner || reservation.owner || "";
         const address = reservation.address || "주소 미정";
-        const dogName = reservation.dogName || "";
+        const dogName = member?.dogName || reservation.dogName || "";
         const nextItems = [];
         if (pickupChecked) {
           nextItems.push({
@@ -717,18 +763,16 @@ function getStatusLabelFromKey(statusKey, STATUS) {
 }
 
 function getMemberIdFromReservation(reservation) {
-  if (!reservation) {
-    return "";
+  return String(reservation?.memberId || "").trim();
+}
+
+function getMemberByReservation(reservation, members = null) {
+  const memberId = getMemberIdFromReservation(reservation);
+  if (!memberId) {
+    return null;
   }
-  const dogName = reservation.dogName || "";
-  const owner = reservation.owner || "";
-  const breed = reservation.breed || "";
-  const match = loadIssueMembers().find((member) =>
-    member.dogName === dogName
-    && member.owner === owner
-    && (!breed || member.breed === breed)
-  );
-  return match?.id || "";
+  const targetMembers = Array.isArray(members) ? members : loadIssueMembers();
+  return targetMembers.find((member) => String(member?.id || "") === memberId) || null;
 }
 
 function resolveReservationServiceTypes(reservation, entry, classStorage) {
@@ -785,11 +829,20 @@ function applyMemberStatusDeltas(reservation, beforeStatusKey, afterStatusKey, c
   });
 }
 
+function clearTicketPaymentIfCanceledReservation(reservation) {
+  if (!shouldClearTicketPaymentOnCancellation(reservation)) {
+    return reservation;
+  }
+  return {
+    ...reservation,
+    payment: null,
+  };
+}
+
 function renderTicketInfoBadge(container, options) {
   if (!container) {
     return;
   }
-  container.innerHTML = "";
   const { ticketName, count, overCount, totalCount } = options || {};
   const card = document.createElement("div");
   card.className = "reservation-detail__ticket-card";
@@ -835,6 +888,118 @@ function renderTicketInfoBadge(container, options) {
   container.appendChild(card);
 }
 
+function renderNoTicketUsagePlaceholder(container) {
+  if (!container) {
+    return;
+  }
+  container.innerHTML = `
+    <p class="reservation-ticket-placeholder">예약에 사용한 이용권이 없습니다.</p>
+  `;
+}
+
+function createReservationFeeLine(labelText, calcContent) {
+  const line = document.createElement("div");
+  line.className = "reservation-fee-line";
+  const calc = document.createElement("span");
+  calc.className = "reservation-fee-line__calc";
+  if (labelText) {
+    const label = document.createElement("span");
+    label.className = "reservation-fee-line__label";
+    label.textContent = labelText;
+    line.appendChild(label);
+  }
+  if (calcContent instanceof Node) {
+    calc.appendChild(calcContent);
+  } else {
+    calc.textContent = String(calcContent ?? "");
+  }
+  line.appendChild(calc);
+  return line;
+}
+
+function buildAllocationItems(allocation = {}) {
+  const items = [];
+  const school = Number(allocation?.school) || 0;
+  const daycare = Number(allocation?.daycare) || 0;
+  const hoteling = Number(allocation?.hoteling) || 0;
+  const oneway = Number(allocation?.oneway) || 0;
+  const roundtrip = Number(allocation?.roundtrip) || 0;
+  if (school > 0) {
+    items.push(`유치원 ${formatTicketPrice(school)}`);
+  }
+  if (daycare > 0) {
+    items.push(`데이케어 ${formatTicketPrice(daycare)}`);
+  }
+  if (hoteling > 0) {
+    items.push(`호텔링 ${formatTicketPrice(hoteling)}`);
+  }
+  if (oneway > 0) {
+    items.push(`픽드랍(편도) ${formatTicketPrice(oneway)}`);
+  }
+  if (roundtrip > 0) {
+    items.push(`픽드랍(왕복) ${formatTicketPrice(roundtrip)}`);
+  }
+  return items;
+}
+
+function createReservationFeeItems(items = []) {
+  const fragment = document.createDocumentFragment();
+  if (!Array.isArray(items) || items.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "reservation-fee-line__item reservation-fee-line__item--empty";
+    empty.textContent = "0원";
+    fragment.appendChild(empty);
+    return fragment;
+  }
+  items.forEach((item) => {
+    const node = document.createElement("span");
+    node.className = "reservation-fee-line__item";
+    node.textContent = item;
+    fragment.appendChild(node);
+  });
+  return fragment;
+}
+
+function renderReservationDetailFeeLines(container, reservation) {
+  if (!container) {
+    return;
+  }
+  container.innerHTML = "";
+  const dateKeys = Array.from(
+    new Set(
+      (Array.isArray(reservation?.dates) ? reservation.dates : [])
+        .map((entry) => String(entry?.date || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+  if (dateKeys.length === 0) {
+    container.appendChild(createReservationFeeLine("요금 정보", "-"));
+    return;
+  }
+  const allocations =
+    reservation?.billing && typeof reservation.billing.allocationsByDate === "object"
+      ? reservation.billing.allocationsByDate
+      : {};
+  const mergedAllocation = dateKeys.reduce(
+    (acc, dateKey) => {
+      const allocation = allocations?.[dateKey] || {};
+      acc.school += Number(allocation?.school) || 0;
+      acc.daycare += Number(allocation?.daycare) || 0;
+      acc.hoteling += Number(allocation?.hoteling) || 0;
+      acc.oneway += Number(allocation?.oneway) || 0;
+      acc.roundtrip += Number(allocation?.roundtrip) || 0;
+      return acc;
+    },
+    { school: 0, daycare: 0, hoteling: 0, oneway: 0, roundtrip: 0 }
+  );
+  container.appendChild(
+    createReservationFeeLine(
+      "",
+      createReservationFeeItems(buildAllocationItems(mergedAllocation))
+    )
+  );
+}
+
 function applySelectedStatus(row, selectedKey) {
   const nextState = {
     baseStatus: TARGET_TO_BASE_STATUS[selectedKey] || "PLANNED",
@@ -859,10 +1024,6 @@ function syncReservationRow(row, state, storage) {
   }
 
   const baseStatusKey = row.dataset.baseStatus || "PLANNED";
-  const statusText =
-    storage?.STATUS?.[baseStatusKey]
-    || row.querySelector(".list-table__status")?.textContent?.trim()
-    || "";
   const checkinTime = row.dataset.checkinTime || "";
   const checkoutTime = row.dataset.checkoutTime || "";
 
@@ -872,7 +1033,6 @@ function syncReservationRow(row, state, storage) {
       dateKey,
       (entry) => ({
         baseStatusKey,
-        statusText,
         checkinTime,
         checkoutTime,
       })
@@ -1093,8 +1253,6 @@ function setupCancelModal(list, state, storage, refresh) {
     const reservations = resolveSchoolReservations(storage, state.reservations);
     const usageByMember = new Map();
     const canceledStatusKey = "CANCELED";
-    const canceledLabel =
-      storage && storage.STATUS ? storage.STATUS[canceledStatusKey] : "예약 취소";
     const nextReservations = reservations.map((item) => {
       const matches = keys.filter((key) => key.id === item.id);
       if (matches.length === 0) {
@@ -1124,17 +1282,22 @@ function setupCancelModal(list, state, storage, refresh) {
         }
         nextItem = updateReservationDateEntry(nextItem, match.date, (entry) => ({
           baseStatusKey: canceledStatusKey,
-          statusText: canceledLabel,
         }));
+        nextItem = buildReservationWithBilling(clearTicketPaymentIfCanceledReservation(nextItem));
       });
       return nextItem;
     });
 
+    const mergedReservations = mergeSchoolReservations(
+      storage,
+      nextReservations,
+      state.reservations
+    );
     if (storage && typeof storage.saveReservations === "function") {
-      storage.saveReservations(nextReservations);
+      storage.saveReservations(mergedReservations);
     }
 
-    state.reservations = filterSchoolReservations(nextReservations);
+    state.reservations = filterSchoolReservations(mergedReservations);
     usageByMember.forEach((usageMap, memberId) => {
       rollbackReservationMemberTickets(memberId, usageMap);
     });
@@ -1151,7 +1314,7 @@ function setupDetailModal(list, state, storage, refresh) {
   }
 
   const classStorage = initClassStorage();
-  const operationsStorage = initOperationsStorage();
+  const pricingStorage = initPricingStorage();
   const ticketStorage = initTicketStorage();
   const overlay = modal.querySelector("[data-reservation-detail-overlay]");
   const closeButtons = modal.querySelectorAll("[data-reservation-detail-close]");
@@ -1178,13 +1341,21 @@ function setupDetailModal(list, state, storage, refresh) {
   const tabPanels = modal.querySelectorAll("[data-reservation-detail-panel]");
   const paymentMethodButtons = modal.querySelectorAll("[data-reservation-payment-method]");
   const paymentTicketRow = modal.querySelector("[data-reservation-payment-ticket]");
+  const paymentAmountRow = modal.querySelector("[data-reservation-payment-amount-row]");
+  const paymentAmountInput = modal.querySelector("[data-reservation-payment-amount]");
+  const detailTotalAmount = modal.querySelector("[data-reservation-detail-total]");
+  const detailFeeLines = modal.querySelector("[data-reservation-detail-fee-lines]");
+  const detailPaymentTotal = modal.querySelector("[data-reservation-detail-payment-total]");
+  const detailBalanceRow = modal.querySelector("[data-reservation-detail-fee-balance-row]");
+  const detailBalanceTotal = modal.querySelector("[data-reservation-detail-fee-balance-total]");
   let activeReservationId = "";
   let activeReservationDate = "";
   let initialSnapshot = "";
   let activeStatusKey = "PLANNED";
   let initialStatusKey = "PLANNED";
   let activeMemberId = "";
-  let activePaymentMethod = "ticket";
+  let activePaymentMethod = "";
+  let activeMemberWeight = null;
   const timeZone = getTimeZone();
 
   const getSelectedClass = () =>
@@ -1215,6 +1386,19 @@ function setupDetailModal(list, state, storage, refresh) {
       checkoutTime: checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
       className: getSelectedClass(),
       statusKey: activeStatusKey,
+      paymentMethod: activePaymentMethod || "",
+      paymentAmount:
+        activePaymentMethod === PAYMENT_METHODS.TICKET
+          ? "0"
+          : activePaymentMethod
+            ? String(
+              parsePaymentAmount(
+                paymentAmountInput instanceof HTMLInputElement
+                  ? paymentAmountInput.value
+                  : 0
+              )
+            )
+            : "",
       ...getPickdropFlags(),
     });
     saveButton.disabled = current === initialSnapshot;
@@ -1243,14 +1427,117 @@ function setupDetailModal(list, state, storage, refresh) {
   };
 
   const setPaymentMethod = (value) => {
-    activePaymentMethod = value || "ticket";
+    const normalized = String(value || "").trim();
+    activePaymentMethod = normalized;
     paymentMethodButtons.forEach((button) => {
       const isSelected = button.dataset.reservationPaymentMethod === activePaymentMethod;
       button.classList.toggle("is-selected", isSelected);
     });
-    if (paymentTicketRow) {
-      paymentTicketRow.hidden = activePaymentMethod !== "ticket";
+    if (!activePaymentMethod) {
+      if (paymentTicketRow) {
+        paymentTicketRow.hidden = false;
+      }
+      if (paymentAmountRow) {
+        paymentAmountRow.hidden = true;
+      }
+      if (paymentAmountInput instanceof HTMLInputElement) {
+        paymentAmountInput.value = "";
+        paymentAmountInput.disabled = true;
+      }
+      syncDetailPaymentSummary();
+      return;
     }
+    const isTicket = activePaymentMethod === PAYMENT_METHODS.TICKET;
+    if (paymentTicketRow) {
+      paymentTicketRow.hidden = !isTicket;
+    }
+    if (paymentAmountRow) {
+      paymentAmountRow.hidden = isTicket;
+    }
+    if (paymentAmountInput instanceof HTMLInputElement) {
+      paymentAmountInput.disabled = isTicket;
+    }
+    syncDetailPaymentSummary();
+  };
+
+  const syncPaymentAmountInput = () => {
+    if (!(paymentAmountInput instanceof HTMLInputElement)) {
+      return;
+    }
+    if (!activePaymentMethod) {
+      paymentAmountInput.value = "";
+      syncDetailPaymentSummary();
+      return;
+    }
+    if (activePaymentMethod === PAYMENT_METHODS.TICKET) {
+      paymentAmountInput.value = "0";
+      syncDetailPaymentSummary();
+      return;
+    }
+    const numeric = parsePaymentAmount(paymentAmountInput.value);
+    paymentAmountInput.value = numeric > 0 ? numeric.toLocaleString() : "";
+    syncDetailPaymentSummary();
+  };
+
+  const getDetailExpectedTotalAmount = () => {
+    if (!activeReservationId) {
+      return 0;
+    }
+    const activeReservation = resolveSchoolReservations(storage, state.reservations).find(
+      (item) => item.id === activeReservationId
+    );
+    const dateKey = dateInput instanceof HTMLInputElement
+      ? dateInput.value
+      : activeReservationDate;
+    const className = getSelectedClass();
+    const classes = classStorage.ensureDefaults();
+    const classInfo = classes.find((item) => item.name === className) || null;
+    const classType = classInfo?.type || "school";
+    const pickdropFlags = getPickdropFlags();
+    const fee = calculateDateEntryFee({
+      dateKey,
+      serviceType: classType,
+      classId: String(classInfo?.id || ""),
+      checkinTime: checkinInput instanceof HTMLInputElement ? checkinInput.value : "",
+      checkoutTime: checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
+      pickup: pickdropFlags.hasPickup,
+      dropoff: pickdropFlags.hasDropoff,
+      pricingItems: pricingStorage.loadPricingItems(),
+      memberWeight: activeMemberWeight,
+      timeZone,
+    });
+    const expected = getDateEntryFeeExpected(fee);
+    if (expected > 0 || className || dateKey) {
+      return expected;
+    }
+    const billingExpected = Number(activeReservation?.billing?.totals?.expected);
+    if (Number.isFinite(billingExpected) && billingExpected >= 0) {
+      return Math.round(billingExpected);
+    }
+    return 0;
+  };
+
+  const syncDetailPaymentSummary = () => {
+    const totalAmount = getDetailExpectedTotalAmount();
+    let paidAmount = 0;
+    if (detailTotalAmount) {
+      detailTotalAmount.textContent = formatTicketPrice(totalAmount);
+    }
+    if (activePaymentMethod === PAYMENT_METHODS.TICKET) {
+      paidAmount = totalAmount;
+    } else if (activePaymentMethod) {
+      paidAmount = parsePaymentAmount(
+        paymentAmountInput instanceof HTMLInputElement ? paymentAmountInput.value : 0
+      );
+    }
+    if (detailPaymentTotal) {
+      detailPaymentTotal.textContent = formatTicketPrice(paidAmount);
+    }
+    const balance = totalAmount - paidAmount;
+    if (detailBalanceTotal) {
+      detailBalanceTotal.textContent = formatTicketPrice(balance);
+    }
+    detailBalanceRow?.classList.toggle("is-positive", balance > 0);
   };
 
   const statusClassMap = {
@@ -1346,46 +1633,54 @@ function setupDetailModal(list, state, storage, refresh) {
     daycareFeeRow.hidden = !isDaycare;
     if (!isDaycare) {
       daycareFeeValue.textContent = "-";
+      syncDetailPaymentSummary();
       return;
     }
-    const pricing = operationsStorage.loadSettings().daycarePricing || {};
-    const fee = calculateDaycareFee(
-      checkinInput instanceof HTMLInputElement ? checkinInput.value : "",
-      checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
-      {
-        hourlyRate: Number(pricing.hourlyRate) || 0,
-        billingUnit: Number(pricing.billingUnit) || 60,
-      }
-    );
-    daycareFeeValue.textContent = formatTicketPrice(fee);
+    const dateKey = dateInput instanceof HTMLInputElement
+      ? dateInput.value
+      : activeReservationDate;
+    const pickdropFlags = getPickdropFlags();
+    const fee = calculateDateEntryFee({
+      dateKey,
+      serviceType: "daycare",
+      classId: String(classes.find((item) => item.name === className)?.id || ""),
+      checkinTime: checkinInput instanceof HTMLInputElement ? checkinInput.value : "",
+      checkoutTime: checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
+      pickup: pickdropFlags.hasPickup,
+      dropoff: pickdropFlags.hasDropoff,
+      pricingItems: pricingStorage.loadPricingItems(),
+      memberWeight: activeMemberWeight,
+      timeZone,
+    });
+    daycareFeeValue.textContent = formatTicketPrice(fee.daycare);
+    syncDetailPaymentSummary();
   };
 
-  const updateTicketInfo = (reservation, dateEntry) => {
+  const renderTicketUsageCards = (reservation, dateEntry) => {
     if (!ticketInfo) {
       return;
     }
-    const memberId = getMemberIdFromReservation(reservation);
-    if (!memberId) {
-      renderTicketInfoBadge(ticketInfo);
+    const usages = getEntryTicketUsages(dateEntry || {});
+    if (usages.length === 0) {
+      renderNoTicketUsagePlaceholder(ticketInfo);
       return;
     }
-    const usage = getPrimaryTicketUsage(dateEntry || {});
-    if (!usage?.ticketId || !usage?.sequence) {
-      renderTicketInfoBadge(ticketInfo);
-      return;
-    }
-    const tickets = ticketStorage.ensureDefaults();
-    const member = loadIssueMembers().find((item) =>
-      String(item.id) === String(memberId)
+    const member = getMemberByReservation(reservation);
+    const ticketMap = new Map(
+      (Array.isArray(member?.tickets) ? member.tickets : []).map((ticket) => [
+        String(ticket?.id || ""),
+        ticket,
+      ])
     );
-    const options = getIssuedTicketOptions(
-      tickets,
-      Array.isArray(member?.tickets) ? member.tickets : []
-    );
-    const optionMap = new Map(options.map((option) => [option.id, option]));
-    const ticketName = optionMap.get(String(usage.ticketId))?.name || "";
-    const totalCount = optionMap.get(String(usage.ticketId))?.totalCount;
-    renderTicketInfoBadge(ticketInfo, { ticketName, count: usage.sequence, totalCount });
+    ticketInfo.innerHTML = "";
+    usages.forEach((usage) => {
+      const ticket = ticketMap.get(String(usage?.ticketId || ""));
+      renderTicketInfoBadge(ticketInfo, {
+        ticketName: ticket?.name || "-",
+        count: Number(usage?.sequence) || 0,
+        totalCount: Number(ticket?.totalCount) || 0,
+      });
+    });
   };
 
   const renderClassOptions = () => {
@@ -1403,7 +1698,16 @@ function setupDetailModal(list, state, storage, refresh) {
     activeReservationDate = dateKey || "";
     const reservations = resolveSchoolReservations(storage, state.reservations);
     const target = reservations.find((item) => item.id === reservationId);
+    renderReservationDetailFeeLines(detailFeeLines, target);
     activeMemberId = getMemberIdFromReservation(target);
+    const member = getMemberByReservation(target);
+    const parsedWeight = Number(
+      member?.weight
+      ?? target?.weight
+      ?? target?.memberWeight
+      ?? target?.petWeight
+    );
+    activeMemberWeight = Number.isFinite(parsedWeight) ? parsedWeight : null;
     const dateEntries = getReservationEntries([target]);
     const dateEntry = dateEntries.find((entry) => entry.date === activeReservationDate)
       || dateEntries[0];
@@ -1420,24 +1724,46 @@ function setupDetailModal(list, state, storage, refresh) {
       checkoutInput.value = dateEntry?.checkoutTime || "";
     }
     if (dogNameText instanceof HTMLElement) {
-      dogNameText.textContent = target?.dogName || "-";
+      dogNameText.textContent = member?.dogName || target?.dogName || "-";
     }
     if (breedText instanceof HTMLElement) {
-      breedText.textContent = target?.breed || "-";
+      breedText.textContent = member?.breed || target?.breed || "-";
     }
     if (weightText instanceof HTMLElement) {
       weightText.textContent =
-        target?.weight || target?.memberWeight || target?.petWeight || "-";
+        member?.weight
+        || target?.weight
+        || target?.memberWeight
+        || target?.petWeight
+        || "-";
     }
     if (ownerDetailText instanceof HTMLElement) {
-      ownerDetailText.textContent = target?.owner || "-";
+      ownerDetailText.textContent = member?.owner || target?.owner || "-";
     }
     if (phoneDetailText instanceof HTMLElement) {
-      phoneDetailText.textContent = target?.phone || target?.ownerPhone || "-";
+      phoneDetailText.textContent =
+        member?.phone
+        || member?.ownerPhone
+        || target?.phone
+        || target?.ownerPhone
+        || "-";
     }
-    updateTicketInfo(target, dateEntry);
-    const hasTicketUsage = getEntryTicketUsages(dateEntry || {}).length > 0;
-    setPaymentMethod(hasTicketUsage ? "ticket" : "cash");
+    const hasPersistedPayment = target?.payment && typeof target.payment === "object";
+    const payment = hasPersistedPayment
+      ? normalizeReservationPayment(target.payment, target)
+      : null;
+    setPaymentMethod(payment?.method || "");
+    if (paymentAmountInput instanceof HTMLInputElement) {
+      paymentAmountInput.value =
+        payment?.method === PAYMENT_METHODS.TICKET
+          ? "0"
+          : (Number(payment?.amount) > 0 ? Number(payment.amount).toLocaleString() : "");
+    }
+    if (!payment) {
+      renderNoTicketUsagePlaceholder(ticketInfo);
+    } else {
+      renderTicketUsageCards(target, dateEntry);
+    }
     const className = dateEntry?.className || target?.class || target?.service || "";
     setSelectedClass(className);
     const fallbackKey = resolveStatusKey(dateEntry?.statusText || "", storage?.STATUS || {}) || "PLANNED";
@@ -1463,6 +1789,10 @@ function setupDetailModal(list, state, storage, refresh) {
       checkoutTime: checkoutInput instanceof HTMLInputElement ? checkoutInput.value : "",
       className,
       statusKey: activeStatusKey,
+      paymentMethod: payment?.method || "",
+      paymentAmount: payment?.method === PAYMENT_METHODS.TICKET
+        ? "0"
+        : (payment ? String(payment.amount || 0) : ""),
       hasPickup: entryPickdrop.pickup,
       hasDropoff: entryPickdrop.dropoff,
     });
@@ -1499,6 +1829,7 @@ function setupDetailModal(list, state, storage, refresh) {
     const paymentButton = target?.closest("[data-reservation-payment-method]");
     if (paymentButton && modal.contains(paymentButton)) {
       setPaymentMethod(paymentButton.dataset.reservationPaymentMethod);
+      updateSaveState();
       return;
     }
     const statusToggle = target?.closest("[data-reservation-status-trigger]");
@@ -1556,8 +1887,30 @@ function setupDetailModal(list, state, storage, refresh) {
     const nextDate = dateInput instanceof HTMLInputElement ? dateInput.value : "";
     const nextClass = getSelectedClass();
     const nextStatusKey = activeStatusKey || "PLANNED";
-    const statusText = storage?.STATUS ? storage.STATUS[nextStatusKey] : "";
+    const nextPaymentMethod = activePaymentMethod || "";
+    const nextPaymentAmount = nextPaymentMethod === PAYMENT_METHODS.TICKET
+      ? 0
+      : nextPaymentMethod
+        ? parsePaymentAmount(
+          paymentAmountInput instanceof HTMLInputElement
+            ? paymentAmountInput.value
+            : 0
+        )
+        : 0;
     const pickdropFlags = getPickdropFlags();
+    let initialPickdropFlags = { hasPickup: false, hasDropoff: false };
+    try {
+      const parsed = JSON.parse(initialSnapshot || "{}");
+      initialPickdropFlags = {
+        hasPickup: Boolean(parsed?.hasPickup),
+        hasDropoff: Boolean(parsed?.hasDropoff),
+      };
+    } catch (error) {
+      initialPickdropFlags = { hasPickup: false, hasDropoff: false };
+    }
+    const hasPickdropFlagChange =
+      initialPickdropFlags.hasPickup !== pickdropFlags.hasPickup
+      || initialPickdropFlags.hasDropoff !== pickdropFlags.hasDropoff;
     const nextCheckin = checkinInput instanceof HTMLInputElement
       ? checkinInput.value
       : "";
@@ -1566,6 +1919,33 @@ function setupDetailModal(list, state, storage, refresh) {
       : "";
     const classes = classStorage.ensureDefaults();
     const classType = classes.find((item) => item.name === nextClass)?.type || "school";
+    if (classType === "daycare") {
+      const durationMinutes = getDaycareDurationMinutes(nextCheckin, nextCheckout);
+      if (!nextCheckin || !nextCheckout) {
+        showToast("데이케어 시작/종료 시간을 입력하세요.");
+        return;
+      }
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        showToast("데이케어 시간은 시작보다 종료가 늦어야 합니다.");
+        return;
+      }
+      const member = loadIssueMembers().find(
+        (item) => String(item?.id || "") === String(activeMemberId || "")
+      ) || null;
+      const conflictDateKey = nextDate || activeReservationDate;
+      if (hasMemberDaycareTimeConflict({
+        reservations: storage?.loadReservations?.() || [],
+        member,
+        dateKey: conflictDateKey,
+        checkinTime: nextCheckin,
+        checkoutTime: nextCheckout,
+        storage,
+        excludeReservationId: activeReservationId,
+      })) {
+        showToast("같은 날짜에 겹치는 데이케어 예약 시간이 있습니다.");
+        return;
+      }
+    }
     const serviceTypes = nextClass ? [classType] : [];
     if (pickdropFlags.hasPickup || pickdropFlags.hasDropoff) {
       const pickdropType = getPickdropCountType({
@@ -1579,28 +1959,33 @@ function setupDetailModal(list, state, storage, refresh) {
     if (serviceTypes.length === 0) {
       serviceTypes.push("school");
     }
-    const pricing = operationsStorage.loadSettings().daycarePricing || {};
-    const daycareFee = classType === "daycare"
-      ? calculateDaycareFee(nextCheckin, nextCheckout, {
-          hourlyRate: Number(pricing.hourlyRate) || 0,
-          billingUnit: Number(pricing.billingUnit) || 60,
-        })
-      : 0;
+    const classId = String(classes.find((item) => item.name === nextClass)?.id || "");
+    const nextDateKey = nextDate || activeReservationDate;
+    const nextEntryFee = calculateDateEntryFee({
+      dateKey: nextDateKey,
+      serviceType: classType,
+      classId,
+      checkinTime: nextCheckin,
+      checkoutTime: nextCheckout,
+      pickup: pickdropFlags.hasPickup,
+      dropoff: pickdropFlags.hasDropoff,
+      pricingItems: pricingStorage.loadPricingItems(),
+      memberWeight: activeMemberWeight,
+      timeZone,
+    });
     const updateReservationItem = (item) => {
       const updated = updateReservationDateEntry(item, activeReservationDate, (entry) => ({
         date: nextDate || entry.date,
         class: nextClass,
         service: nextClass,
         baseStatusKey: nextStatusKey,
-        statusText,
         checkinTime: nextCheckin,
         checkoutTime: nextCheckout,
-        daycareFee,
         pickup: pickdropFlags.hasPickup,
         dropoff: pickdropFlags.hasDropoff,
       }));
       const pickdropSummary = getReservationPickdropSummary(updated.dates);
-      return {
+      const nextItem = {
         ...updated,
         memo: nextMemo,
         class: nextClass,
@@ -1610,6 +1995,62 @@ function setupDetailModal(list, state, storage, refresh) {
         pickupChecked: pickdropSummary.hasPickup,
         dropoffChecked: pickdropSummary.hasDropoff,
       };
+      const repairContext = buildPickdropRepairContext({
+        reservation: nextItem,
+        memberId: activeMemberId,
+        tickets: ticketStorage.ensureDefaults(),
+        members: loadIssueMembers(),
+      });
+      if (repairContext.skipReason) {
+        if (hasPickdropFlagChange) {
+          console.debug(
+            `[reservation-detail] pickdrop usage repair skipped: ${repairContext.skipReason}`
+          );
+        }
+        const nextItemWithPayment = {
+          ...nextItem,
+          payment: nextPaymentMethod
+            ? normalizeReservationPayment(
+              { method: nextPaymentMethod, amount: nextPaymentAmount },
+              nextItem
+            )
+            : null,
+        };
+        const ticketPaymentCleared = clearTicketPaymentIfCanceledReservation(nextItemWithPayment);
+        return buildReservationWithBilling(ticketPaymentCleared, {
+          pricingItems: pricingStorage.loadPricingItems(),
+          memberWeight: activeMemberWeight,
+          timeZone,
+          classIdByName: new Map(
+            classes.map((classItem) => [String(classItem?.name || ""), String(classItem?.id || "")])
+          ),
+          payment: ticketPaymentCleared.payment,
+        });
+      }
+      const repaired = repairReservationPickdropUsages({
+        reservation: nextItem,
+        pickdropOptions: repairContext.pickdropOptions,
+        selectionOrder: repairContext.selectionOrder,
+      });
+      const repairedWithPayment = {
+        ...repaired,
+        payment: nextPaymentMethod
+          ? normalizeReservationPayment(
+            { method: nextPaymentMethod, amount: nextPaymentAmount },
+            repaired
+          )
+          : null,
+      };
+      const ticketPaymentCleared = clearTicketPaymentIfCanceledReservation(repairedWithPayment);
+      return buildReservationWithBilling(ticketPaymentCleared, {
+        pricingItems: pricingStorage.loadPricingItems(),
+        memberWeight: activeMemberWeight,
+        timeZone,
+        classIdByName: new Map(
+          classes.map((classItem) => [String(classItem?.name || ""), String(classItem?.id || "")])
+        ),
+        payment: ticketPaymentCleared.payment,
+      });
     };
     if (storage && typeof storage.updateReservation === "function") {
       state.reservations = filterSchoolReservations(
@@ -1652,9 +2093,15 @@ function setupDetailModal(list, state, storage, refresh) {
         rollbackReservationMemberTickets(activeMemberId, usageMap);
       }
     }
+    applyReservationToMemberTickets(activeMemberId || "", new Map());
     closeModal();
     refresh();
     notifyReservationUpdated();
+  });
+
+  paymentAmountInput?.addEventListener("input", () => {
+    syncPaymentAmountInput();
+    updateSaveState();
   });
 
   cancelButton?.addEventListener("click", () => {
@@ -1693,12 +2140,18 @@ function setupDetailModal(list, state, storage, refresh) {
       }
       return acc;
     }, []);
+    const mergedReservations = mergeSchoolReservations(
+      storage,
+      nextReservations,
+      state.reservations
+    );
     if (storage && typeof storage.saveReservations === "function") {
-      storage.saveReservations(nextReservations);
+      storage.saveReservations(mergedReservations);
     }
-    state.reservations = filterSchoolReservations(nextReservations);
+    state.reservations = filterSchoolReservations(mergedReservations);
     closeModal();
     refresh();
+    notifyReservationUpdated();
   });
 
   renderClassOptions();
@@ -1720,6 +2173,7 @@ export function setupList(state, storage) {
   const timeZone = getTimeZone();
   const classFilters = document.querySelectorAll("[data-class-filter]");
   const teacherFilters = document.querySelectorAll("[data-teacher-filter]");
+  const paymentFilters = document.querySelectorAll("[data-payment-filter]");
   const getRows = () => list.querySelectorAll("[data-reservation-row]");
   const cancelButton = list.querySelector("[data-reservation-cancel-open]");
   const selectAll = list.querySelector("[data-reservation-select-all]");
@@ -1819,12 +2273,37 @@ export function setupList(state, storage) {
     refresh();
   };
 
+
+  const handlePaymentFilterChange = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const { value, checked } = target;
+    state.selectedPaymentStatuses = state.selectedPaymentStatuses || {};
+    state.selectedPaymentStatuses[value] = checked;
+
+    const hasActive = Object.values(state.selectedPaymentStatuses || {}).some(Boolean);
+    if (!hasActive) {
+      state.selectedPaymentStatuses[value] = true;
+      target.checked = true;
+    }
+
+    syncFilterChip(target);
+    document.dispatchEvent(new CustomEvent("payment-filter:change"));
+    refresh();
+  };
   classFilters.forEach((filter) => {
     filter.addEventListener("change", handleClassFilterChange);
   });
 
   teacherFilters.forEach((filter) => {
     filter.addEventListener("change", handleTeacherFilterChange);
+  });
+
+  paymentFilters.forEach((filter) => {
+    filter.addEventListener("change", handlePaymentFilterChange);
   });
 
   list.addEventListener("change", (event) => {
@@ -1903,3 +2382,6 @@ export function setupList(state, storage) {
 
   void state;
 }
+
+
+

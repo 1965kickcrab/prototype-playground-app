@@ -10,11 +10,11 @@ const buildMiniCalendarControls = ({
   assetPrefix,
 }) => `
   <div class="mini-calendar__controls">
-    <button class="month-button month-button--prev" type="button" ${prevAttr} aria-label="이전 월">
+    <button class="month-button month-button--prev" type="button" ${prevAttr} aria-label="이전 달">
       ${buildIcon(assetPrefix, "iconChevronLeft.svg")}
     </button>
     <div class="mini-calendar__current" ${currentAttr}>0000년 0월</div>
-    <button class="month-button month-button--next" type="button" ${nextAttr} aria-label="다음 월">
+    <button class="month-button month-button--next" type="button" ${nextAttr} aria-label="다음 달">
       ${buildIcon(assetPrefix, "iconChevronRight.svg")}
     </button>
   </div>
@@ -65,43 +65,52 @@ const buildReservationModal = ({
   </div>
 `;
 
+const buildReservationFeeSegment = ({
+  title,
+  amountAttr = "",
+  bodyAttr = "",
+  contentHtml = "",
+  assetPrefix,
+  open = true,
+}) => `
+  <div class="reservation-fee-segment">
+    <div class="reservation-fee-segment__header" data-fee-toggle>
+      <span class="reservation-fee-segment__title">${title}</span>
+      <span class="reservation-fee-segment__amount" ${amountAttr}>
+        <span class="reservation-ticket-row__meta">
+          <span class="as-is">-</span>
+        </span>
+      </span>
+      ${buildIcon(assetPrefix, "iconDropdown.svg", "", "reservation-fee-segment__arrow")}
+    </div>
+    <div class="reservation-fee-segment__body" ${bodyAttr} ${open ? "" : "hidden"}>
+      ${contentHtml}
+    </div>
+  </div>
+`;
+
 const buildReservationFeeCard = ({
   detailAttr = "",
   title,
   amountAttr = "",
-  ticketsClass,
-  ticketsAttr,
-  ticketsEmptyAttr,
-  feeListAttr,
+  contentHtml = "",
   assetPrefix,
-  open = false,
+  open = true,
 }) => `
-  <details class="reservation-fee-card" ${detailAttr} ${open ? "open" : ""}>
-    <summary class="reservation-fee-card__summary">
-      <span class="reservation-fee-card__title">${title}</span>
-      <span class="reservation-fee-card__amount is-empty" ${amountAttr}>
-        <span class="reservation-ticket-row__meta-value">-</span>
-        <span class="reservation-fee-card__amount-arrow" aria-hidden="true">→</span>
-        <span class="reservation-ticket-row__meta-value">-</span>
+  <div class="reservation-fee-group" ${detailAttr}>
+    <div class="reservation-fee-group__header" data-fee-group-toggle>
+      <span class="reservation-fee-group__title">${title}</span>
+      <span class="reservation-fee-group__amount" ${amountAttr}>
+        <span class="reservation-ticket-row__meta">
+          <span class="as-is">-</span>
+        </span>
       </span>
-      ${buildIcon(assetPrefix, "iconDropdown.svg")}
-    </summary>
-    <div class="reservation-fee-card__body">
-      <div class="reservation-fee-section">
-        <div class="reservation-fee-section__label">이용권</div>
-        <div class="reservation-fee-section__body">
-          <div class="${ticketsClass}" ${ticketsAttr}></div>
-          <p class="reservation-ticket-placeholder" ${ticketsEmptyAttr} hidden>사용 가능한 이용권이 없습니다.</p>
-        </div>
-      </div>
-      <div class="reservation-fee-section">
-        <div class="reservation-fee-section__label">요금</div>
-        <div class="reservation-fee-section__body">
-          <div class="reservation-fee-list" ${feeListAttr}>-</div>
-        </div>
-      </div>
+      ${buildIcon(assetPrefix, "iconDropdown.svg", "", "reservation-fee-group__arrow")}
     </div>
-  </details>
+    <div class="reservation-fee-group__body" ${open ? "" : "hidden"}>
+      ${contentHtml}
+    </div>
+  </div>
 `;
 
 const buildProgressStep = ({
@@ -142,19 +151,19 @@ export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
     <div class="reservation-progress" data-reservation-progress>
       <span class="reservation-progress__line" aria-hidden="true"></span>
       ${buildProgressStep({
-        index: 1,
-        label: "유치원",
-        assetPrefix,
-        isActive: true,
-        attrs: 'data-reservation-progress-step="1"',
-      })}
+    index: 1,
+    label: "유치원",
+    assetPrefix,
+    isActive: true,
+    attrs: 'data-reservation-progress-step="1"',
+  })}
       <span class="reservation-progress__line" aria-hidden="true"></span>
       ${buildProgressStep({
-        index: 2,
-        label: "픽드랍",
-        assetPrefix,
-        attrs: 'data-reservation-progress-step="2"',
-      })}
+    index: 2,
+    label: "픽드랍",
+    assetPrefix,
+    attrs: 'data-reservation-progress-step="2"',
+  })}
       <span class="reservation-progress__line" aria-hidden="true"></span>
     </div>
   `;
@@ -195,11 +204,11 @@ export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
         <div class="reservation-row__header">
           <div class="reservation-row__label">날짜</div>
           ${buildMiniCalendarControls({
-            prevAttr: "data-mini-prev",
-            currentAttr: "data-mini-current",
-            nextAttr: "data-mini-next",
-            assetPrefix,
-          })}
+    prevAttr: "data-mini-prev",
+    currentAttr: "data-mini-current",
+    nextAttr: "data-mini-next",
+    assetPrefix,
+  })}
         </div>
         <div class="mini-calendar">
           ${buildMiniCalendarDayNames()}
@@ -242,44 +251,94 @@ export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
         </div>
       </div>
     </div>
-  `;
-
-  const feeCardsHtml = `
-    ${buildReservationFeeCard({
-      detailAttr: "data-reservation-fee-school",
-      title: "유치원",
-      amountAttr: "data-reservation-school-total",
-      ticketsClass: "reservation-ticket-list",
-      ticketsAttr: "data-reservation-tickets",
-      ticketsEmptyAttr: "data-reservation-tickets-empty",
-      feeListAttr: "data-reservation-fee-school-list",
-      assetPrefix,
-      open: true,
-    })}
-    ${buildReservationFeeCard({
-      detailAttr: "data-reservation-fee-pickdrop",
-      title: "픽드랍",
-      amountAttr: "data-reservation-pickdrop-total",
-      ticketsClass: "reservation-pickdrop-ticket-list",
-      ticketsAttr: "data-reservation-pickdrop-tickets",
-      ticketsEmptyAttr: "data-reservation-pickdrop-tickets-empty",
-      feeListAttr: "data-reservation-fee-pickdrop-list",
-      assetPrefix,
-    })}
-  `;
-
-  const rightHtml = `
-    <div class="reservation-step reservation-step--fee" data-reservation-step="2">
-      <div class="reservation-fee-total">
-        <span class="reservation-fee-total__label">총 예상 금액</span>
-        <span class="reservation-fee-total__value" data-reservation-total>-</span>
-      </div>
-      <div class="reservation-fee-panel">
-        ${feeCardsHtml}
-      </div>
-    </div>
     ${buildMemoCard("data-reservation-memo")}
   `;
+
+  const feeAreaHtml = `
+    <div class="reservation-step reservation-step--fee" data-reservation-step="2">
+      ${buildReservationFeeCard({
+    detailAttr: 'data-fee-group="total"',
+    title: "총 예상 금액",
+    amountAttr: 'data-reservation-total',
+    assetPrefix,
+    open: true,
+    contentHtml: `
+          <div class="reservation-fee-segments">
+            ${buildReservationFeeSegment({
+      title: "유치원",
+      amountAttr: 'data-reservation-school-fee-total',
+      bodyAttr: 'data-reservation-fee-school-list',
+      assetPrefix,
+    })}
+            ${buildReservationFeeSegment({
+      title: "픽드랍",
+      amountAttr: 'data-reservation-pickdrop-fee-total',
+      bodyAttr: 'data-reservation-fee-pickdrop-list',
+      assetPrefix,
+    })}
+          </div>
+        `,
+  })}
+
+      ${buildReservationFeeCard({
+    detailAttr: 'data-fee-group="payment"',
+    title: "결제",
+    amountAttr: 'data-reservation-payment-total',
+    assetPrefix,
+    open: true,
+    contentHtml: `
+          <div class="reservation-fee-tabs">
+            <div class="reservation-fee-tab-list" role="tablist">
+              <button class="reservation-fee-tab is-active" type="button" role="tab" data-fee-tab="ticket">이용권</button>
+              <button class="reservation-fee-tab" type="button" role="tab" data-fee-tab="other">현장 결제</button>
+            </div>
+            <div class="reservation-fee-tab-panel is-active" data-fee-panel="ticket">
+              <div class="reservation-fee-segments">
+                ${buildReservationFeeSegment({
+      title: "유치원",
+      amountAttr: 'data-reservation-school-ticket-total',
+      contentHtml: `
+                    <div class="reservation-ticket-list" data-reservation-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-reservation-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                  `,
+      assetPrefix,
+    })}
+                ${buildReservationFeeSegment({
+      title: "픽드랍",
+      amountAttr: 'data-reservation-pickdrop-ticket-total',
+      contentHtml: `
+                    <div class="reservation-pickdrop-ticket-list" data-reservation-pickdrop-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-reservation-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                  `,
+      assetPrefix,
+    })}
+              </div>
+            </div>
+            <div class="reservation-fee-tab-panel" data-fee-panel="other" hidden>
+              <div class="reservation-fee-other">
+                <select class="form-field__control" data-reservation-other-type>
+                  <option value="cash">현금</option>
+                  <option value="bank">계좌이체</option>
+                  <option value="card">카드</option>
+                </select>
+                <div class="reservation-fee-other__input-wrapper">
+                  <input type="text" class="form-field__control" placeholder="0" data-reservation-other-amount>
+                  <span class="reservation-fee-other__suffix">원</span>
+                </div>
+              </div>
+              </div>
+            </div>
+          </div>
+        `,
+  })}
+</div>
+  <div class="reservation-fee-balance" data-reservation-fee-balance-row>
+    <span class="reservation-fee-balance__title">잔여</span>
+    <span class="reservation-fee-balance__price" data-reservation-fee-balance-total>0원</span>
+  </div>
+  `;
+
+  const rightHtml = feeAreaHtml;
 
   const footerHtml = `
     <div class="reservation-submit reservation-submit--split">
@@ -308,17 +367,17 @@ export function getHotelingReservationModalMarkup({ assetPrefix = "../../" } = {
     <div class="reservation-progress hoteling-progress">
       <span class="reservation-progress__line" aria-hidden="true"></span>
       ${buildProgressStep({
-        index: 1,
-        label: "호텔링",
-        assetPrefix,
-        isActive: true,
-      })}
+    index: 1,
+    label: "호텔링",
+    assetPrefix,
+    isActive: true,
+  })}
       <span class="reservation-progress__line" aria-hidden="true"></span>
       ${buildProgressStep({
-        index: 2,
-        label: "픽드랍",
-        assetPrefix,
-      })}
+    index: 2,
+    label: "픽드랍",
+    assetPrefix,
+  })}
       <span class="reservation-progress__line" aria-hidden="true"></span>
     </div>
   `;
@@ -346,11 +405,11 @@ export function getHotelingReservationModalMarkup({ assetPrefix = "../../" } = {
         <div class="reservation-row__header">
           <div class="reservation-row__label">날짜</div>
           ${buildMiniCalendarControls({
-            prevAttr: "data-hoteling-modal-prev",
-            currentAttr: "data-hoteling-modal-current",
-            nextAttr: "data-hoteling-modal-next",
-            assetPrefix,
-          })}
+    prevAttr: "data-hoteling-modal-prev",
+    currentAttr: "data-hoteling-modal-current",
+    nextAttr: "data-hoteling-modal-next",
+    assetPrefix,
+  })}
         </div>
         <div class="mini-calendar hoteling-modal-calendar">
           <div class="mini-calendar__grid" data-hoteling-modal-calendar-grid></div>
@@ -373,44 +432,94 @@ export function getHotelingReservationModalMarkup({ assetPrefix = "../../" } = {
         </div>
       </div>
     </section>
+    ${buildMemoCard("data-hoteling-memo")}
   `;
 
-  const feeCardsHtml = `
-    ${buildReservationFeeCard({
-      detailAttr: "data-hoteling-fee-hoteling",
-      title: "호텔링",
-      amountAttr: "data-hoteling-hoteling-total",
-      ticketsClass: "reservation-ticket-list",
-      ticketsAttr: "data-hoteling-tickets",
-      ticketsEmptyAttr: "data-hoteling-tickets-empty",
-      feeListAttr: "data-hoteling-fee-list",
-      assetPrefix,
-      open: true,
-    })}
-    ${buildReservationFeeCard({
-      detailAttr: "data-hoteling-fee-pickdrop",
-      title: "픽드랍",
-      amountAttr: "data-hoteling-pickdrop-total",
-      ticketsClass: "reservation-pickdrop-ticket-list",
-      ticketsAttr: "data-hoteling-pickdrop-tickets",
-      ticketsEmptyAttr: "data-hoteling-pickdrop-tickets-empty",
-      feeListAttr: "data-hoteling-pickdrop-fee-list",
-      assetPrefix,
-    })}
-  `;
-
-  const rightHtml = `
+  const feeAreaHtml = `
     <div class="reservation-step reservation-step--fee hoteling-fee-card">
-      <div class="reservation-fee-total">
-        <span class="reservation-fee-total__label">총 예상 금액</span>
-        <span class="reservation-fee-total__value" data-hoteling-total>-</span>
-      </div>
-      <div class="reservation-fee-panel">
-        ${feeCardsHtml}
-      </div>
-    </div>
-    ${buildMemoCard()}
+      ${buildReservationFeeCard({
+    detailAttr: 'data-fee-group="total"',
+    title: "총 예상 금액",
+    amountAttr: 'data-hoteling-total',
+    assetPrefix,
+    open: true,
+    contentHtml: `
+          <div class="reservation-fee-segments">
+            ${buildReservationFeeSegment({
+      title: "호텔링",
+      amountAttr: 'data-hoteling-hoteling-fee-total',
+      bodyAttr: 'data-hoteling-fee-list',
+      assetPrefix,
+    })}
+            ${buildReservationFeeSegment({
+      title: "픽드랍",
+      amountAttr: 'data-hoteling-pickdrop-fee-total',
+      bodyAttr: 'data-hoteling-pickdrop-fee-list',
+      assetPrefix,
+    })}
+          </div>
+        `,
+  })}
+
+      ${buildReservationFeeCard({
+    detailAttr: 'data-fee-group="payment"',
+    title: "결제",
+    amountAttr: 'data-hoteling-payment-total',
+    assetPrefix,
+    open: true,
+    contentHtml: `
+          <div class="reservation-fee-tabs">
+            <div class="reservation-fee-tab-list" role="tablist">
+              <button class="reservation-fee-tab is-active" type="button" role="tab" data-fee-tab="ticket">이용권</button>
+              <button class="reservation-fee-tab" type="button" role="tab" data-fee-tab="other">현장 결제</button>
+            </div>
+            <div class="reservation-fee-tab-panel is-active" data-fee-panel="ticket">
+              <div class="reservation-fee-segments">
+                ${buildReservationFeeSegment({
+      title: "호텔링",
+      amountAttr: 'data-hoteling-hoteling-ticket-total',
+      contentHtml: `
+                    <div class="reservation-ticket-list" data-hoteling-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-hoteling-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                  `,
+      assetPrefix,
+    })}
+                ${buildReservationFeeSegment({
+      title: "픽드랍",
+      amountAttr: 'data-hoteling-pickdrop-ticket-total',
+      contentHtml: `
+                    <div class="reservation-pickdrop-ticket-list" data-hoteling-pickdrop-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-hoteling-pickdrop-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                  `,
+      assetPrefix,
+    })}
+              </div>
+            </div>
+            <div class="reservation-fee-tab-panel" data-fee-panel="other" hidden>
+              <div class="reservation-fee-other">
+                <select class="form-field__control" data-reservation-other-type>
+                  <option value="cash">현금</option>
+                  <option value="bank">계좌이체</option>
+                  <option value="card">카드</option>
+                </select>
+                <div class="reservation-fee-other__input-wrapper">
+                  <input type="text" class="form-field__control" placeholder="0" data-reservation-other-amount>
+                  <span class="reservation-fee-other__suffix">원</span>
+                </div>
+              </div>
+              </div>
+            </div>
+          </div>
+        `,
+  })}
+</div>
+  <div class="reservation-fee-balance" data-hoteling-fee-balance-row>
+    <span class="reservation-fee-balance__title">잔여</span>
+    <span class="reservation-fee-balance__price" data-hoteling-fee-balance-total>0원</span>
+  </div>
   `;
+
+  const rightHtml = feeAreaHtml;
 
   const footerHtml = `
     <div class="hoteling-modal__actions">

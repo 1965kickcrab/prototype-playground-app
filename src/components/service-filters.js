@@ -1,4 +1,4 @@
-﻿import { syncFilterChip } from "../utils/dom.js";
+import { syncFilterChip } from "../utils/dom.js";
 
 export function setupServiceFilters(container, classes, state) {
   if (!container) {

@@ -9,6 +9,7 @@ import { initOperationsStorage } from "../storage/operations-storage.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { isDayoffDate } from "../utils/dayoff.js";
 import { getReservationEntries } from "../services/reservation-entries.js";
+import { getReservationPaymentStatus } from "../services/reservation-payment-status.js";
 
 function formatDateISO(date) {
   const d = date instanceof Date ? date : new Date(date);
@@ -69,6 +70,17 @@ function emitDateChange(date) {
   );
 }
 
+function getActivePaymentStatuses(state) {
+  const paymentMap = state?.selectedPaymentStatuses;
+  if (!paymentMap || typeof paymentMap !== "object") {
+    return new Set(["paid", "unpaid"]);
+  }
+  const selected = Object.entries(paymentMap)
+    .filter(([, checked]) => checked === true)
+    .map(([status]) => status);
+  return selected.length > 0 ? new Set(selected) : new Set(["paid", "unpaid"]);
+}
+
 export function setupCalendar(state, storage) {
   const calendar = document.querySelector("[data-calendar]");
 
@@ -100,6 +112,7 @@ export function setupCalendar(state, storage) {
     const selectedKey = formatDateISO(state.selectedDate);
     const activeServices = new Set(getActiveServices(state));
     const activeTeachers = new Set(getActiveTeachers(state));
+    const activePayments = getActivePaymentStatuses(state);
     const reservationCounts = getReservationEntries(state.reservations).reduce((acc, entry) => {
       const key = formatDateISO(entry.date);
       if (!key) return acc;
@@ -107,6 +120,8 @@ export function setupCalendar(state, storage) {
       if (!activeServices.has(service)) return acc;
       const teacher = normalizeTeacher(service, state);
       if (!activeTeachers.has(teacher)) return acc;
+      const paymentStatus = getReservationPaymentStatus(entry?.reservation);
+      if (!activePayments.has(paymentStatus)) return acc;
       if (isCanceledStatus(entry.baseStatusKey, entry.statusText, storage)) return acc;
       acc.set(key, (acc.get(key) || 0) + 1);
       return acc;
@@ -243,7 +258,10 @@ export function setupCalendar(state, storage) {
   document.addEventListener("reservation:updated", render);
   document.addEventListener("service-filter:change", render);
   document.addEventListener("teacher-filter:change", render);
+  document.addEventListener("payment-filter:change", render);
   void storage;
 }
+
+
 
 

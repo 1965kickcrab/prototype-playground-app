@@ -1,4 +1,4 @@
-﻿import { WEEKDAY_LABELS, WEEKDAY_ORDER } from "../utils/weekday.js";
+import { WEEKDAY_LABELS, WEEKDAY_ORDER } from "../utils/weekday.js";
 
 function formatNumber(value) {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");

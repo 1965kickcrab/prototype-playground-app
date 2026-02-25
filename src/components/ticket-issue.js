@@ -1,4 +1,4 @@
-﻿import { applyIssueToMembers, loadIssueMembers } from "../storage/ticket-issue-members.js";
+import { applyIssueToMembers, loadIssueMembers } from "../storage/ticket-issue-members.js";
 import {
   getDefaultIssueQuantity,
   computeIssueAvailability,

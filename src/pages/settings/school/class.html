@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -58,29 +58,31 @@
     </aside>
 
     <main class="main">
-      <section class="page-header class-registration__header">
-        <div class="class-registration__title">
-          <h1>반 목록</h1>
-          <p>운영 중인 반을 관리하세요.</p>
-        </div>
-        <div class="page-actions">
-          <button class="primary-button" type="button" data-class-modal-open>반 등록</button>
-        </div>
-      </section>
-      <section class="list-card class-registration__card">
-        <div class="list-table list-table--class" role="table" aria-label="반 목록">
-          <div class="list-table__header" role="row">
-            <span role="columnheader">반 이름</span>
-            <span role="columnheader">담당 선생님</span>
-            <span role="columnheader">정원</span>
-            <span role="columnheader">운영 요일</span>
-            <span role="columnheader">운영 시간</span>
-            <span role="columnheader">소속 회원</span>
-            <span role="columnheader">예약 가능한 이용권</span>
+      <div class="main__content">
+        <section class="page-header class-registration__header">
+          <div class="class-registration__title">
+            <h1>반 목록</h1>
+            <p>운영 중인 반을 관리하세요.</p>
           </div>
-          <div class="list-table__body" data-class-rows></div>
-        </div>
-      </section>
+          <div class="page-actions">
+            <button class="primary-button" type="button" data-class-modal-open>반 등록</button>
+          </div>
+        </section>
+        <section class="list-card class-registration__card">
+          <div class="list-table list-table--class" role="table" aria-label="반 목록">
+            <div class="list-table__header" role="row">
+              <span role="columnheader">반 이름</span>
+              <span role="columnheader">담당 선생님</span>
+              <span role="columnheader">정원</span>
+              <span role="columnheader">운영 요일</span>
+              <span role="columnheader">운영 시간</span>
+              <span role="columnheader">소속 회원</span>
+              <span role="columnheader">예약 가능한 이용권</span>
+            </div>
+            <div class="list-table__body" data-class-rows></div>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
   <div class="modal" data-class-modal aria-hidden="true">

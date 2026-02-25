@@ -12,9 +12,9 @@
   --color-success: #00AA81;
   --color-hover: #E0ECFF;
   --radius-base: 6px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
   --radius-lg: 24px;
-  --radius-md: var(--radius-base);
-  --radius-sm: var(--radius-base);
   --list-table-columns: auto 5fr 3fr 3fr 3fr 10fr;
   --shadow-card: 0 20px 40px rgba(0, 0, 0, 0.06);
   --spacing-1: 4px;

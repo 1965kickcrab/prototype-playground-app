@@ -1,4 +1,4 @@
-﻿import { initTicketStorage } from "../storage/ticket-storage.js";
+import { initTicketStorage } from "../storage/ticket-storage.js";
 import { renderTicketRows } from "../components/ticket-view.js";
 import {
   fillTicketForm,
@@ -14,8 +14,11 @@ import {
 } from "../components/ticket-form.js";
 import { initTicketIssueModal } from "../components/ticket-issue.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
+import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
+import { getTimeZone } from "../utils/timezone.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 import { syncClassesFromTickets } from "../services/class-ticket-sync.js";
 
 const PAGE_SIZE = 10;
@@ -90,6 +93,8 @@ function setupTicketModal(modal, options = {}) {
 
 export function initTicketPage(options = {}) {
   const storage = initTicketStorage();
+  const reservationStorage = initReservationStorage();
+  const timeZone = getTimeZone();
   const classStorage = initClassStorage();
   const roomStorage = initHotelRoomStorage();
   const tickets = storage.ensureDefaults();
@@ -336,6 +341,7 @@ export function initTicketPage(options = {}) {
   });
 
   setupSidebarToggle(options);
+  setupSidebarReservationBadges({ storage: reservationStorage, timeZone });
   updateView();
 }
 

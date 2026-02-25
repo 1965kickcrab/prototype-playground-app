@@ -1,4 +1,4 @@
-﻿import { initClassStorage } from "../../storage/class-storage.js";
+import { initClassStorage } from "../../storage/class-storage.js";
 import { initReservationStorage } from "/src/storage/reservation-storage.js";
 import { initOperationsStorage } from "../../storage/operations-storage.js";
 import { initHotelOperationsStorage } from "../../storage/hotel-operations-storage.js";
@@ -353,7 +353,7 @@ const initClassSettingsPage = () => {
     iconOpen: "../assets/menuIcon_sidebar_open.svg",
     iconClose: "../assets/menuIcon_sidebar_close.svg",
   });
-  setupSidebarGroups();
+  setupSidebarGroups({ navigateToFirstItemOnToggle: true });
   setupClassModal(
     storage,
     classes,

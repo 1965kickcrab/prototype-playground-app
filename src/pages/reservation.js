@@ -6,6 +6,7 @@ import { renderPricingBreakdown, renderPickdropTickets } from "../components/res
 import { renderTicketOptions } from "../components/reservation-ticket-view.js";
 import { renderMemberSearchResults } from "../components/member-search.js";
 import { syncReservationFeeTotal } from "../utils/reservation-fee-total.js";
+import { setupReservationFeeDropdowns } from "../utils/reservation-fee-dropdown.js";
 import { syncFilterChip } from "../utils/dom.js";
 import { isCanceledStatus } from "../utils/status.js";
 import { notifyReservationUpdated } from "../utils/reservation-events.js";
@@ -25,6 +26,7 @@ import {
 } from "../utils/date.js";
 import {
   allocateTicketUsage,
+  buildPickdropUsagePlan,
   getDefaultTicketSelection,
   getIssuedTicketOptions,
   getAutoSelectedDateKeys,
@@ -32,13 +34,33 @@ import {
 } from "../services/ticket-reservation-service.js";
 import { formatTicketPrice, normalizePickdropType } from "../services/ticket-service.js";
 import { getReservationEntries } from "../services/reservation-entries.js";
-import { getMemberReservationConflictDates } from "../services/member-reservation-summary.js";
-import { buildDateTicketUsageMap, buildDateTicketUsagesMap } from "../services/ticket-usage-service.js";
+import {
+  getMemberReservationConflictDates,
+  hasMemberDaycareTimeConflict,
+} from "../services/member-reservation-summary.js";
+import {
+  buildDateTicketUsageMap,
+  buildDateTicketUsagesMap,
+  getEntryTicketUsages,
+  mergeTicketUsagesForDate,
+} from "../services/ticket-usage-service.js";
 import { createId } from "../utils/id.js";
 import {
   getPickdropReservableTotal,
+  normalizePickdropFlags,
   resolvePickdropTicketCountType,
 } from "../services/pickdrop-policy.js";
+import {
+  PAYMENT_METHODS,
+  parsePaymentAmount,
+  normalizeReservationPayment,
+} from "../services/reservation-payment.js";
+import {
+  getDefaultDaycareTimes,
+  getDaycareDurationMinutes,
+} from "../services/daycare-duration.js";
+import { calculateDateEntryFee } from "../services/reservation-date-fee.js";
+import { buildReservationWithBilling } from "../services/reservation-billing.js";
 
 const PICKDROP_OPTIONS = [
   { value: "pickup", label: "픽업" },
@@ -121,12 +143,18 @@ function setCountValue(element, value, options = {}) {
   const numericValue = Number(value);
   const isNumeric = Number.isFinite(numericValue);
   const normalized = isNumeric ? String(numericValue) : String(value);
+  const minDisplayValue = Number(options.minDisplayValue);
+  const hasMinDisplayValue = Number.isFinite(minDisplayValue);
+  const displayNumericValue = isNumeric && hasMinDisplayValue
+    ? Math.max(numericValue, minDisplayValue)
+    : numericValue;
+  const displayText = isNumeric ? String(displayNumericValue) : String(value);
   const shouldMarkExceeded = Boolean(options.negativeAsExceeded && isNumeric && numericValue < 0);
 
   element.dataset.value = normalized;
   element.textContent = shouldMarkExceeded
     ? `초과 ${Math.abs(numericValue)}`
-    : normalized;
+    : displayText;
 
   if (options.negativeClassName) {
     element.classList.toggle(options.negativeClassName, shouldMarkExceeded);
@@ -153,8 +181,8 @@ function getReservationMode(elements) {
     : "school";
 }
 
-function getSelectedServiceType(state, classes, elements) {
-  if (getReservationMode(elements) === "pickdrop") {
+function getSelectedServiceType(state, classes, elements, ignorePickdrop = false) {
+  if (!ignorePickdrop && getReservationMode(elements) === "pickdrop") {
     return "pickdrop";
   }
   const selectedName = Array.from(state.services || [])[0] || "";
@@ -243,7 +271,7 @@ function syncCounts(state, elements, classes = []) {
 
   setCountValue(elements.countCurrent, current);
   setCountValue(elements.countLimit, limit, {
-    negativeAsExceeded: true,
+    minDisplayValue: 0,
     negativeClassName: "is-over-limit",
   });
 
@@ -251,10 +279,14 @@ function syncCounts(state, elements, classes = []) {
   const limitValue = getNumericValue(elements.countLimit, limit);
   const exceedsLimit = currentValue > limitValue;
   const diff = exceedsLimit ? currentValue - limitValue : 0;
+  const shouldHighlightCounts = exceedsLimit
+    && Boolean(state.selectedMember)
+    && state.context !== "hoteling";
 
   elements.countError.hidden = !exceedsLimit;
   elements.countDiff.textContent = diff === 0 ? "" : String(diff);
   elements.overrideCheckbox.disabled = !exceedsLimit;
+  elements.countsSummary?.classList.toggle("is-over-limit", shouldHighlightCounts);
 }
 
 function isSubmitEnabled(state, elements) {
@@ -281,49 +313,18 @@ function syncActionState(state, elements, classes = []) {
   if (submitButton) {
     submitButton.disabled = isPickdropMode ? false : !enabled;
   }
+  const hasMember = Boolean(state.selectedMember);
+  const canGoToPickdrop = hasMember;
   if (pickdropToggle) {
-    pickdropToggle.disabled = !enabled;
+    pickdropToggle.disabled = isPickdropMode ? !enabled : !canGoToPickdrop;
+    if (!isPickdropMode) {
+      pickdropToggle.textContent = activeDates.size > 0 ? "픽드랍까지 예약" : "픽드랍만 예약";
+    }
   }
   if (nextButton) {
     nextButton.disabled = !enabled;
   }
   overrideCheckbox.disabled = !exceedsLimit;
-}
-
-function parseTimeToMinutes(value) {
-  if (!value) {
-    return null;
-  }
-  const [hour, minute] = value.split(":").map((part) => Number.parseInt(part, 10));
-  if (Number.isNaN(hour) || Number.isNaN(minute)) {
-    return null;
-  }
-  return hour * 60 + minute;
-}
-
-function getDaycarePricing(operationsStorage) {
-  const settings = operationsStorage.loadSettings();
-  const pricing = settings.daycarePricing || {};
-  return {
-    hourlyRate: Number(pricing.hourlyRate) || 0,
-    billingUnit: Number(pricing.billingUnit) || 60,
-  };
-}
-
-function calculateDaycareFee(startTime, endTime, pricing) {
-  const startMinutes = parseTimeToMinutes(startTime);
-  const endMinutes = parseTimeToMinutes(endTime);
-  if (startMinutes === null || endMinutes === null) {
-    return 0;
-  }
-  const duration = endMinutes - startMinutes;
-  if (duration <= 0) {
-    return 0;
-  }
-  const unit = pricing.billingUnit || 60;
-  const units = Math.ceil(duration / unit);
-  const fee = units * (pricing.hourlyRate || 0) * (unit / 60);
-  return Math.round(fee);
 }
 
 function isDaycareSelected(state, classes) {
@@ -402,14 +403,16 @@ function getUsedReservationCountByClass(storage, member, selectedServices) {
     return results;
   }
   const reservations = storage?.loadReservations?.() || [];
-  const dogName = member.dogName || "";
-  const owner = member.owner || "";
+  const memberId = String(member.id || "");
+  if (!memberId) {
+    return results;
+  }
   getReservationEntries(reservations).forEach((entry) => {
     const { reservation, className, baseStatusKey, statusText } = entry;
     if (!reservation || isCanceledStatus(baseStatusKey, statusText, storage)) {
       return;
     }
-    if (reservation.dogName !== dogName || reservation.owner !== owner) {
+    if (String(reservation.memberId || "") !== memberId) {
       return;
     }
     if (!selectedServices.has(className)) {
@@ -495,85 +498,6 @@ function getClassRemainingMinimum({
 function getSortedDateKeys(dateSet) {
   return sortDateKeys(Array.from(dateSet || []));
 }
-
-function buildPickdropUsagePlan({
-  dateKeys,
-  pickdropFlags,
-  selectionOrder,
-  optionMap,
-}) {
-  const planByDate = [];
-  const usedByTicket = new Map();
-  const mutableRemaining = new Map();
-  const roundtripTickets = [];
-  const onewayTickets = [];
-  const orderedSelection = Array.isArray(selectionOrder) ? selectionOrder : [];
-
-  orderedSelection.forEach((ticketId) => {
-    const option = optionMap.get(ticketId);
-    if (!option) {
-      return;
-    }
-    const remaining = Number(option.reservableCount ?? option.remainingCount) || 0;
-    if (remaining <= 0) {
-      return;
-    }
-    mutableRemaining.set(ticketId, remaining);
-    const countType = resolvePickdropTicketCountType(option);
-    if (countType === "roundtrip") {
-      roundtripTickets.push(ticketId);
-      return;
-    }
-    onewayTickets.push(ticketId);
-  });
-
-  const pickFrom = (pool, quantity = 1) => {
-    const selected = [];
-    for (let i = 0; i < quantity; i += 1) {
-      const ticketId = pool.find((id) => (mutableRemaining.get(id) || 0) > 0);
-      if (!ticketId) {
-        break;
-      }
-      const before = mutableRemaining.get(ticketId) || 0;
-      mutableRemaining.set(ticketId, Math.max(before - 1, 0));
-      selected.push(ticketId);
-      usedByTicket.set(ticketId, (usedByTicket.get(ticketId) || 0) + 1);
-    }
-    return selected;
-  };
-
-  const dates = Array.isArray(dateKeys) ? dateKeys : [];
-  dates.forEach(() => {
-    const { hasPickup, hasDropoff } = pickdropFlags;
-    if (!hasPickup && !hasDropoff) {
-      planByDate.push([]);
-      return;
-    }
-    if (hasPickup && hasDropoff) {
-      const roundtrip = pickFrom(roundtripTickets, 1);
-      if (roundtrip.length === 1) {
-        planByDate.push(roundtrip);
-        return;
-      }
-      const oneway = pickFrom(onewayTickets, 2);
-      planByDate.push(oneway);
-      return;
-    }
-    const oneway = pickFrom(onewayTickets, 1);
-    if (oneway.length === 1) {
-      planByDate.push(oneway);
-      return;
-    }
-    const fallbackRoundtrip = pickFrom(roundtripTickets, 1);
-    planByDate.push(fallbackRoundtrip);
-  });
-
-  return {
-    planByDate,
-    usedByTicket,
-  };
-}
-
 
 function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}) {
   const { miniGrid, miniCurrent } = elements;
@@ -696,10 +620,11 @@ function hasPickdropPricing(pricingItems, key) {
   );
 }
 
-  function resetForm(state, elements, options = {}) {
-    state.services = new Set();
-    state.pickdrops = new Set();
-    state.selectedMember = null;
+
+function resetForm(state, elements, options = {}) {
+  state.services = new Set();
+  state.pickdrops = new Set();
+  state.selectedMember = null;
   state.selectedDates = new Set();
   state.pickdropDates = new Set();
   state.conflicts = new Set();
@@ -707,10 +632,12 @@ function hasPickdropPricing(pricingItems, key) {
   state.ticketOptions = [];
   state.ticketLimit = RESERVATION_LIMIT;
   state.miniViewDate = new Date();
-    state.autoSelected = false;
-    state.context = "school";
-    state.pickdropSelectionsInitialized = false;
-    state.pickdropDatesInitialized = false;
+  state.autoSelected = false;
+  state.context = "school";
+  state.pickdropSelectionsInitialized = false;
+  state.pickdropDatesInitialized = false;
+  state.daycareDefaultsInitialized = false;
+  state.daycareTimesEdited = false;
   elements.memberInput.value = "";
   elements.memberResults.innerHTML = "";
   elements.overrideCheckbox.checked = false;
@@ -798,7 +725,7 @@ function getMemberTicketClassNames(classes, ticketOptions, serviceOptions) {
   const matched = classes
     .filter((item) =>
       Array.isArray(item.ticketIds)
-        && item.ticketIds.some((ticketId) => availableTicketIds.has(String(ticketId)))
+      && item.ticketIds.some((ticketId) => availableTicketIds.has(String(ticketId)))
     )
     .map((item) => item.name)
     .filter((name) => typeof name === "string" && name.trim().length > 0);
@@ -873,6 +800,14 @@ function applyMemberClassSelection(state, elements, classNames) {
 }
 
 function getConflictDates(state, storage) {
+  const selectedName = Array.from(state?.services || [])[0] || "";
+  if (selectedName) {
+    const classes = initClassStorage().ensureDefaults();
+    const selectedType = classes.find((item) => item.name === selectedName)?.type || "school";
+    if (selectedType === "daycare") {
+      return new Set();
+    }
+  }
   return getMemberReservationConflictDates({
     reservations: storage?.loadReservations?.() || [],
     member: state.selectedMember,
@@ -1005,22 +940,85 @@ function getMemberAutoSelectionOptions(state, classes, timeZone) {
       return [ticket.id, Math.max(remainingAfter, 0)];
     })
   );
-  const candidate = eligibleOptions.find((ticket) => {
+  const candidates = eligibleOptions.filter((ticket) => {
     const remaining = availableMap.get(ticket.id) ?? 0;
     return remaining > 0 && Array.isArray(ticket.weekdays) && ticket.weekdays.length > 0;
   });
-  if (!candidate) {
+  if (candidates.length === 0) {
     return null;
   }
+  let totalCount = 0;
+  const allWeekdays = new Set();
+  candidates.forEach((ticket) => {
+    totalCount += (availableMap.get(ticket.id) ?? 0);
+    ticket.weekdays.forEach((day) => allWeekdays.add(day));
+  });
   return {
-    weekdays: candidate.weekdays,
-    count: availableMap.get(candidate.id) ?? 0,
+    weekdays: Array.from(allWeekdays),
+    count: totalCount,
     startKey: getTodayKey(timeZone),
   };
 }
 
+function getBillingExpectedByDateMap(billing) {
+  const allocationsByDate =
+    billing && typeof billing === "object" && billing.allocationsByDate && typeof billing.allocationsByDate === "object"
+      ? billing.allocationsByDate
+      : {};
+  return Object.entries(allocationsByDate).reduce((acc, [dateKey, allocation]) => {
+    const expected = Number(allocation?.expected);
+    acc.set(dateKey, Number.isFinite(expected) && expected > 0 ? expected : 0);
+    return acc;
+  }, new Map());
+}
+
+function splitPaymentAmountByEntries(totalAmount, entries, expectedByDate) {
+  const safeTotal = Math.max(0, Math.round(Number(totalAmount) || 0));
+  const targetEntries = Array.isArray(entries) ? entries : [];
+  if (safeTotal <= 0 || targetEntries.length === 0) {
+    return targetEntries.map(() => 0);
+  }
+
+  const dateExpectedList = targetEntries.map((entry) => {
+    const dateKey = String(entry?.date || "");
+    const expected = Number(expectedByDate?.get?.(dateKey));
+    return Number.isFinite(expected) && expected > 0 ? expected : 0;
+  });
+  const expectedTotal = dateExpectedList.reduce((sum, expected) => sum + expected, 0);
+
+  if (expectedTotal <= 0) {
+    const baseAmount = Math.floor(safeTotal / targetEntries.length);
+    return targetEntries.map((_, index) =>
+      index === targetEntries.length - 1
+        ? safeTotal - baseAmount * (targetEntries.length - 1)
+        : baseAmount
+    );
+  }
+
+  const splitAmounts = targetEntries.map(() => 0);
+  let assignedTotal = 0;
+  for (let index = 0; index < targetEntries.length - 1; index += 1) {
+    const expected = dateExpectedList[index];
+    const allocated = Math.round((safeTotal * expected) / expectedTotal);
+    splitAmounts[index] = Math.max(0, allocated);
+    assignedTotal += splitAmounts[index];
+  }
+  if (assignedTotal > safeTotal) {
+    let overflow = assignedTotal - safeTotal;
+    for (let index = targetEntries.length - 2; index >= 0 && overflow > 0; index -= 1) {
+      const reducible = Math.min(splitAmounts[index], overflow);
+      splitAmounts[index] -= reducible;
+      overflow -= reducible;
+      assignedTotal -= reducible;
+    }
+  }
+  splitAmounts[targetEntries.length - 1] = Math.max(0, safeTotal - assignedTotal);
+  return splitAmounts;
+}
+
 export function setupReservationModal(state, storage) {
   const openButton = document.querySelector("[data-reservation-open]");
+  const serviceMenu = document.querySelector("[data-reservation-service-menu]");
   const modal = document.querySelector("[data-reservation-modal]");
 
   if (!modal) {
@@ -1035,6 +1033,9 @@ export function setupReservationModal(state, storage) {
   const pricingStorage = initPricingStorage();
   const overlay = modal.querySelector("[data-reservation-overlay]");
   const closeButton = modal.querySelector("[data-reservation-close]");
+  const entryOptionButtons = serviceMenu
+    ? Array.from(serviceMenu.querySelectorAll("[data-reservation-entry-option]"))
+    : [];
   const serviceContainer = modal.querySelector("[data-reservation-services]");
   const ticketContainer = modal.querySelector("[data-reservation-tickets]");
   const ticketPlaceholder = modal.querySelector("[data-reservation-tickets-empty]");
@@ -1052,6 +1053,7 @@ export function setupReservationModal(state, storage) {
   const countError = modal.querySelector("[data-reservation-count-error]");
   const countDiff = modal.querySelector("[data-reservation-count-diff]");
   const overrideCheckbox = modal.querySelector("[data-reservation-override]");
+  const countsSummary = modal.querySelector(".reservation-counts");
   const countsRow = modal.querySelector("[data-reservation-counts-row]");
   const daycareRow = modal.querySelector("[data-reservation-daycare-row]");
   const daycareFeeRow = modal.querySelector("[data-reservation-daycare-fee-row]");
@@ -1060,13 +1062,20 @@ export function setupReservationModal(state, storage) {
   const daycareFeeValue = modal.querySelector("[data-reservation-daycare-fee]");
   const schoolFeeList = modal.querySelector("[data-reservation-fee-school-list]");
   const pickdropFeeList = modal.querySelector("[data-reservation-fee-pickdrop-list]");
-  const schoolTotalValue = modal.querySelector("[data-reservation-school-total]");
-  const pickdropTotalValue = modal.querySelector("[data-reservation-pickdrop-total]");
-  const feeSchoolCard = modal.querySelector("[data-reservation-fee-school]");
-  const feePickdropCard = modal.querySelector("[data-reservation-fee-pickdrop]");
+  const schoolFeeTotal = modal.querySelector("[data-reservation-school-fee-total]"); // New
+  const pickdropFeeTotal = modal.querySelector("[data-reservation-pickdrop-fee-total]"); // New
+  const schoolTicketTotal = modal.querySelector("[data-reservation-school-ticket-total]"); // New
+  const pickdropTicketTotal = modal.querySelector("[data-reservation-pickdrop-ticket-total]"); // New
+  const paymentTotalAll = modal.querySelector("[data-reservation-payment-total]"); // New
+  const otherPaymentType = modal.querySelector("[data-reservation-other-type]");
+  const otherPaymentAmount = modal.querySelector("[data-reservation-other-amount]");
   const pricingTotalValue = modal.querySelector("[data-reservation-total]");
+  const balanceRow = modal.querySelector("[data-reservation-fee-balance-row]");
+  const balanceTotal = modal.querySelector("[data-reservation-fee-balance-total]");
   const pickdropTicketField = modal.querySelector("[data-reservation-pickdrop-tickets]");
   const pickdropTicketEmpty = modal.querySelector("[data-reservation-pickdrop-tickets-empty]");
+  const serviceFeeTitle = modal.querySelector("[data-reservation-service-fee-title]");
+  const serviceTicketTitle = modal.querySelector("[data-reservation-service-ticket-title]");
   const memoInput = modal.querySelector("[data-reservation-memo]");
   const pickdropToggle = modal.querySelector("[data-reservation-pickdrop-toggle]");
   const stepOne = modal.querySelector("[data-reservation-step=\"1\"]");
@@ -1096,6 +1105,7 @@ export function setupReservationModal(state, storage) {
     countError,
     countDiff,
     overrideCheckbox,
+    countsSummary,
     countsRow,
     daycareRow,
     daycareFeeRow,
@@ -1104,13 +1114,20 @@ export function setupReservationModal(state, storage) {
     daycareFeeValue,
     schoolFeeList,
     pickdropFeeList,
-    schoolTotalValue,
-    pickdropTotalValue,
-    feeSchoolCard,
-    feePickdropCard,
+    schoolFeeTotal,
+    pickdropFeeTotal,
+    schoolTicketTotal,
+    pickdropTicketTotal,
+    paymentTotalAll,
+    otherPaymentType,
+    otherPaymentAmount,
     pricingTotalValue,
+    balanceRow,
+    balanceTotal,
     pickdropTicketField,
     pickdropTicketEmpty,
+    serviceFeeTitle,
+    serviceTicketTitle,
     memoInput,
     pickdropToggle,
     stepOne,
@@ -1121,6 +1138,13 @@ export function setupReservationModal(state, storage) {
     nextButton,
     submitButton,
   };
+  const feeDropdownController = setupReservationFeeDropdowns(modal, {
+    iconOpen: "../assets/iconDropdown.svg",
+    iconFold: "../assets/iconDropdown_fold.svg",
+    onTabChanged: () => {
+      syncPricingFee();
+    },
+  });
 
   const formState = {
     services: new Set(),
@@ -1132,6 +1156,8 @@ export function setupReservationModal(state, storage) {
     schoolSelections: [],
     pickdropSelectionsInitialized: false,
     pickdropDatesInitialized: false,
+    daycareDefaultsInitialized: false,
+    daycareTimesEdited: false,
     conflicts: new Set(),
     ticketOptions: [],
     ticketLimit: RESERVATION_LIMIT,
@@ -1146,7 +1172,12 @@ export function setupReservationModal(state, storage) {
 
   const renderContextualLabels = () => {
     const context = formState.context || "school";
-    const baseLabel = context === "hoteling" ? "호텔링 예약" : "유치원 예약";
+    const baseLabel = context === "hoteling"
+      ? "호텔링 예약"
+      : context === "daycare"
+        ? "데이케어 예약"
+        : "유치원 예약";
+    const serviceSegmentLabel = context === "daycare" ? "데이케어" : "유치원";
     if (stepTitle) {
       stepTitle.textContent = modal?.classList?.contains("is-pickdrop")
         ? "픽드랍 예약"
@@ -1155,8 +1186,18 @@ export function setupReservationModal(state, storage) {
     if (progressSteps && progressSteps.length) {
       const firstStepLabel = progressSteps[0].querySelector(".reservation-progress__label");
       if (firstStepLabel) {
-        firstStepLabel.textContent = context === "hoteling" ? "호텔링" : "유치원";
+        firstStepLabel.textContent = context === "hoteling"
+          ? "호텔링"
+          : context === "daycare"
+            ? "데이케어"
+            : "유치원";
       }
+    }
+    if (elements.serviceFeeTitle) {
+      elements.serviceFeeTitle.textContent = serviceSegmentLabel;
+    }
+    if (elements.serviceTicketTitle) {
+      elements.serviceTicketTitle.textContent = serviceSegmentLabel;
     }
     if (modal) {
       if (context) {
@@ -1168,18 +1209,8 @@ export function setupReservationModal(state, storage) {
   };
 
   const syncFeeDisclosure = (isPickdropMode) => {
-    if (elements.feeSchoolCard instanceof HTMLDetailsElement) {
-      elements.feeSchoolCard.open = !isPickdropMode;
-    }
-    if (elements.feePickdropCard instanceof HTMLDetailsElement) {
-      elements.feePickdropCard.open = isPickdropMode;
-    }
-    if (elements.feeSchoolCard) {
-      elements.feeSchoolCard.classList.toggle("is-disabled", isPickdropMode);
-    }
-    if (elements.feePickdropCard) {
-      elements.feePickdropCard.classList.toggle("is-disabled", !isPickdropMode);
-    }
+    // Replaced by segmented layout, but keeping for compatibility if needed.
+    // In new layout, Area 1 (Total) and Area 2 (Payment) are always open.
   };
 
   const setPickdropMode = (enabled, options = {}) => {
@@ -1205,7 +1236,12 @@ export function setupReservationModal(state, storage) {
     if (pickdropToggle) {
       pickdropToggle.classList.toggle("is-active", enabled);
       pickdropToggle.setAttribute("aria-pressed", String(enabled));
-      pickdropToggle.textContent = enabled ? "등록" : "픽드랍까지 예약";
+      if (enabled) {
+        pickdropToggle.textContent = "등록";
+      } else {
+        const activeDates = getActiveDates(formState, elements);
+        pickdropToggle.textContent = activeDates.size > 0 ? "픽드랍까지 예약" : "픽드랍만 예약";
+      }
     }
     if (submitButton) {
       submitButton.textContent = enabled ? "이전" : "등록";
@@ -1223,9 +1259,56 @@ export function setupReservationModal(state, storage) {
       memberResults.classList.remove("is-open");
     }
     syncFeeDisclosure(enabled);
+
+    // Context-aware Fee Segment Folding
+    // Area 2 (Payment) Segments:
+    const schoolTicketSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-school-ticket-total])`);
+    const pickdropTicketSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-pickdrop-ticket-total])`);
+
+    // Area 1 (Fee) Segments:
+    const schoolFeeSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-school-fee-total])`);
+    const pickdropFeeSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-pickdrop-fee-total])`);
+
+    const toggleSegment = (segment, shouldOpen) => {
+      if (!segment) return;
+      const body = segment.querySelector(".reservation-fee-segment__body");
+      const arrow = segment.querySelector(".reservation-fee-segment__arrow");
+      if (body) body.hidden = !shouldOpen;
+      if (arrow) {
+        arrow.src = shouldOpen ? "../assets/iconDropdown.svg" : "../assets/iconDropdown_fold.svg";
+        // Ensure no rotation class conflicts if any
+        arrow.classList.toggle("is-rotated", false);
+      }
+    };
+
     if (enabled) {
+      // Pickdrop Mode: Fold School, Open Pickdrop
+      toggleSegment(schoolTicketSegment, false);
+      toggleSegment(schoolFeeSegment, false);
+
+      toggleSegment(pickdropTicketSegment, true);
+      toggleSegment(pickdropFeeSegment, true);
+    } else {
+      // School Mode: Open School, Fold Pickdrop
+      toggleSegment(schoolTicketSegment, true);
+      toggleSegment(schoolFeeSegment, true);
+
+      toggleSegment(pickdropTicketSegment, false);
+      toggleSegment(pickdropFeeSegment, false);
+    }
+    if (enabled) {
+      formState.schoolSelections = [...formState.ticketSelections];
+      formState.ticketSelections = [];
+
       if (!formState.pickdropDatesInitialized) {
-        formState.pickdropDates = new Set(formState.selectedDates);
+        const pickdropLimit = getPickdropReservableTotal(formState.selectedMember?.totalReservableCountByType);
+        let initialDates = Array.from(formState.selectedDates);
+        initialDates.sort();
+
+        if (Number.isFinite(pickdropLimit) && pickdropLimit > 0 && initialDates.length > pickdropLimit) {
+          initialDates = initialDates.slice(0, pickdropLimit);
+        }
+        formState.pickdropDates = new Set(initialDates);
       }
       formState.conflicts = getConflictDates(formState, storage);
       const pricingItems = pricingStorage.loadPricingItems();
@@ -1370,17 +1453,23 @@ export function setupReservationModal(state, storage) {
     if (!amountEl) {
       return;
     }
-    const values = amountEl.querySelectorAll(".reservation-ticket-row__meta-value");
-    const beforeEl = values[0] || null;
-    const afterEl = values[1] || null;
-    if (!beforeEl || !afterEl) {
-      amountEl.textContent = `${before}${unitLabel} → ${after}${unitLabel}`;
-      return;
+
+    const beforeVal = `${before}${unitLabel}`;
+    let afterVal = `${after}${unitLabel}`;
+    if (after < 0) {
+      afterVal = `초과 ${Math.abs(after)}${unitLabel}`;
     }
-    beforeEl.textContent = `${before}${unitLabel}`;
-    afterEl.textContent = `${after}${unitLabel}`;
-    beforeEl.classList.toggle("is-low", Number(before) <= 2);
-    afterEl.classList.toggle("is-low", Number(after) <= 2);
+    const isBeforeLow = Number(before) <= 2;
+    const isAfterLow = Number(after) <= 2;
+
+    amountEl.innerHTML = `
+      <span class="reservation-ticket-row__meta">
+        <span class="as-is ${isBeforeLow ? "is-low" : ""}">${beforeVal}</span>
+        →
+        <span class="to-be ${isAfterLow ? "is-low" : ""}">${afterVal}</span>
+      </span>
+    `;
+
     amountEl.classList.toggle("is-empty", false);
     delete amountEl.dataset.feeAmount;
   };
@@ -1401,9 +1490,7 @@ export function setupReservationModal(state, storage) {
   };
 
   const applyFeeAmountText = (amountEl) => {
-    if (!amountEl) {
-      return;
-    }
+    if (!amountEl) return;
     const feeAmount = Number(amountEl.dataset.feeAmount);
     const hasFeeAmount = Number.isFinite(feeAmount);
     const text = hasFeeAmount ? formatTicketPrice(Math.max(feeAmount, 0)) : "-";
@@ -1413,73 +1500,105 @@ export function setupReservationModal(state, storage) {
 
   const syncFeeCardState = () => {
     const mode = getReservationMode(elements);
-    const schoolSelectionOrder = mode === "pickdrop"
-      ? formState.schoolSelections
-      : formState.ticketSelections;
-    const pickdropSelectionOrder = mode === "pickdrop"
-      ? formState.ticketSelections
-      : [];
+    const activeDates = getActiveDates(formState, elements);
+    const schoolSelectionOrder = mode === "pickdrop" ? formState.schoolSelections : formState.ticketSelections;
+    const pickdropSelectionOrder = mode === "pickdrop" ? formState.ticketSelections : [];
 
-    const hasSchoolSelection = Array.isArray(schoolSelectionOrder)
-      && schoolSelectionOrder.length > 0;
-    const hasPickdropSelection = Array.isArray(pickdropSelectionOrder)
-      && pickdropSelectionOrder.length > 0;
-
-    if (schoolFeeSection) {
-      schoolFeeSection.classList.toggle("is-disabled", hasSchoolSelection);
-    }
-    if (pickdropFeeSection) {
-      pickdropFeeSection.classList.toggle("is-disabled", hasPickdropSelection);
-    }
+    const hasSchoolSelection = schoolSelectionOrder.length > 0;
+    const hasPickdropSelection = pickdropSelectionOrder.length > 0;
 
     const classes = classStorage.ensureDefaults();
-    const selectedClassType = getSelectedServiceType(formState, classes, elements);
+    const schoolType = getSelectedServiceType(formState, classes, elements, true);
 
-    if (schoolTotalValue) {
+    // 1. School Payment Area (Area 2)
+    if (elements.schoolTicketTotal) {
       if (hasSchoolSelection) {
-        const totals = sumSelectionRemaining(
-          schoolSelectionOrder,
-          formState.schoolAllocationMap,
-          formState.schoolRemainingMap
-        );
-        const totalReservable = formState.selectedMember?.totalReservableCountByType?.[selectedClassType];
-        const beforeValue = Number.isFinite(Number(totalReservable))
-          ? Number(totalReservable)
-          : totals.remainingBefore;
-        setAmountRange(
-          schoolTotalValue,
-          beforeValue,
-          totals.remainingAfter
-        );
+        const totalReservable = formState.selectedMember?.totalReservableCountByType?.[schoolType] || 0;
+        // Use activeDates.size for overbooking calculation
+        const requestedUsage = activeDates.size;
+        setAmountRange(elements.schoolTicketTotal, totalReservable, totalReservable - requestedUsage);
       } else {
-        applyFeeAmountText(schoolTotalValue);
+        elements.schoolTicketTotal.innerHTML = `
+          <span class="reservation-ticket-row__meta">
+            <span class="as-is">-</span>
+          </span>
+        `;
       }
     }
 
-    if (pickdropTotalValue) {
+    // 2. Pickdrop Payment Area (Area 2)
+    if (elements.pickdropTicketTotal) {
       if (hasPickdropSelection) {
         const selectedMeta = getSelectedTicketMetaElement(elements.pickdropTicketField);
-        if (!applyTicketMetaAmount(pickdropTotalValue, selectedMeta)) {
-          const totals = sumSelectionRemaining(
-            pickdropSelectionOrder,
-            formState.pickdropAllocationMap,
-            formState.pickdropRemainingMap
-          );
-          const usage = totals.remainingBefore - totals.remainingAfter;
-          const totalReservable = getPickdropReservableTotal(
-            formState.selectedMember?.totalReservableCountByType
-          );
-          const beforeValue = Number.isFinite(Number(totalReservable))
-            ? Number(totalReservable)
-            : totals.remainingBefore;
+        if (selectedMeta) {
+          applyTicketMetaAmount(elements.pickdropTicketTotal, selectedMeta);
+
+          const totalReservable = getPickdropReservableTotal(formState.selectedMember?.totalReservableCountByType) || 0;
+          // Calculate pickdrop usage
+          const pickdropFlags = normalizePickdropFlags({
+            pickup: formState.pickdrops.has("pickup"),
+            dropoff: formState.pickdrops.has("dropoff"),
+          });
+          const hasAnyPickdrop = pickdropFlags.pickup || pickdropFlags.dropoff;
+          const pickdropUsageCount = hasAnyPickdrop ? formState.pickdropDates?.size || 0 : 0;
           setAmountRange(
-            pickdropTotalValue,
-            beforeValue,
-            beforeValue - usage
+            elements.pickdropTicketTotal,
+            totalReservable,
+            totalReservable - pickdropUsageCount
           );
         }
       } else {
-        applyFeeAmountText(pickdropTotalValue);
+        elements.pickdropTicketTotal.innerHTML = `
+          <span class="reservation-ticket-row__meta">
+            <span class="reservation-ticket-row__meta-value">-</span>
+          </span>
+        `;
+      }
+    }
+
+    // 3. Area 2 Group Total (결제 영역 상단)
+    if (elements.paymentTotalAll) {
+      const activeTab = modal.querySelector(".reservation-fee-tab.is-active")?.dataset.feeTab;
+      if (activeTab === "ticket") {
+        if (hasSchoolSelection || hasPickdropSelection) {
+          elements.paymentTotalAll.textContent = "이용권 사용";
+        } else {
+          elements.paymentTotalAll.textContent = "-";
+        }
+      } else if (activeTab === "other") {
+        const otherInput = modal.querySelector("[data-reservation-other-amount]");
+        // Remove commas before parsing for logic, but for display (if used raw) keep formatting
+        const otherValue = otherInput?.value.replace(/,/g, "") || "0";
+        elements.paymentTotalAll.textContent = `${Number(otherValue).toLocaleString()}원`;
+      }
+    }
+
+    // Sync Balance (잔여)
+    if (elements.balanceTotal) {
+      let totalPricing = parseInt(elements.pricingTotalValue?.dataset.feeAmount || "0", 10);
+      if (totalPricing === 0 && elements.pricingTotalValue?.textContent) {
+        totalPricing = parseInt(elements.pricingTotalValue.textContent.replace(/[^0-9]/g, "") || "0", 10);
+      }
+      const paymentText = elements.paymentTotalAll?.textContent || "0";
+      let paymentAmount = 0;
+
+      // Logic Update: If Ticket is used for payment, Balance should say "이용권 사용"
+      if (paymentText === "이용권 사용") {
+        elements.balanceTotal.textContent = "이용권 사용";
+        elements.balanceRow?.classList.remove("is-positive");
+      } else {
+        // Cash/Card/Transfer payment
+        paymentAmount = parseInt(paymentText.replace(/[^0-9]/g, "") || "0", 10);
+        const balance = totalPricing - paymentAmount;
+        const balanceText = `${balance.toLocaleString()}원`;
+        // Handle negative balance display if needed, or just show signed value
+        elements.balanceTotal.textContent = balanceText; // User reported only minus sign attached, meaning simple calc.
+        // If balance > 0 => Red
+        if (balance > 0) {
+          elements.balanceRow?.classList.add("is-positive");
+        } else {
+          elements.balanceRow?.classList.remove("is-positive");
+        }
       }
     }
   };
@@ -1487,17 +1606,14 @@ export function setupReservationModal(state, storage) {
   const syncPricingFee = () => {
     const mode = getReservationMode(elements);
     const activeDates = getActiveDates(formState, elements);
-    const serviceDates = mode === "pickdrop"
-      ? formState.selectedDates
-      : activeDates;
-    const pickdropDates = mode === "pickdrop"
-      ? formState.pickdropDates
-      : activeDates;
+    const serviceDates = mode === "pickdrop" ? formState.selectedDates : activeDates;
+    const pickdropDates = mode === "pickdrop" ? formState.pickdropDates : activeDates;
+
     renderPricingBreakdown({
       schoolFeeContainer: elements.schoolFeeList,
       pickdropFeeContainer: elements.pickdropFeeList,
-      schoolTotalEl: elements.schoolTotalValue,
-      pickdropTotalEl: elements.pickdropTotalValue,
+      schoolTotalEl: elements.schoolFeeTotal,
+      pickdropTotalEl: elements.pickdropFeeTotal,
       totalEl: elements.pricingTotalValue,
       pricingItems: pricingStorage.loadPricingItems(),
       classes: classStorage.ensureDefaults(),
@@ -1506,24 +1622,50 @@ export function setupReservationModal(state, storage) {
       dateCount: activeDates.size,
       serviceDateCount: serviceDates.size,
       pickdropDateCount: pickdropDates.size,
-      selectedWeekdayCounts: getSelectedWeekdayCounts(
-        serviceDates,
-        timeZone
-      ),
+      selectedWeekdayCounts: getSelectedWeekdayCounts(serviceDates, timeZone),
       memberWeight: formState.selectedMember?.weight,
+      timeZone,
+      serviceTimeRange: {
+        checkinTime: elements.daycareStartTime?.value || "",
+        checkoutTime: elements.daycareEndTime?.value || "",
+      },
+      serviceLabelOverride: formState.context === "daycare" ? "데이케어" : "",
     });
     syncFeeCardState();
-    syncReservationFeeTotal(modal, elements.pricingTotalValue);
+    const feeTotalGroup = modal.querySelector('[data-fee-group="total"]');
+    syncReservationFeeTotal(feeTotalGroup, elements.pricingTotalValue);
+  };
+
+  const applyDaycareDefaultTimes = () => {
+    if (!(elements.daycareStartTime instanceof HTMLInputElement)) {
+      return;
+    }
+    if (!(elements.daycareEndTime instanceof HTMLInputElement)) {
+      return;
+    }
+    if (formState.daycareDefaultsInitialized || formState.daycareTimesEdited) {
+      return;
+    }
+    if (elements.daycareStartTime.value || elements.daycareEndTime.value) {
+      formState.daycareDefaultsInitialized = true;
+      return;
+    }
+    const defaults = getDefaultDaycareTimes(new Date(), timeZone);
+    elements.daycareStartTime.value = defaults.checkinTime;
+    elements.daycareEndTime.value = defaults.checkoutTime;
+    formState.daycareDefaultsInitialized = true;
   };
 
   const syncDaycareUI = () => {
     const classes = classStorage.ensureDefaults();
     const isDaycare = isDaycareSelected(formState, classes);
+    const isDaycareEntryContext = String(formState.context || "") === "daycare";
+    const shouldShowDaycareTimeRow = isDaycare || isDaycareEntryContext;
     if (elements.countsRow) {
-      elements.countsRow.hidden = isDaycare;
+      elements.countsRow.hidden = false;
     }
     if (elements.daycareRow) {
-      elements.daycareRow.hidden = !isDaycare;
+      elements.daycareRow.hidden = !shouldShowDaycareTimeRow;
     }
     if (elements.daycareFeeRow) {
       elements.daycareFeeRow.hidden = !isDaycare;
@@ -1532,14 +1674,27 @@ export function setupReservationModal(state, storage) {
       if (!isDaycare) {
         elements.daycareFeeValue.textContent = "-";
       } else {
-        const pricing = getDaycarePricing(operationsStorage);
-        const fee = calculateDaycareFee(
-          elements.daycareStartTime?.value || "",
-          elements.daycareEndTime?.value || "",
-          pricing
-        );
+        applyDaycareDefaultTimes();
+        const pricingItems = pricingStorage.loadPricingItems();
+        const serviceName = Array.from(formState.services)[0] || "";
+        const classInfo = classes.find((item) => item.name === serviceName) || null;
         const activeDates = getActiveDates(formState, elements);
-        const totalFee = fee * Math.max(activeDates.size, 0);
+        const memberWeight = Number(formState.selectedMember?.weight);
+        const totalFee = Array.from(activeDates).reduce((sum, dateKey) => {
+          const fee = calculateDateEntryFee({
+            dateKey,
+            serviceType: "daycare",
+            classId: String(classInfo?.id || ""),
+            checkinTime: elements.daycareStartTime?.value || "",
+            checkoutTime: elements.daycareEndTime?.value || "",
+            pickup: false,
+            dropoff: false,
+            pricingItems,
+            memberWeight: Number.isFinite(memberWeight) ? memberWeight : null,
+            timeZone,
+          });
+          return sum + fee.daycare;
+        }, 0);
         elements.daycareFeeValue.textContent = formatTicketPrice(totalFee);
       }
     }
@@ -1556,11 +1711,13 @@ export function setupReservationModal(state, storage) {
     if (elements.ticketPlaceholder) {
       elements.ticketPlaceholder.hidden = !formState.selectedMember;
     }
-    const selectedClassType = getSelectedServiceType(formState, classes, elements);
+    const schoolType = getSelectedServiceType(formState, classes, elements, true);
     const totalLimitValue = Number(
-      formState.selectedMember?.totalReservableCountByType?.[selectedClassType]
+      formState.selectedMember?.totalReservableCountByType?.[schoolType]
     );
-    const hasNoReservableTickets = Number.isFinite(totalLimitValue) && totalLimitValue <= 0;
+    const hasNoReservableTickets = mode !== "pickdrop"
+      && Number.isFinite(totalLimitValue)
+      && totalLimitValue <= 0;
     if (hasNoReservableTickets) {
       if (elements.ticketContainer) {
         elements.ticketContainer.textContent = "";
@@ -1593,7 +1750,7 @@ export function setupReservationModal(state, storage) {
       (ticket) => ticket.type === "pickdrop"
     );
     const serviceOptions = eligibleOptions.filter(
-      (ticket) => ticket.type === selectedClassType
+      (ticket) => ticket.type === schoolType
     );
     const displayOptions = serviceOptions;
     const disabledIds = mode === "pickdrop"
@@ -1685,7 +1842,8 @@ export function setupReservationModal(state, storage) {
         schoolAllocationMap,
         Boolean(formState.selectedMember),
         getReservationCount(formState, elements),
-        disabledIds
+        disabledIds,
+        mode === "pickdrop"
       );
       formState.schoolAllocationMap = schoolAllocationMap;
       formState.schoolRemainingMap = schoolRemainingMap;
@@ -1830,13 +1988,13 @@ export function setupReservationModal(state, storage) {
     const autoChanged = mode === "pickdrop" || !shouldAutoSelect
       ? false
       : applyAutoWeekdaySelection(
-          formState,
-          conflicts,
-          timeZone,
-          true,
-          dayoffSettings,
-          autoOverrides || {}
-        );
+        formState,
+        conflicts,
+        timeZone,
+        true,
+        dayoffSettings,
+        autoOverrides || {}
+      );
     renderMiniCalendar(formState, elements, conflicts, {
       dayoffSettings,
       timeZone,
@@ -1945,6 +2103,60 @@ export function setupReservationModal(state, storage) {
     syncPickdropTickets();
   };
 
+  const closeServiceMenu = () => {
+    if (!serviceMenu) {
+      return;
+    }
+    serviceMenu.classList.remove("is-open");
+    serviceMenu.hidden = true;
+    openButton?.setAttribute("aria-expanded", "false");
+  };
+
+  const toggleServiceMenu = () => {
+    if (!serviceMenu) {
+      openModal();
+      return;
+    }
+    const shouldOpen = !serviceMenu.classList.contains("is-open");
+    serviceMenu.classList.toggle("is-open", shouldOpen);
+    serviceMenu.hidden = !shouldOpen;
+    openButton?.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+  };
+
+  const pickServiceNameByType = (targetType) => {
+    const normalizedType = String(targetType || "").trim().toLowerCase();
+    const classes = classStorage.ensureDefaults();
+    const match = classes.find((item) => {
+      const classType = String(item?.type || "").trim().toLowerCase();
+      const className = String(item?.name || "").trim();
+      return classType === normalizedType && className.length > 0;
+    });
+    return match?.name || "";
+  };
+
+  const applyEntryServiceType = (targetType) => {
+    formState.context = String(targetType || "").trim().toLowerCase() === "daycare"
+      ? "daycare"
+      : "school";
+    renderContextualLabels();
+    const serviceName = pickServiceNameByType(targetType);
+    if (!serviceName) {
+      syncDaycareUI();
+      return;
+    }
+    formState.services = new Set([serviceName]);
+    renderServiceOptions(serviceContainer, serviceOptions, formState.services);
+    const conflicts = pruneConflictingDates(formState, storage);
+    formState.conflicts = conflicts;
+    renderMiniCalendar(formState, elements, conflicts, {
+      dayoffSettings: getDayoffSettings(),
+      timeZone,
+      selectedDates: getActiveDates(formState, elements),
+    });
+    syncDaycareUI();
+    refreshTicketOptions(true);
+  };
+
   const openModalFromQuery = () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("reservation") !== "open") {
@@ -1975,7 +2187,39 @@ export function setupReservationModal(state, storage) {
       timeZone,
       getClasses: () => classStorage.ensureDefaults(),
     });
+    renderMemberResults();
     syncPricingFee();
+  };
+
+  const getMemberMaxTicketUsageSequence = (member) => {
+    if (!member) {
+      return 0;
+    }
+    const memberId = String(member.id || "");
+    if (!memberId) {
+      return 0;
+    }
+    const reservations = storage?.loadReservations?.() || [];
+    let maxSequence = 0;
+    reservations.forEach((reservation) => {
+      if (!reservation) {
+        return;
+      }
+      if (String(reservation.memberId || "") !== memberId) {
+        return;
+      }
+      const dateEntries = Array.isArray(reservation.dates) ? reservation.dates : [];
+      dateEntries.forEach((dateEntry) => {
+        const usages = Array.isArray(dateEntry?.ticketUsages) ? dateEntry.ticketUsages : [];
+        usages.forEach((usage) => {
+          const sequence = Number(usage?.sequence);
+          if (Number.isFinite(sequence) && sequence > maxSequence) {
+            maxSequence = sequence;
+          }
+        });
+      });
+    });
+    return maxSequence;
   };
 
   renderServiceOptions(serviceContainer, serviceOptions, formState.services);
@@ -1989,7 +2233,33 @@ export function setupReservationModal(state, storage) {
     selectedDates: getActiveDates(formState, elements),
   });
 
-  openButton?.addEventListener("click", openModal);
+  openButton?.addEventListener("click", (event) => {
+    event.preventDefault();
+    toggleServiceMenu();
+  });
+  entryOptionButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetType = String(button.dataset.reservationEntryOption || "school");
+      closeServiceMenu();
+      formState.context = targetType === "daycare" ? "daycare" : "school";
+      openModal();
+      applyEntryServiceType(targetType);
+    });
+  });
+  document.addEventListener("click", (event) => {
+    if (!serviceMenu?.classList.contains("is-open")) {
+      return;
+    }
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target) {
+      closeServiceMenu();
+      return;
+    }
+    if (target.closest("[data-reservation-open]") || target.closest("[data-reservation-service-menu]")) {
+      return;
+    }
+    closeServiceMenu();
+  });
   overlay?.addEventListener("click", closeModal);
   closeButton?.addEventListener("click", closeModal);
   openModalFromQuery();
@@ -2010,44 +2280,95 @@ export function setupReservationModal(state, storage) {
       ? getReservationCount(formState, elements)
       : activeDates.size;
     const exceedsLimit = currentCount > limit;
-    if (exceedsLimit && !overrideCheckbox.checked) {
+    const allowPickdropOverLimit = includePickdrop && exceedsLimit;
+    if (exceedsLimit && !overrideCheckbox.checked && !allowPickdropOverLimit) {
       syncActionState(formState, elements, classes);
       return;
     }
 
     const isDaycare = isDaycareSelected(formState, classes);
-    const pickdropFlags = includePickdrop
-      ? {
-          hasPickup: formState.pickdrops.has("pickup"),
-          hasDropoff: formState.pickdrops.has("dropoff"),
-        }
-      : {
-          hasPickup: false,
-          hasDropoff: false,
-        };
-    const pricing = getDaycarePricing(operationsStorage);
-    const daycareFee = isDaycare
-      ? calculateDaycareFee(
-          elements.daycareStartTime?.value || "",
-          elements.daycareEndTime?.value || "",
-          pricing
-        )
-      : 0;
+    const daycareStartTime = elements.daycareStartTime?.value || "";
+    const daycareEndTime = elements.daycareEndTime?.value || "";
+    if (isDaycare) {
+      const durationMinutes = getDaycareDurationMinutes(daycareStartTime, daycareEndTime);
+      if (!daycareStartTime || !daycareEndTime) {
+        showToast("데이케어 시작/종료 시간을 입력하세요.");
+        return;
+      }
+      if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+        showToast("데이케어 시간은 시작보다 종료가 늦어야 합니다.");
+        return;
+      }
+      const allReservations = storage?.loadReservations?.() || [];
+      const conflictDateKey = Array.from(activeDates).find((dateKey) =>
+        hasMemberDaycareTimeConflict({
+          reservations: allReservations,
+          member: formState.selectedMember,
+          dateKey,
+          checkinTime: daycareStartTime,
+          checkoutTime: daycareEndTime,
+          storage,
+        })
+      );
+      if (conflictDateKey) {
+        showToast(`데이케어 시간 중복 예약이 있습니다. (${conflictDateKey})`);
+        return;
+      }
+    }
+    const pickdropFlags = {
+      hasPickup: formState.pickdrops.has("pickup"),
+      hasDropoff: formState.pickdrops.has("dropoff"),
+    };
     const reservationDates = [];
+    let nextTicketUsageSequence = getMemberMaxTicketUsageSequence(formState.selectedMember) + 1;
+    const assignNextUsageSequence = (usage) => {
+      if (!usage || !usage.ticketId) {
+        return null;
+      }
+      const sequence = nextTicketUsageSequence;
+      nextTicketUsageSequence += 1;
+      return {
+        ...usage,
+        sequence,
+      };
+    };
+    const assignNextUsageSequences = (usages) => {
+      if (!Array.isArray(usages) || usages.length === 0) {
+        return [];
+      }
+      return usages
+        .map((usage) => assignNextUsageSequence(usage))
+        .filter(Boolean);
+    };
     const memo = memoInput instanceof HTMLTextAreaElement
       ? memoInput.value.trim()
       : "";
+    const activePaymentTab = modal.querySelector(".reservation-fee-tab.is-active")?.dataset?.feeTab || "ticket";
+    const rawMethod = activePaymentTab === "other"
+      ? (elements.otherPaymentType instanceof HTMLSelectElement
+        ? elements.otherPaymentType.value
+        : PAYMENT_METHODS.CASH)
+      : PAYMENT_METHODS.TICKET;
+    const paymentMethod = rawMethod === "bank" ? PAYMENT_METHODS.TRANSFER : rawMethod;
+    const paymentAmount = activePaymentTab === "other"
+      ? parsePaymentAmount(
+        elements.otherPaymentAmount instanceof HTMLInputElement
+          ? elements.otherPaymentAmount.value
+          : 0
+      )
+      : 0;
     const serviceName = Array.from(formState.services)[0] || "";
     const serviceClass = classes.find((item) => item.name === serviceName);
     const primaryServiceType = serviceClass?.type || "school";
+    const serviceClassId = String(serviceClass?.id || "");
+    const pricingItems = pricingStorage.loadPricingItems();
+    const memberWeight = Number(formState.selectedMember?.weight);
     const serviceDates = getSortedDateKeys(formState.selectedDates);
+    const hasAnyPickdrop = pickdropFlags.hasPickup || pickdropFlags.hasDropoff;
     const pickdropDates = includePickdrop
       ? getSortedDateKeys(formState.pickdropDates)
-      : [];
-    const pickdropCount = includePickdrop
-      && (pickdropFlags.hasPickup || pickdropFlags.hasDropoff)
-      ? pickdropDates.length
-      : 0;
+      : (hasAnyPickdrop ? serviceDates : []);
+    const pickdropCount = hasAnyPickdrop ? pickdropDates.length : 0;
     const hasMember = Boolean(formState.selectedMember?.id);
     const optionMap = new Map();
     const usageMap = new Map();
@@ -2163,7 +2484,7 @@ export function setupReservationModal(state, storage) {
       optionMap
     );
 
-    const pickdropDateSet = includePickdrop ? formState.pickdropDates : new Set();
+    const pickdropDateSet = new Set(pickdropDates);
     const getPickdropForDate = (dateKey) => ({
       pickup: Boolean(pickdropFlags.hasPickup && pickdropDateSet.has(dateKey)),
       dropoff: Boolean(pickdropFlags.hasDropoff && pickdropDateSet.has(dateKey)),
@@ -2171,17 +2492,16 @@ export function setupReservationModal(state, storage) {
 
     serviceDates.forEach((dateKey) => {
       const pickdropForDate = getPickdropForDate(dateKey);
-      const serviceUsage = serviceTicketUsageMap.get(dateKey) || null;
+      const serviceUsage = assignNextUsageSequence(serviceTicketUsageMap.get(dateKey) || null);
+      const pickdropUsages = assignNextUsageSequences(pickdropTicketUsagesMap.get(dateKey) || []);
       reservationDates.push({
         date: dateKey,
         class: serviceName,
         service: serviceName,
         baseStatusKey: "PLANNED",
-        statusText: "예약",
         checkinTime: elements.daycareStartTime?.value || "",
         checkoutTime: elements.daycareEndTime?.value || "",
-        daycareFee: isDaycare ? daycareFee : 0,
-        ticketUsages: serviceUsage ? [serviceUsage] : [],
+        ticketUsages: mergeTicketUsagesForDate(serviceUsage, pickdropUsages),
         ...pickdropForDate,
       });
     });
@@ -2197,11 +2517,12 @@ export function setupReservationModal(state, storage) {
           class: "",
           service: "",
           baseStatusKey: "PLANNED",
-          statusText: "예약",
           checkinTime: "",
           checkoutTime: "",
-          daycareFee: 0,
-          ticketUsages: pickdropTicketUsagesMap.get(dateKey) || [],
+          ticketUsages: mergeTicketUsagesForDate(
+            null,
+            assignNextUsageSequences(pickdropTicketUsagesMap.get(dateKey) || [])
+          ),
           ...pickdropForDate,
         });
       });
@@ -2209,29 +2530,125 @@ export function setupReservationModal(state, storage) {
 
     const hasAnyPickup = reservationDates.some((entry) => entry.pickup);
     const hasAnyDropoff = reservationDates.some((entry) => entry.dropoff);
-    const reservationItem = {
+    const classIdByName = new Map(
+      classes.map((item) => [String(item?.name || ""), String(item?.id || "")])
+    );
+    const aggregateReservationDraft = {
       id: createId(),
       type: primaryServiceType,
+      memberId: String(formState.selectedMember?.id || ""),
       class: serviceName,
       service: serviceName,
       baseStatusKey: "PLANNED",
-      statusText: "예약",
-      dogName: formState.selectedMember?.dogName || "",
-      breed: formState.selectedMember?.breed || "",
-      owner: formState.selectedMember?.owner || "",
       memo,
       checkinTime: elements.daycareStartTime?.value || "",
       checkoutTime: elements.daycareEndTime?.value || "",
-      daycareFee: isDaycare ? daycareFee : 0,
       hasPickup: hasAnyPickup,
       hasDropoff: hasAnyDropoff,
       pickupChecked: hasAnyPickup,
       dropoffChecked: hasAnyDropoff,
-      address: "",
       dates: reservationDates,
     };
+    const hasTicketPaymentUsage = reservationDates.some(
+      (entry) => getEntryTicketUsages(entry).length > 0
+    );
+    if (paymentMethod === PAYMENT_METHODS.TICKET) {
+      aggregateReservationDraft.payment = hasTicketPaymentUsage
+        ? normalizeReservationPayment(
+          {
+            method: PAYMENT_METHODS.TICKET,
+            amount: 0,
+          },
+          aggregateReservationDraft
+        )
+        : null;
+    } else {
+      aggregateReservationDraft.payment = paymentAmount > 0
+        ? normalizeReservationPayment(
+          {
+            method: paymentMethod,
+            amount: paymentAmount,
+          },
+          aggregateReservationDraft
+        )
+        : null;
+    }
 
-    state.reservations = persistReservations([reservationItem]);
+    const aggregateReservationWithBilling = buildReservationWithBilling(
+      aggregateReservationDraft,
+      {
+        pricingItems,
+        memberWeight: Number.isFinite(memberWeight) ? memberWeight : null,
+        timeZone,
+        classId: serviceClassId,
+        classIdByName,
+        payment: aggregateReservationDraft.payment,
+      }
+    );
+    const splitDateEntries = Array.isArray(aggregateReservationWithBilling?.dates)
+      ? aggregateReservationWithBilling.dates
+      : [];
+    const expectedByDate = getBillingExpectedByDateMap(aggregateReservationWithBilling?.billing);
+    const splitPaymentAmounts = paymentMethod !== PAYMENT_METHODS.TICKET && paymentAmount > 0
+      ? splitPaymentAmountByEntries(paymentAmount, splitDateEntries, expectedByDate)
+      : splitDateEntries.map(() => 0);
+
+    const splitReservations = splitDateEntries.map((entry, index) => {
+      const entryPickup = Boolean(entry?.pickup);
+      const entryDropoff = Boolean(entry?.dropoff);
+      const entryClass = String(entry?.class || entry?.service || "");
+      const singleReservationDraft = {
+        id: createId(),
+        type: primaryServiceType,
+        memberId: String(formState.selectedMember?.id || ""),
+        class: entryClass,
+        service: entryClass,
+        baseStatusKey: "PLANNED",
+        memo,
+        checkinTime: entry?.checkinTime || "",
+        checkoutTime: entry?.checkoutTime || "",
+        hasPickup: entryPickup,
+        hasDropoff: entryDropoff,
+        pickupChecked: entryPickup,
+        dropoffChecked: entryDropoff,
+        dates: [{ ...entry }],
+      };
+      const hasEntryTicketUsage = getEntryTicketUsages(entry).length > 0;
+      let entryPayment = null;
+      if (paymentMethod === PAYMENT_METHODS.TICKET) {
+        entryPayment = hasEntryTicketUsage
+          ? normalizeReservationPayment(
+            {
+              method: PAYMENT_METHODS.TICKET,
+              amount: 0,
+            },
+            singleReservationDraft
+          )
+          : null;
+      } else {
+        const entryAmount = Number(splitPaymentAmounts[index]) || 0;
+        entryPayment = entryAmount > 0
+          ? normalizeReservationPayment(
+            {
+              method: paymentMethod,
+              amount: entryAmount,
+            },
+            singleReservationDraft
+          )
+          : null;
+      }
+      singleReservationDraft.payment = entryPayment;
+      return buildReservationWithBilling(singleReservationDraft, {
+        pricingItems,
+        memberWeight: Number.isFinite(memberWeight) ? memberWeight : null,
+        timeZone,
+        classId: serviceClassId,
+        classIdByName,
+        payment: entryPayment,
+      });
+    });
+
+    state.reservations = persistReservations(splitReservations);
     if (hasMember && usageMap.size > 0) {
       applyReservationToMemberTickets(formState.selectedMember.id, usageMap);
     }
@@ -2294,6 +2711,10 @@ export function setupReservationModal(state, storage) {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && serviceMenu?.classList.contains("is-open")) {
+      closeServiceMenu();
+      return;
+    }
     if (event.key === "Escape" && modal.classList.contains("is-open")) {
       closeModal();
     }
@@ -2377,6 +2798,29 @@ export function setupReservationModal(state, storage) {
     }
   };
 
+  const handleTicketRowClick = (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target) {
+      return;
+    }
+    if (target instanceof HTMLInputElement && target.matches("[data-reservation-ticket]")) {
+      return;
+    }
+    const row = target.closest(".reservation-ticket-row");
+    if (!row) {
+      return;
+    }
+    const input = row.querySelector("input[data-reservation-ticket]");
+    if (!(input instanceof HTMLInputElement) || input.disabled) {
+      return;
+    }
+    event.preventDefault();
+    input.checked = !input.checked;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  ticketContainer?.addEventListener("click", handleTicketRowClick);
+  elements.pickdropTicketField?.addEventListener("click", handleTicketRowClick);
   ticketContainer?.addEventListener("change", handleTicketSelectionChange);
   elements.pickdropTicketField?.addEventListener("change", handleTicketSelectionChange);
 
@@ -2391,10 +2835,12 @@ export function setupReservationModal(state, storage) {
   });
 
   elements.daycareStartTime?.addEventListener("input", () => {
+    formState.daycareTimesEdited = true;
     syncDaycareUI();
   });
 
   elements.daycareEndTime?.addEventListener("input", () => {
+    formState.daycareTimesEdited = true;
     syncDaycareUI();
   });
 
@@ -2404,6 +2850,7 @@ export function setupReservationModal(state, storage) {
   });
 
   memberInput?.addEventListener("focus", () => {
+    renderMemberResults();
     elements.memberResults?.classList.add("is-open");
   });
 
@@ -2524,6 +2971,32 @@ export function setupReservationModal(state, storage) {
     }
     setPickdropMode(true, options);
   };
+
+  modal.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.matches("[data-reservation-other-amount]")) {
+      // Input Formatting
+      let value = event.target.value.replace(/[^0-9]/g, "");
+      if (value) {
+        // Prevent infinite loop by checking if value actually changed
+        const formatted = parseInt(value, 10).toLocaleString();
+        if (event.target.value !== formatted) {
+          event.target.value = formatted;
+        }
+      } else {
+        if (event.target.value !== "") event.target.value = "";
+      }
+      syncPricingFee();
+    }
+  });
+
+  // Initialize form
+  resetForm(formState, elements, {
+    dayoffSettings: getDayoffSettings(),
+    timeZone,
+    getClasses: () => classStorage.ensureDefaults(),
+  });
+  feeDropdownController.reset();
+  setPickdropMode(false);
 
   return {
     openModal,

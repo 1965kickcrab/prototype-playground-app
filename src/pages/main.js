@@ -8,9 +8,12 @@ import { setupList } from "../components/list.js";
 import { setupReservationModal } from "./reservation.js";
 import { setupFilterPanel } from "../components/filter-panel.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
+import { getTimeZone } from "../utils/timezone.js";
+import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
 
 document.addEventListener("DOMContentLoaded", () => {
   const storage = initReservationStorage();
+  const timeZone = getTimeZone();
   const classStorage = initClassStorage();
   const hotelRoomStorage = initHotelRoomStorage();
   const classes = classStorage.ensureDefaults();
@@ -34,12 +37,20 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedServices[name] = true;
   });
   const selectedTeachers = {};
-  const existingReservations = storage.loadReservations().filter(r => r.type === 'school');
+  const selectedPaymentStatuses = {
+    paid: true,
+    unpaid: true,
+  };
+  const existingReservations = storage.loadReservations().filter(
+    (r) => r?.type === "school" || r?.type === "daycare"
+  );
   const state = initState(existingReservations, {
     selectedServices,
     defaultService,
     serviceOptions: classNames,
     selectedTeachers,
+    selectedPaymentStatuses,
+    paymentStatusOptions: ["paid", "unpaid"],
     classTeachers,
   });
   const filterPanel = document.querySelector("[data-filter-panel]");
@@ -51,7 +62,10 @@ document.addEventListener("DOMContentLoaded", () => {
     iconOpen: "../assets/menuIcon_sidebar_open.svg",
     iconClose: "../assets/menuIcon_sidebar_close.svg",
   });
+  setupSidebarReservationBadges({ storage, timeZone });
   setupReservationModal(state, storage);
 });
+
+
 
 

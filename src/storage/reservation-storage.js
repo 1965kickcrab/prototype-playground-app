@@ -1,5 +1,12 @@
 import { readStorageArray, writeStorageValue } from "./storage-utils.js";
 import { createId } from "../utils/id.js";
+import { normalizeReservationPayment } from "../services/reservation-payment.js";
+import { syncReservationBillingCache } from "../services/reservation-billing.js";
+import {
+  loadMemberReservationIndex,
+  rebuildMemberReservationIndex,
+  saveMemberReservationIndex,
+} from "./member-reservation-index-storage.js";
 
 const UNIFIED_STORAGE_KEY = "reservations";
 
@@ -86,6 +93,15 @@ function normalizeTimeOrNull(value) {
   return trimmed ? trimmed : null;
 }
 
+function hasPersistablePayment(payment) {
+  if (!payment || typeof payment !== "object") {
+    return false;
+  }
+  const method = String(payment.method || "").trim();
+  const amount = Number(payment.amount);
+  return method.length > 0 || (Number.isFinite(amount) && amount > 0);
+}
+
 /**
  * Normalizes a reservation from either the old daycare or old hoteling format
  * into the new unified format.
@@ -93,6 +109,7 @@ function normalizeTimeOrNull(value) {
 function normalizeReservation(item = {}) {
   const isHoteling = item.type === "hoteling" || item.room;
   const id = item.id || createId();
+  const memberId = String(item.memberId || "").trim();
 
   let type, dates, service, room, memo;
 
@@ -113,7 +130,6 @@ function normalizeReservation(item = {}) {
             date: d.date,
             kind: d.kind, // 'checkin', 'checkout', 'stay'
             baseStatusKey: entryStatusKey,
-            statusText: STATUS[entryStatusKey], // Ensure statusText is set
             ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
             ...normalizePickdropFlags(d, item),
             checkinTime: normalizeTimeOrNull(
@@ -140,12 +156,11 @@ function normalizeReservation(item = {}) {
         // Prioritize baseStatusKey, then statusText, then fallback
         const rawStatus = d.baseStatusKey || d.statusText;
         const statusKey = STATUS_KEY_MAP[rawStatus] || "PLANNED";
-        
+
         return {
             date: d.date,
             service: d.service || service,
             baseStatusKey: statusKey,
-            statusText: STATUS[statusKey], // Ensure statusText is synced with key
             ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
             ...normalizePickdropFlags(d, item),
             checkinTime: normalizeTimeOrNull(d.checkinTime ?? item.checkinTime),
@@ -154,25 +169,47 @@ function normalizeReservation(item = {}) {
     });
   }
 
-  return {
+  const reservation = {
     id,
     type,
-    dogName: item.dogName || "",
-    owner: item.owner || "",
-    breed: item.breed || "",
+    memberId,
     memo,
     service,
     room,
     dates,
   };
+  const normalized = {
+    ...reservation,
+    billing: item?.billing && typeof item.billing === "object"
+      ? item.billing
+      : null,
+    payment: hasPersistablePayment(item.payment)
+      ? normalizeReservationPayment(item.payment, reservation)
+      : null,
+  };
+  return syncReservationBillingCache(normalized);
 }
 
 function readReservations() {
-  return readStorageArray(UNIFIED_STORAGE_KEY);
+  const reservations = readStorageArray(UNIFIED_STORAGE_KEY);
+  const orderedReservations = Array.isArray(reservations)
+    ? reservations.map((item) => normalizeReservation(item))
+    : [];
+  const shouldRewrite = JSON.stringify(orderedReservations) !== JSON.stringify(reservations);
+  if (shouldRewrite) {
+    writeStorageValue(UNIFIED_STORAGE_KEY, orderedReservations);
+  }
+  const index = loadMemberReservationIndex();
+  const isIndexMissing = !index || !index.updatedAt;
+  if (isIndexMissing) {
+    saveMemberReservationIndex(rebuildMemberReservationIndex(orderedReservations));
+  }
+  return orderedReservations;
 }
 
 function writeReservations(reservations) {
   writeStorageValue(UNIFIED_STORAGE_KEY, reservations);
+  saveMemberReservationIndex(rebuildMemberReservationIndex(reservations));
 }
 
 export function initReservationStorage() {

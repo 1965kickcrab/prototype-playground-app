@@ -1,5 +1,6 @@
 export function setupSidebarGroups(options = {}) {
   const root = options.root instanceof Element ? options.root : document;
+  const navigateToFirstItemOnToggle = options.navigateToFirstItemOnToggle === true;
   const groups = Array.from(root.querySelectorAll("[data-sidebar-group]"));
 
   if (groups.length === 0) {
@@ -36,6 +37,24 @@ export function setupSidebarGroups(options = {}) {
     applyState(group, expanded);
   });
 
+  const activateFirstGroupItem = (group) => {
+    const firstItem = group.querySelector(".sidebar__group-list .sidebar__nav-item--sub[href]");
+    if (!(firstItem instanceof HTMLAnchorElement)) {
+      return false;
+    }
+
+    applyState(group, true);
+
+    const nextUrl = new URL(firstItem.getAttribute("href"), window.location.href);
+    const currentUrl = new URL(window.location.href);
+    if (nextUrl.href === currentUrl.href) {
+      return true;
+    }
+
+    window.location.href = nextUrl.href;
+    return true;
+  };
+
   root.addEventListener("click", (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
@@ -47,6 +66,9 @@ export function setupSidebarGroups(options = {}) {
     }
     const group = toggle.closest("[data-sidebar-group]");
     if (!group) {
+      return;
+    }
+    if (navigateToFirstItemOnToggle && activateFirstGroupItem(group)) {
       return;
     }
     const expanded = toggle.getAttribute("aria-expanded") !== "true";

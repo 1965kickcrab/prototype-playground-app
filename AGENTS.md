@@ -61,7 +61,7 @@ my-project/
 - Single responsibility per function
 - Event delegation preferred
 - Reuse existing class names
-- UTF-8 encoding mandatory
+- Encoding: ALWAYS use UTF-8 **(without BOM)**
 - Do not change Korean UI text arbitrarily
 
 ### 5. Design Rules
@@ -83,33 +83,57 @@ my-project/
 - Default behavior: If no timezone is specified, assume **Asia/Seoul (UTC+9)**.
 
 ### 8. Agent Behavior Rules (Must Obey)
-- **Scope**: Only requested features. No refactors or new libraries without instruction.
-- **TODO Workflow**:
+- **Scope**:
+  - Only implement explicitly requested features.
+  - No refactors, renaming, structural reorganization, or new libraries unless explicitly instructed.
+
+- **Task Classification (Mandatory Check Before Work)**:
+  - Level 1 — Micro Fix:
+    - Single file change
+    - No state/schema/storage modification
+    - No cross-page impact
+    → TODO.md NOT required
+  - Level 2 — Local Feature Change:
+    - 2–3 related files
+    - Event flow or condition logic changes
+    - No storage schema change
+    → Short TODO entry required (bullet-level)
+  - Level 3 — Structural / State Change:
+    - localStorage schema change
+    - State model modification
+    - Shared component/service responsibility change
+    - Cross-page impact
+    → Full TODO workflow mandatory
+
+- **TODO Workflow (Only for Level 2 & 3)**:
   - Write in English.
-  - Write tasks to `TODO.md` before execution if decisions or sequencing exist.  
-  - Execute only listed tasks.  
-  - New step found → STOP and update `TODO.md`.
-- **TODO Structure**:  
-  - Do not change headers. Modify items only.  
-  - On completion: remove items from **Active Tasks**, add to **Completed**.  
+  - Execute only listed tasks.
+  - If new structural step is discovered → STOP and update TODO.md.
+  - Minor implementation detail discovery does NOT require STOP.
+
+- **TODO Structure**:
+  - Do not change headers.
+  - Modify items only.
+  - On completion:
+    - Remove from Active Tasks
+    - Add to Completed
   - No duplication across sections.
-- **Current Focus**:  
-  - Exactly **one active task** at all times.  
-  - Update immediately on focus change or completion.
-- **Completed & History**:  
-  - **Completed = latest 5 items only**.  
-  - Older items → `history/HISTORY.md` (append-only).  
-  - Sync to `CHANGELOG.md`; rules → `history/DECISIONS.md`.
-- **Size Limits**:  
-  - Keep `TODO.md` and `HISTORY.md` ≤ 200 lines; archive older entries.
+
+- **Focus Rule**:
+  - Level 3: Exactly one active structural task.
+  - Level 1–2: Multiple micro tasks allowed.
 
 ### 9. History System (Agent-Optimized)
-- The agent-loaded history file is `history/HISTORY.md` ONLY. Keep it short (≤200 lines).
-- Do NOT append detailed logs to `history/HISTORY.md`. Put details in `history/archive/YYYY-MM.md`.
-- All stable rules/policies/“why” decisions must be recorded in `history/DECISIONS.md` using `DR-###` format:
+- Only structural or behavior-impacting changes go to HISTORY.md.
+- Micro UI/text/style fixes do NOT require HISTORY entry.
+- The agent-loaded history file is `history/HISTORY.md` ONLY (≤200 lines).
+- Detailed logs → `history/archive/YYYY-MM.md`.
+- Stable architectural decisions → `history/DECISIONS.md` using DR-### format:
   - What / Rationale / Implication
-- When editing history docs:
-  - Never invent entries; derive from actual changes only.
-  - Preserve original dates in archives.
-  - Use consistent tags: [reservation] [ticket] [hoteling] [pickdrop] [settings] [storage] [ui] [bugfix]
-- Prefer referencing archives by link/pointer instead of copying content into HISTORY.md.
+
+- Never invent entries.
+- Preserve original dates in archives.
+- Use consistent tags:
+  [reservation] [ticket] [hoteling] [pickdrop] [settings] [storage] [ui] [bugfix]
+
+- Prefer linking archives instead of copying into HISTORY.md.

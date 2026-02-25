@@ -1,4 +1,4 @@
-﻿import { initOperationsStorage } from "../../storage/operations-storage.js";
+import { initOperationsStorage } from "../../storage/operations-storage.js";
 import { initHotelOperationsStorage } from "../../storage/hotel-operations-storage.js";
 import { setupSidebarGroups } from "../../utils/sidebar-groups.js";
 import { POLICY_SECTIONS } from "../../config/policy-sections.js";
@@ -23,7 +23,7 @@ function getPoliciesFromForm(sectionMap) {
 }
 
 function setupPolicyPage() {
-  setupSidebarGroups();
+  setupSidebarGroups({ navigateToFirstItemOnToggle: true });
   const isHotel = document.body?.dataset?.settingsScope === "hotel";
   const storage = isHotel ? initHotelOperationsStorage() : initOperationsStorage();
   const page = document.querySelector("[data-policy-page]");

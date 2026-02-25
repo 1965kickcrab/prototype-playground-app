@@ -3,6 +3,19 @@
 Human-friendly release notes. This file is intentionally brief.
 
 ## Unreleased
+- [reservation][billing][pickdrop][bugfix] School/daycare normal `등록` now persists selected pickdrop flags on service dates, aligning stored `reservations[].billing.totals.expected` with modal 총 예상 금액 composition; hoteling create/detail-save parity was validated on existing `buildReservationWithBilling(...)` paths.
+- [settings][ui][bugfix] Fixed pricing popup row click behavior where selection toggled back on mouseup by handling row toggle on `pointerdown` and preventing click double-toggle.
+- [settings][ui][bugfix] In pricing form `상품 연동` popup, each class/room row is now directly selectable (mouse and keyboard) without requiring `전체 선택`.
+- [settings][ui] In pricing form `상품 연동` popup, each class/room option row now uses a bordered card style with explicit selected-state highlight to improve row distinction.
+- [reservation][pickdrop][storage][ticket][bugfix] In school/daycare pickdrop mode, reservation save is now allowed even when pickdrop availability is 0/negative (no override required), so pickup/dropoff reservation data and pickdrop reserved counts are still produced.
+- [storage][ticket][count] Member count-map normalization now guarantees numeric defaults (`0`) for all service keys, including `oneway`/`roundtrip`, instead of null/missing values.
+- [hoteling][reservation][pickdrop][ticket][bugfix] Hoteling reservation save now writes pickdrop `ticketUsages[]` per date entry and merges them with hoteling service usage so reservation-level `ticketId/sequence` tracking remains consistent.
+- [reservation][pickdrop][ticket][bugfix] Reservation save now merges service and pickdrop `ticketUsages` on the same date entry, so pickdrop tickets are counted in `reservedCount/reservableCount` when pickup/dropoff is selected on school/daycare dates.
+- [reservation][pickdrop][service] Added manual-only utility `pickdrop-usage-repair-service` for selective pickdrop usage reconstruction; no automatic backfill is performed.
+- [ticket][storage][count] `recalculateTicketCounts()` now matches reservation owners using `dogName/owner` with `petName/guardianName` fallback to prevent missed member aggregation.
+- [ticket][storage][count] `totalReservableCountByType` now uses `Σ(ticket.totalCount by type) - totalReservedCountByType`, allowing negative values for overbooked reservations.
+- [ticket][reservation][count] `totalReservedCountByType` now counts all non-canceled reservation entries by type (including overbooked reservations without `ticketUsages`).
+- [ticket][storage][count] Added `memberList.totalReservedCountByType` to keep per-type reserved aggregates in member maps.
 - [hoteling][ui][cleanup] Consolidated hoteling page controller to `src/pages/hotels.js` and removed duplicate `src/services/hotels.js` to avoid split maintenance.
 - [reservation][storage][cleanup] Removed legacy unified-reservation migration bootstrap (`migrateToUnifiedReservations`) and old key references (`daycare-reservations:reservations`, `hoteling-reservations:reservations`) from app startup/storage flow.
 - [ticket][storage][count][bugfix] Member count maps now use ticket aggregation as single source: `totalReservableCountByType=ΣreservableCount`, `remainingCountByType=Σ(totalCount-usedCount)`; status/issue delta updates no longer mutate member maps directly.

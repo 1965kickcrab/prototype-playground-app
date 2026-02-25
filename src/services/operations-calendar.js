@@ -1,4 +1,4 @@
-﻿import {
+import {
   buildMonthCells,
   compareDateKeys,
   getWeekdayIndex,

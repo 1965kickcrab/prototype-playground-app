@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -58,54 +58,56 @@
     </aside>
 
     <main class="main">
-      <section class="settings-section">
-        <div class="settings-card">
-          <div class="settings-card__header">
-            <div class="settings-card__icon">
-              <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+      <div class="main__content">
+        <section class="settings-section">
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <div class="settings-card__icon">
+                <img src="../../../../assets/iconTime.svg" alt="" aria-hidden="true">
+              </div>
+              <div>
+                <h2>정기 영업 설정</h2>
+                <p>휴무일에 예정된 예약은 모두 취소되고, 회원의 이용권 횟수는 원복됩니다.</p>
+              </div>
             </div>
-            <div>
-              <h2>정기 영업 설정</h2>
-              <p>휴무일에 예정된 예약은 모두 취소되고, 회원의 이용권 횟수는 원복됩니다.</p>
+            <div class="settings-card__body">
+              <div class="toggle-list" data-weekday-toggles></div>
+              <label class="checkbox-row">
+                <input type="checkbox" data-public-holiday>
+                <span class="checkbox-row__box" aria-hidden="true"></span>
+                <span class="checkbox-row__label">공휴일 휴무</span>
+                <span class="checkbox-row__hint">임시 공휴일을 포함한 공휴일은 쉬어요.</span>
+              </label>
             </div>
           </div>
-          <div class="settings-card__body">
-            <div class="toggle-list" data-weekday-toggles></div>
-            <label class="checkbox-row">
-              <input type="checkbox" data-public-holiday>
-              <span class="checkbox-row__box" aria-hidden="true"></span>
-              <span class="checkbox-row__label">공휴일 휴무</span>
-              <span class="checkbox-row__hint">임시 공휴일을 포함한 공휴일은 쉬어요.</span>
-            </label>
-          </div>
-        </div>
 
-        <div class="settings-card">
-          <div class="settings-card__header">
-            <div class="settings-card__icon">
-              <img src="../../../../assets/iconDayoff.svg" alt="" aria-hidden="true">
+          <div class="settings-card">
+            <div class="settings-card__header">
+              <div class="settings-card__icon">
+                <img src="../../../../assets/iconDayoff.svg" alt="" aria-hidden="true">
+              </div>
+              <div>
+                <h2>임시 휴무일 설정</h2>
+                <p>과거 날짜는 설정을 변경할 수 없습니다.</p>
+              </div>
             </div>
-            <div>
-              <h2>임시 휴무일 설정</h2>
-              <p>과거 날짜는 설정을 변경할 수 없습니다.</p>
+            <div class="settings-card__body">
+              <div class="dayoff-toolbar">
+                <button class="month-button month-button--prev" type="button" aria-label="이전 월" data-dayoff-prev>
+                  <img class="month-button__icon" src="../../../../assets/iconChevronLeft.svg" alt="" aria-hidden="true">
+                </button>
+                <div class="dayoff-toolbar__current" data-dayoff-current>0000년 0월</div>
+                <button class="month-button month-button--next" type="button" aria-label="다음 월" data-dayoff-next>
+                  <img class="month-button__icon" src="../../../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+                </button>
+              </div>
+              <div class="dayoff-calendar" data-dayoff-calendar></div>
             </div>
           </div>
-          <div class="settings-card__body">
-            <div class="dayoff-toolbar">
-              <button class="month-button month-button--prev" type="button" aria-label="이전 월" data-dayoff-prev>
-                <img class="month-button__icon" src="../../../../assets/iconChevronLeft.svg" alt="" aria-hidden="true">
-              </button>
-              <div class="dayoff-toolbar__current" data-dayoff-current>0000년 0월</div>
-              <button class="month-button month-button--next" type="button" aria-label="다음 월" data-dayoff-next>
-                <img class="month-button__icon" src="../../../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
-              </button>
-            </div>
-            <div class="dayoff-calendar" data-dayoff-calendar></div>
-          </div>
+        </section>
+        <div class="settings-save">
+          <button class="primary-button" type="button" data-operations-save>저장</button>
         </div>
-      </section>
-      <div class="settings-save">
-        <button class="primary-button" type="button" data-operations-save>저장</button>
       </div>
     </main>
   </div>

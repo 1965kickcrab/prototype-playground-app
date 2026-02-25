@@ -1,4 +1,4 @@
-﻿import { syncFilterChip } from "../utils/dom.js";
+import { syncFilterChip } from "../utils/dom.js";
 
 export function renderHotelingRoomOptions(root, rooms, options = {}) {
   const container = root?.querySelector?.("[data-hoteling-room-options]");

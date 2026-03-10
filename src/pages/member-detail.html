@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 회원 상세</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sidebar__brand">
+        <img class="sidebar__brand-icon" src="../../assets/logoImg.svg" alt="다이얼독 비즈">
+        <img class="sidebar__brand-text" src="../../assets/logoText.svg" alt="다이얼독 비즈 텍스트">
+      </div>
+      <div class="sidebar__profile">
+        <div class="sidebar__profile-avatar" aria-hidden="true">
+          <img src="../../assets/defaultProfile.svg" alt="">
+        </div>
+        <div class="sidebar__profile-text">
+          <span class="sidebar__profile-name">다이얼독</span>
+          <span class="sidebar__profile-role">애견유치원</span>
+        </div>
+      </div>
+      <nav class="sidebar__nav" aria-label="주요 메뉴">
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_Graph.svg" alt="" aria-hidden="true">
+          <span>대시보드</span>
+        </a>
+        <a class="sidebar__nav-item" href="../../public/index.html">
+          <img src="../../assets/menuIcon_daycare.svg" alt="" aria-hidden="true">
+          <span>유치원</span>
+          <span class="sidebar__nav-badge" data-sidebar-school-count>0</span>
+        </a>
+        <a class="sidebar__nav-item" href="hotels.html">
+          <img src="../../assets/menuIcon_hotel.svg" alt="" aria-hidden="true">
+          <span>호텔링</span>
+          <span class="sidebar__nav-badge" data-sidebar-hoteling-count>0</span>
+        </a>
+        <a class="sidebar__nav-item" href="#">
+          <img src="../../assets/menuIcon_report.svg" alt="" aria-hidden="true">
+          <span>알림장</span>
+        </a>
+        <a class="sidebar__nav-item sidebar__nav-item--active" href="members.html">
+          <img src="../../assets/menuIcon_member.svg" alt="" aria-hidden="true">
+          <span>회원</span>
+        </a>
+        <a class="sidebar__nav-item" href="tickets.html">
+          <img src="../../assets/menuIcon_ticket.svg" alt="" aria-hidden="true">
+          <span>이용권</span>
+        </a>
+        <a class="sidebar__nav-item" href="pricing.html">
+          <span>요금표</span>
+        </a>
+      </nav>
+      <div class="sidebar__footer">
+        <div class="sidebar__footer-links">
+          <a href="#">개인정보 처리방침</a>
+          <a href="#">이용약관</a>
+          <a href="#">문의</a>
+        </div>
+        <p class="sidebar__footer-copy">© 2025 Kickcrab. All rights reserved.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="topbar__left">
+          <div class="topbar__toggle-wrap">
+            <button class="icon-button icon-button--secondary" data-sidebar-toggle aria-expanded="true" aria-label="사이드바 토글">
+              <img data-sidebar-toggle-icon src="../../assets/menuIcon_sidebar_close.svg" alt="" aria-hidden="true">
+            </button>
+            <span class="sidebar__nav-badge topbar__today-badge" data-topbar-today-badge hidden data-topbar-today-count>0</span>
+          </div>
+        </div>
+        <div class="topbar__actions">
+          <a class="icon-button" aria-label="설정" href="settings/school/operations.html">
+            <img src="../../assets/menuIcon_setting.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="알림" href="#">
+            <img src="../../assets/menuIcon_notification.svg" alt="" aria-hidden="true">
+          </a>
+          <a class="icon-button" aria-label="프로필" href="#">
+            <img src="../../assets/menuIcon_profile.svg" alt="" aria-hidden="true">
+          </a>
+        </div>
+      </header>
+
+      <div class="main__content member-detail">
+        <section class="page-header ticket-header">
+          <div class="ticket-header__title member-detail__title">
+            <button class="icon-button icon-button--secondary" type="button" data-member-detail-back aria-label="뒤로가기">
+              <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
+            </button>
+            <h1>회원 상세</h1>
+          </div>
+          <div class="page-actions">
+            <button class="primary-button" type="button" data-member-detail-issue>이용권 지급</button>
+          </div>
+        </section>
+
+        <section class="list-card member-detail__summary">
+          <div class="member-detail__profile">
+            <div class="member-detail__avatar" aria-hidden="true">
+              <img src="../../assets/defaultProfile_dog.svg" alt="">
+            </div>
+            <div class="member-detail__profile-text">
+              <strong data-member-dog-name>-</strong>
+              <span data-member-breed>-</span>
+              <div class="member-detail__summary-tags" data-member-pet-tags hidden></div>
+            </div>
+          </div>
+          <div class="member-detail__status member-detail__status--normal" data-member-status>
+            <span class="member-detail__status-label">예약 가능</span>
+            <strong data-member-reservable-count>0회</strong>
+          </div>
+        </section>
+
+        <section class="member-detail__tabs" aria-label="회원 상세 탭">
+          <button class="member-detail__tab is-active" type="button">회원 정보</button>
+          <button class="member-detail__tab" type="button" disabled>이용권 내역</button>
+        </section>
+
+        <section class="member-detail__panel">
+          <article class="list-card member-detail__section">
+            <h2>메모</h2>
+            <textarea class="form-field__control" rows="4" readonly data-member-memo placeholder="성격, 알러지 등 필요한 내용 입력 (최대 500자)"></textarea>
+          </article>
+
+          <article class="list-card member-detail__section">
+            <div class="member-detail__section-title">
+              <h2>보호자 정보</h2>
+              <button class="icon-button member-detail__edit-button" type="button" aria-label="보호자 정보 수정" data-member-detail-edit="guardian">
+                <img src="../../assets/iconEdit.svg" alt="" aria-hidden="true">
+              </button>
+            </div>
+            <div class="member-detail__grid">
+              <div>
+                <span>보호자</span>
+                <div class="member-detail__owner-inline">
+                  <strong data-member-owner>-</strong>
+                  <div class="member-detail__owner-tags" data-member-owner-tags hidden></div>
+                </div>
+              </div>
+              <div><span>연락처</span><strong data-member-phone>-</strong></div>
+              <div><span>주소</span><strong data-member-address>-</strong></div>
+            </div>
+          </article>
+
+          <article class="list-card member-detail__section">
+            <div class="member-detail__section-title">
+              <h2>반려견 세부 정보</h2>
+              <button class="icon-button member-detail__edit-button" type="button" aria-label="반려견 세부 정보 수정" data-member-detail-edit="pet">
+                <img src="../../assets/iconEdit.svg" alt="" aria-hidden="true">
+              </button>
+            </div>
+            <div class="member-detail__grid">
+              <div><span>생년월일</span><strong data-member-birth-date>-</strong></div>
+              <div><span>동물등록번호</span><strong data-member-registration>-</strong></div>
+              <div><span>털색</span><strong data-member-coat-color>-</strong></div>
+              <div><span>몸무게</span><strong data-member-weight>-</strong></div>
+              <div><span>성별</span><strong data-member-gender>-</strong></div>
+            </div>
+          </article>
+
+          <article class="list-card member-detail__section">
+            <div class="member-detail__section-head">
+              <h2>형제 자매견</h2>
+              <button class="button-secondary button-secondary--small" type="button" disabled>추가 등록</button>
+            </div>
+            <div class="member-detail__siblings" data-member-siblings></div>
+          </article>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="modal" data-member-ticket-issue-modal aria-hidden="true">
+    <div class="modal__overlay" data-member-ticket-issue-overlay></div>
+    <div class="modal__dialog member-ticket-issue-modal" role="dialog" aria-modal="true" aria-labelledby="member-ticket-issue-title">
+      <div class="modal__header">
+        <h2 id="member-ticket-issue-title">이용권 지급</h2>
+        <button class="icon-button modal__close" type="button" data-member-ticket-issue-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body member-ticket-issue">
+        <div class="member-ticket-issue__summary">
+          <div class="member-ticket-issue__summary-row">
+            <span>회원</span>
+            <strong data-member-ticket-issue-member>-</strong>
+          </div>
+          <div class="member-ticket-issue__summary-row">
+            <span>예약 가능</span>
+            <strong data-member-ticket-issue-reservable>0회</strong>
+          </div>
+        </div>
+        <div class="member-ticket-issue__title">이용권 목록</div>
+        <div class="member-ticket-issue__table" role="table" aria-label="이용권 목록">
+          <div class="member-ticket-issue__header" role="row">
+            <span role="columnheader">
+              <input type="checkbox" data-member-ticket-issue-select-all aria-label="전체 선택">
+            </span>
+            <span role="columnheader">이용권</span>
+            <span role="columnheader">총횟수</span>
+            <span role="columnheader">유효기간</span>
+            <span role="columnheader">가격</span>
+            <span role="columnheader">수량</span>
+          </div>
+          <div class="member-ticket-issue__body" data-member-ticket-issue-rows></div>
+        </div>
+        <div class="member-ticket-issue__actions">
+          <button class="primary-button member-ticket-issue__submit" type="button" data-member-ticket-issue-submit disabled>지급</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal" data-member-detail-edit-modal aria-hidden="true">
+    <div class="modal__overlay" data-member-detail-edit-overlay></div>
+    <div class="modal__dialog member-edit-modal" role="dialog" aria-modal="true" aria-labelledby="member-detail-edit-title">
+      <div class="modal__header">
+        <h2 id="member-detail-edit-title" data-member-detail-edit-title>회원 정보 수정</h2>
+        <button class="icon-button modal__close" type="button" data-member-detail-edit-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body member-edit-modal__body">
+        <div class="member-edit-modal__member" data-member-detail-edit-member>-</div>
+        <div class="member-edit-modal__fields" data-member-detail-edit-fields></div>
+        <div class="member-edit-modal__actions">
+          <button class="button-secondary" type="button" data-member-detail-edit-cancel>취소</button>
+          <button class="primary-button" type="button" data-member-detail-edit-save>저장</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./member-detail-page.js"></script>
+</body>
+</html>

@@ -15,7 +15,7 @@
         <a class="icon-button icon-button--secondary" aria-label="뒤로 가기" href="../../../../public/index.html">
           <img src="../../../../assets/iconBack.svg" alt="" aria-hidden="true">
         </a>
-        <span class="sidebar__title">환경 설정</span>
+        <span class="sidebar__title">센터 설정</span>
       </div>
       <nav class="sidebar__nav" aria-label="주요 메뉴">
         <div class="sidebar__group" data-sidebar-group>
@@ -90,54 +90,195 @@
           <img src="../../../../assets/iconClose.svg" alt="" aria-hidden="true">
         </button>
       </div>
+      <div class="room-form__name-field">
+        <label class="form-field form-field--full">
+          <span class="form-field__label">호실 이름</span>
+          <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
+        </label>
+      </div>
+      <div class="modal-tabs" role="tablist" aria-label="호실 등록 탭">
+        <button class="modal-tab is-active" type="button" role="tab" aria-selected="true" data-class-tab="basic">기본 정보</button>
+        <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
+        <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="pricing">요금 정보</button>
+      </div>
       <div class="modal__body">
+        <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
+          <div class="settings-modal-form">
+            <label class="form-field form-field--full">
+              <span class="form-field__label">호실 설명</span>
+              <textarea class="form-field__control" rows="3" placeholder="호실 특징을 입력해주세요." data-class-description></textarea>
+            </label>
+          </div>
+        </div>
+        <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
           <div class="settings-modal-form">
             <label class="form-field">
-              <span class="form-field__label">호실 이름</span>
-              <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
-            </label>
-              <label class="form-field">
                 <span class="form-field__label form-field__label--inline">
-                    <span>호실 수</span>
+                  <span>호실 수</span>
                   <span class="tooltip-icon" role="img" aria-label="회원 앱에서 예약 가능한 최대 인원" data-tooltip="회원 앱에서 예약 가능한 최대 인원">i</span>
                 </span>
                 <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
-              </label>
-              <label class="form-field form-field--full">
-                <span class="form-field__label">체중 제한</span>
-                <div class="pricing-weight-range">
-                  <div class="pricing-weight-field">
-                    <div class="ticket-input-group">
-                      <input class="form-field__control" type="number" min="0" placeholder="0" data-class-weight-min>
-                      <span class="ticket-input-suffix">이상</span>
-                    </div>
-                  </div>
-                  <span class="pricing-weight-tilde">~</span>
-                  <div class="pricing-weight-field">
-                    <div class="ticket-input-group">
-                      <input class="form-field__control" type="number" min="0" placeholder="0" data-class-weight-max>
-                      <span class="ticket-input-suffix">미만</span>
-                    </div>
-                  </div>
-                </div>
-              </label>
-              <label class="form-field form-field--full" data-class-tickets-section>
-                <div class="class-ticket-stack settings-selection-stack">
-                  <div class="form-field__label form-field__label--row">
-                    <span>예약 가능한 이용권</span>
-                    <span class="class-ticket-actions settings-selection-actions">
-                      <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
-                      <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
-                    </span>
-                  </div>
-                  <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
-                </div>
             </label>
-          <label class="form-field form-field--full">
-            <span class="form-field__label">호실 설명</span>
-            <textarea class="form-field__control" rows="3" placeholder="호실 특징을 입력해주세요." data-class-description></textarea>
-          </label>
-
+            <label class="form-field form-field--full" data-class-tickets-section>
+              <div class="class-ticket-stack settings-selection-stack">
+                <div class="form-field__label form-field__label--row">
+                  <span>예약 가능한 이용권</span>
+                  <span class="class-ticket-actions settings-selection-actions">
+                    <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+                    <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+                  </span>
+                </div>
+                <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+              </div>
+            </label>
+          </div>
+        </div>
+        <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="pricing" hidden>
+          <div class="settings-modal-form">
+            <section class="room-pricing-editor" data-room-pricing-editor>
+              <div class="room-pricing-editor__header">
+                <span class="form-field__label">요금 구간</span>
+                <button class="button-secondary button-secondary--small" type="button" data-room-pricing-add-segment>구간 추가</button>
+              </div>
+              <div class="room-pricing-range" data-room-pricing-range>
+                <div class="room-pricing-range__scale">
+                  <span>0kg</span>
+                  <span>99kg</span>
+                </div>
+                <div class="room-pricing-range__track" data-room-pricing-track></div>
+              </div>
+              <div class="room-pricing-table" role="table" aria-label="요금 구간">
+                <div class="room-pricing-table__header" role="row">
+                  <span role="columnheader">이상</span>
+                  <span role="columnheader">미만</span>
+                  <span role="columnheader">요금</span>
+                  <span role="columnheader" aria-label="삭제"></span>
+                </div>
+                <div class="room-pricing-table__body" data-room-pricing-rows></div>
+              </div>
+            </section>
+            <div class="form-field form-field--full">
+              <div class="room-pricing-extra">
+                <div class="room-pricing-extra__toggle">
+                  <span class="form-field__label">요일별 추가 요금</span>
+                  <label class="toggle-row toggle-row--compact">
+                    <span>추가 요금 사용</span>
+                    <input type="checkbox" aria-label="추가 요금 사용" data-room-pricing-extra-enabled>
+                    <span class="toggle-switch" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="room-pricing-extra__toggle" data-room-pricing-extra-mode-toggle>
+                  <span class="form-field__label"></span>
+                  <div class="room-pricing-extra__mode-toggle" role="tablist" aria-label="요일별 설정">
+                    <button
+                      class="room-pricing-extra__mode-option is-selected"
+                      type="button"
+                      role="tab"
+                      aria-selected="true"
+                      data-room-pricing-extra-mode="grouped"
+                    >간단</button>
+                    <button
+                      class="room-pricing-extra__mode-option"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-room-pricing-extra-mode="daily"
+                    >요일별</button>
+                  </div>
+                </div>
+                <div class="room-pricing-extra__row" data-room-pricing-extra-grouped>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">주중 (일~목)</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="weekday">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">주말 (금, 토)</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="weekend">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">공휴일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="holiday">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                </div>
+                <div class="room-pricing-extra__row room-pricing-extra__row--daily" data-room-pricing-extra-daily hidden>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">월</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="mon">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">화</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="tue">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">수</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="wed">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">목</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="thu">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">금</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="fri">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">토</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="sat">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="sun">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">공휴일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="holidayDaily">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-field form-field--full">
+              <span class="form-field__label">VAT 별도</span>
+              <label class="toggle-row pricing-vat-toggle room-pricing-vat-toggle">
+                <input type="checkbox" aria-label="VAT 별도" data-room-pricing-vat>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="settings-modal-form">
           <div class="reservation-submit form-field--full">
             <button class="primary-button" type="button" data-class-submit>등록</button>
           </div>
@@ -154,36 +295,34 @@
           <img src="../../../../assets/iconClose.svg" alt="" aria-hidden="true">
         </button>
       </div>
+      <div class="room-form__name-field">
+        <label class="form-field form-field--full">
+          <span class="form-field__label">호실 이름</span>
+          <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
+        </label>
+      </div>
+      <div class="modal-tabs" role="tablist" aria-label="호실 상세 탭">
+        <button class="modal-tab is-active" type="button" role="tab" aria-selected="true" data-class-tab="basic">기본 정보</button>
+        <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="reservation">예약 설정</button>
+        <button class="modal-tab" type="button" role="tab" aria-selected="false" data-class-tab="pricing">요금 정보</button>
+      </div>
       <div class="modal__body">
-        <div class="settings-modal-form">
-          <label class="form-field">
-            <span class="form-field__label">호실 이름</span>
-            <input class="form-field__control" type="text" placeholder="예: 스탠다드호실" data-class-name>
-          </label>
+        <div class="modal-tab-panel is-active" role="tabpanel" data-class-tab-panel="basic">
+          <div class="settings-modal-form">
+            <label class="form-field form-field--full">
+              <span class="form-field__label">호실 설명</span>
+              <textarea class="form-field__control" rows="3" placeholder="호실 특징을 입력해주세요." data-class-description></textarea>
+            </label>
+          </div>
+        </div>
+        <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="reservation" hidden>
+          <div class="settings-modal-form">
             <label class="form-field">
               <span class="form-field__label form-field__label--inline">
-                  <span>호실 수</span>
+                <span>호실 수</span>
                 <span class="tooltip-icon" role="img" aria-label="회원 앱에서 예약 가능한 최대 인원" data-tooltip="회원 앱에서 예약 가능한 최대 인원">i</span>
               </span>
               <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
-            </label>
-            <label class="form-field form-field--full">
-              <span class="form-field__label">체중 제한</span>
-              <div class="pricing-weight-range">
-                <div class="pricing-weight-field">
-                  <div class="ticket-input-group">
-                    <input class="form-field__control" type="number" min="0" placeholder="0" data-class-weight-min>
-                    <span class="ticket-input-suffix">이상</span>
-                  </div>
-                </div>
-                <span class="pricing-weight-tilde">~</span>
-                <div class="pricing-weight-field">
-                  <div class="ticket-input-group">
-                    <input class="form-field__control" type="number" min="0" placeholder="0" data-class-weight-max>
-                    <span class="ticket-input-suffix">미만</span>
-                  </div>
-                </div>
-              </div>
             </label>
             <label class="form-field form-field--full" data-class-tickets-section>
               <div class="class-ticket-stack settings-selection-stack">
@@ -196,12 +335,155 @@
                 </div>
                 <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
               </div>
-          </label>
-          <label class="form-field form-field--full">
-            <span class="form-field__label">호실 설명</span>
-            <textarea class="form-field__control" rows="3" placeholder="호실 특징을 입력해주세요." data-class-description></textarea>
-          </label>
-
+            </label>
+          </div>
+        </div>
+        <div class="modal-tab-panel" role="tabpanel" data-class-tab-panel="pricing" hidden>
+          <div class="settings-modal-form">
+            <section class="room-pricing-editor" data-room-pricing-editor>
+              <div class="room-pricing-editor__header">
+                <span class="form-field__label">요금 구간</span>
+                <button class="button-secondary button-secondary--small" type="button" data-room-pricing-add-segment>구간 추가</button>
+              </div>
+              <div class="room-pricing-range" data-room-pricing-range>
+                <div class="room-pricing-range__scale">
+                  <span>0kg</span>
+                  <span>99kg</span>
+                </div>
+                <div class="room-pricing-range__track" data-room-pricing-track></div>
+              </div>
+              <div class="room-pricing-table" role="table" aria-label="요금 구간">
+                <div class="room-pricing-table__header" role="row">
+                  <span role="columnheader">이상</span>
+                  <span role="columnheader">미만</span>
+                  <span role="columnheader">요금</span>
+                  <span role="columnheader" aria-label="삭제"></span>
+                </div>
+                <div class="room-pricing-table__body" data-room-pricing-rows></div>
+              </div>
+            </section>
+            <div class="form-field form-field--full">
+              <div class="room-pricing-extra">
+                <div class="room-pricing-extra__toggle">
+                  <span class="form-field__label">요일별 추가 요금</span>
+                  <label class="toggle-row toggle-row--compact">
+                    <span>추가 요금 사용</span>
+                    <input type="checkbox" aria-label="추가 요금 사용" data-room-pricing-extra-enabled>
+                    <span class="toggle-switch" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="room-pricing-extra__toggle" data-room-pricing-extra-mode-toggle>
+                  <span class="form-field__label"></span>
+                  <div class="room-pricing-extra__mode-toggle" role="tablist" aria-label="요일별 설정">
+                    <button
+                      class="room-pricing-extra__mode-option is-selected"
+                      type="button"
+                      role="tab"
+                      aria-selected="true"
+                      data-room-pricing-extra-mode="grouped"
+                    >간단</button>
+                    <button
+                      class="room-pricing-extra__mode-option"
+                      type="button"
+                      role="tab"
+                      aria-selected="false"
+                      data-room-pricing-extra-mode="daily"
+                    >요일별</button>
+                  </div>
+                </div>
+                <div class="room-pricing-extra__row" data-room-pricing-extra-grouped>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">주중 (일~목)</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="weekday">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">주말 (금, 토)</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="weekend">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">공휴일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="holiday">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                </div>
+                <div class="room-pricing-extra__row room-pricing-extra__row--daily" data-room-pricing-extra-daily hidden>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">월</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="mon">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">화</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="tue">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">수</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="wed">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">목</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="thu">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">금</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="fri">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">토</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="sat">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="sun">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                  <label class="room-pricing-extra__item">
+                    <span class="room-pricing-extra__name">공휴일</span>
+                    <span class="ticket-input-group">
+                      <input class="form-field__control" type="text" inputmode="numeric" placeholder="0" data-room-pricing-extra-fee="holidayDaily">
+                      <span class="ticket-input-suffix">원</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="form-field form-field--full">
+              <span class="form-field__label">VAT 별도</span>
+              <label class="toggle-row pricing-vat-toggle room-pricing-vat-toggle">
+                <input type="checkbox" aria-label="VAT 별도" data-room-pricing-vat>
+                <span class="toggle-switch" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="settings-modal-form">
           <div class="reservation-submit form-field--full">
             <button class="button-secondary button-secondary--danger" type="button" data-class-delete>삭제</button>
             <button class="primary-button" type="button" data-class-update>수정</button>
@@ -213,13 +495,3 @@
   <script type="module" src="../class-settings.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-

@@ -109,6 +109,53 @@ export function collectTicketIds(root) {
     .filter((value) => value);
 }
 
+function collectRoomPricingExtraFees(root) {
+  const result = {};
+  root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    const key = input.dataset.roomPricingExtraFee || "";
+    if (!key) {
+      return;
+    }
+    result[key] = input.value.trim();
+  });
+  return result;
+}
+
+function hasAnyExtraFeeValue(extraFees) {
+  if (!extraFees || typeof extraFees !== "object") {
+    return false;
+  }
+  return Object.values(extraFees).some((value) => String(value ?? "").trim() !== "");
+}
+
+export function syncRoomPricingExtraModeVisibility(root) {
+  const enabledToggle = root.querySelector("[data-room-pricing-extra-enabled]");
+  const modeToggleRow = root.querySelector("[data-room-pricing-extra-mode-toggle]");
+  const customModeButton = root.querySelector(
+    "[data-room-pricing-extra-mode='daily'].is-selected"
+  );
+  const groupedSection = root.querySelector("[data-room-pricing-extra-grouped]");
+  const dailySection = root.querySelector("[data-room-pricing-extra-daily]");
+  const isEnabled = enabledToggle instanceof HTMLInputElement
+    ? enabledToggle.checked
+    : false;
+  const isCustom = customModeButton instanceof HTMLButtonElement;
+
+  if (modeToggleRow) {
+    modeToggleRow.hidden = !isEnabled;
+  }
+
+  if (groupedSection) {
+    groupedSection.hidden = !isEnabled || isCustom;
+  }
+  if (dailySection) {
+    dailySection.hidden = !isEnabled || !isCustom;
+  }
+}
+
 export function updateMemberSelectAllState(root) {
   const button = root.querySelector("[data-class-member-select-all]");
   if (!button) {
@@ -209,19 +256,39 @@ export function collectClassFormData(root, config) {
   const capacity = Number.parseInt(capacityValue, 10);
   if (config.isHotelScope) {
     const weightMinValue =
-      root.querySelector("[data-class-weight-min]")?.value.trim() || "";
+      root.querySelector("[data-room-pricing-weight-min]")?.value.trim() || "";
     const weightMaxValue =
-      root.querySelector("[data-class-weight-max]")?.value.trim() || "";
+      root.querySelector("[data-room-pricing-weight-max]")?.value.trim() || "";
+    const pricingPrice =
+      root.querySelector("[data-room-pricing-price]")?.value.trim() || "";
+    const pricingVatSeparate =
+      root.querySelector("[data-room-pricing-vat]")?.checked || false;
+    const pricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]")?.checked
+      || false;
+    const pricingExtraMode = root.querySelector(
+      "[data-room-pricing-extra-mode='daily'].is-selected"
+    )
+      ? "daily"
+      : "grouped";
+    const pricingExtraFees = collectRoomPricingExtraFees(root);
     const weightMin = Number.parseFloat(weightMinValue);
     const weightMax = Number.parseFloat(weightMaxValue);
     return {
       name,
       capacity: Number.isNaN(capacity) ? 0 : capacity,
       description,
-      weightMin: Number.isNaN(weightMin) ? "" : weightMin,
-      weightMax: Number.isNaN(weightMax) ? "" : weightMax,
       ticketIds,
       type: classType,
+      pricing: {
+        weightMin: Number.isNaN(weightMin) ? "" : weightMin,
+        weightMax: Number.isNaN(weightMax) ? "" : weightMax,
+        weekdays: [],
+        price: pricingPrice,
+        vatSeparate: pricingVatSeparate,
+        extraFeeEnabled: pricingExtraEnabled,
+        extraFeeMode: pricingExtraMode,
+        extraFees: pricingExtraFees,
+      },
     };
   }
 
@@ -287,7 +354,7 @@ export function updateClassTypeVisibility(root, classType) {
     memberSection.hidden = isDaycare;
   }
   if (ticketSection) {
-    ticketSection.hidden = isDaycare;
+    ticketSection.hidden = false;
   }
 }
 
@@ -296,8 +363,10 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
   const teacher = root.querySelector("[data-class-teacher]");
   const capacity = root.querySelector("[data-class-capacity]");
   const description = root.querySelector("[data-class-description]");
-  const weightMin = root.querySelector("[data-class-weight-min]");
-  const weightMax = root.querySelector("[data-class-weight-max]");
+  const roomPricingWeightMin = root.querySelector("[data-room-pricing-weight-min]");
+  const roomPricingWeightMax = root.querySelector("[data-room-pricing-weight-max]");
+  const roomPricingPrice = root.querySelector("[data-room-pricing-price]");
+  const roomPricingVat = root.querySelector("[data-room-pricing-vat]");
   const startTime = root.querySelector("[data-class-start]");
   const endTime = root.querySelector("[data-class-end]");
   const holidayInput = root.querySelector("[data-class-public-holiday]");
@@ -318,12 +387,35 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
   if (description) {
     description.value = "";
   }
-  if (weightMin) {
-    weightMin.value = "";
+  if (roomPricingWeightMin) {
+    roomPricingWeightMin.value = "";
   }
-  if (weightMax) {
-    weightMax.value = "";
+  if (roomPricingWeightMax) {
+    roomPricingWeightMax.value = "";
   }
+  if (roomPricingPrice) {
+    roomPricingPrice.value = "";
+  }
+  if (roomPricingVat) {
+    roomPricingVat.checked = false;
+  }
+  const roomPricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]");
+  if (roomPricingExtraEnabled instanceof HTMLInputElement) {
+    roomPricingExtraEnabled.checked = false;
+  }
+  root.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const isSelected = button.dataset.roomPricingExtraMode === "grouped";
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-selected", String(isSelected));
+  });
+  root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
+    if (input instanceof HTMLInputElement) {
+      input.value = "";
+    }
+  });
   if (startTime) {
     startTime.value = "09:00";
   }
@@ -340,18 +432,21 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
   if (holidayInput) {
     holidayInput.checked = Boolean(holidayDefault);
   }
+  syncRoomPricingExtraModeVisibility(root);
   updateClassTypeVisibility(root, defaultClassType);
   applyMemberSelection(root, []);
   applyTicketSelection(root, []);
 }
 
-export function fillClassForm(root, classItem, holidayDefault, defaultClassType) {
+export function fillClassForm(root, classItem, holidayDefault, defaultClassType, pricingItem = null) {
   const name = root.querySelector("[data-class-name]");
   const teacher = root.querySelector("[data-class-teacher]");
   const capacity = root.querySelector("[data-class-capacity]");
   const description = root.querySelector("[data-class-description]");
-  const weightMin = root.querySelector("[data-class-weight-min]");
-  const weightMax = root.querySelector("[data-class-weight-max]");
+  const roomPricingWeightMin = root.querySelector("[data-room-pricing-weight-min]");
+  const roomPricingWeightMax = root.querySelector("[data-room-pricing-weight-max]");
+  const roomPricingPrice = root.querySelector("[data-room-pricing-price]");
+  const roomPricingVat = root.querySelector("[data-room-pricing-vat]");
   const startTime = root.querySelector("[data-class-start]");
   const endTime = root.querySelector("[data-class-end]");
   const holidayInput = root.querySelector("[data-class-public-holiday]");
@@ -371,12 +466,48 @@ export function fillClassForm(root, classItem, holidayDefault, defaultClassType)
   if (description) {
     description.value = classItem?.description || "";
   }
-  if (weightMin) {
-    weightMin.value = classItem?.weightMin ? String(classItem.weightMin) : "";
+  if (roomPricingWeightMin) {
+    roomPricingWeightMin.value = pricingItem?.weightMin === "" || pricingItem?.weightMin == null
+      ? "0"
+      : String(pricingItem.weightMin);
   }
-  if (weightMax) {
-    weightMax.value = classItem?.weightMax ? String(classItem.weightMax) : "";
+  if (roomPricingWeightMax) {
+    roomPricingWeightMax.value = pricingItem?.weightMax === "" || pricingItem?.weightMax == null
+      ? "99"
+      : String(pricingItem.weightMax);
   }
+  if (roomPricingPrice) {
+    roomPricingPrice.value = pricingItem?.price || "";
+  }
+  if (roomPricingVat) {
+    roomPricingVat.checked = Boolean(pricingItem?.vatSeparate);
+  }
+  const roomPricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]");
+  const extraMode = pricingItem?.extraFeeMode === "daily" ? "daily" : "grouped";
+  root.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const isSelected = button.dataset.roomPricingExtraMode === extraMode;
+    button.classList.toggle("is-selected", isSelected);
+    button.setAttribute("aria-selected", String(isSelected));
+  });
+  const extraFees = pricingItem?.extraFees && typeof pricingItem.extraFees === "object"
+    ? pricingItem.extraFees
+    : {};
+  if (roomPricingExtraEnabled instanceof HTMLInputElement) {
+    const fallbackEnabled = hasAnyExtraFeeValue(extraFees);
+    roomPricingExtraEnabled.checked = typeof pricingItem?.extraFeeEnabled === "boolean"
+      ? pricingItem.extraFeeEnabled
+      : fallbackEnabled;
+  }
+  root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    const key = input.dataset.roomPricingExtraFee || "";
+    input.value = key ? String(extraFees[key] ?? "") : "";
+  });
   if (startTime) {
     startTime.value = classItem?.startTime || "09:00";
   }
@@ -394,10 +525,10 @@ export function fillClassForm(root, classItem, holidayDefault, defaultClassType)
       ? classItem.publicHolidayOff
       : Boolean(holidayDefault);
   }
+  syncRoomPricingExtraModeVisibility(root);
   const nextType = classItem?.type || defaultClassType;
   root.dataset.classType = nextType;
   updateClassTypeVisibility(root, nextType);
   applyMemberSelection(root, classItem?.memberIds);
   applyTicketSelection(root, classItem?.ticketIds);
 }
-

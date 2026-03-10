@@ -21,6 +21,12 @@ const SERVICE_DEDUCTIONS = {
   hoteling: { value: "24", unit: "시간" },
   pickdrop: { value: "1", unit: "회" },
 };
+const SERVICE_LINKAGE_HEADERS = {
+  school: "적용 클래스",
+  daycare: "적용 클래스",
+  hoteling: "적용 호실",
+  pickdrop: "적용 클래스/호실",
+};
 const PICKDROP_ROOM_PREFIX = "room:";
 
 function showToast(message) {
@@ -339,6 +345,7 @@ const setupPricingPriceInputs = () => {
 const setupPricingTabs = (classes, rooms) => {
   const tabs = document.querySelector(".ticket-tabs");
   const table = document.querySelector(".list-table--pricing-form");
+  const linkageHeader = document.querySelector("[data-pricing-linkage-header]");
   const rowsContainer = document.querySelector("[data-pricing-form-rows]");
   if (!tabs || !table || !rowsContainer) {
     return {
@@ -356,6 +363,9 @@ const setupPricingTabs = (classes, rooms) => {
       button.setAttribute("aria-selected", String(isActive));
     });
     setServiceTypeOnTable(table, serviceType);
+    if (linkageHeader) {
+      linkageHeader.textContent = SERVICE_LINKAGE_HEADERS[serviceType] || SERVICE_LINKAGE_HEADERS.school;
+    }
     applyServiceDefaultsToRows(rowsContainer, serviceType, classes);
     ensureServiceRowExists(rowsContainer, serviceType, classes, rooms);
     updatePricingRowVisibility(rowsContainer, serviceType);
@@ -749,6 +759,145 @@ const setupPricingClassSelection = (classes, rooms, getServiceType) => {
   });
 };
 
+const setupPricingClassPopupPositioning = () => {
+  const rowsContainer = document.querySelector("[data-pricing-form-rows]");
+  if (!rowsContainer) {
+    return;
+  }
+
+  let activeCell = null;
+
+  const closePopup = () => {
+    if (!activeCell) {
+      return;
+    }
+    activeCell.classList.remove("is-popup-open");
+    activeCell = null;
+  };
+
+  const positionPopup = (cell) => {
+    if (!(cell instanceof HTMLElement)) {
+      return;
+    }
+
+    const input = cell.querySelector("[data-pricing-class-input]");
+    const popup = cell.querySelector("[data-pricing-class-popup]");
+    if (!(input instanceof HTMLElement) || !(popup instanceof HTMLElement)) {
+      return;
+    }
+
+    const spacing = 6;
+    const viewportPadding = 8;
+    const inputRect = input.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const popupWidth = popupRect.width || 320;
+    const popupHeight = popupRect.height || 220;
+
+    let left = inputRect.left;
+    const maxLeft = window.innerWidth - popupWidth - viewportPadding;
+    left = Math.min(Math.max(viewportPadding, left), Math.max(viewportPadding, maxLeft));
+
+    let top = inputRect.bottom + spacing;
+    if (top + popupHeight > window.innerHeight - viewportPadding) {
+      top = inputRect.top - popupHeight - spacing;
+    }
+    if (top < viewportPadding) {
+      top = viewportPadding;
+    }
+
+    popup.style.left = `${Math.round(left)}px`;
+    popup.style.top = `${Math.round(top)}px`;
+  };
+
+  const openPopup = (cell) => {
+    if (!(cell instanceof HTMLElement)) {
+      return;
+    }
+    if (activeCell && activeCell !== cell) {
+      activeCell.classList.remove("is-popup-open");
+    }
+    activeCell = cell;
+    activeCell.classList.add("is-popup-open");
+    window.requestAnimationFrame(() => {
+      if (!activeCell || !document.body.contains(activeCell)) {
+        closePopup();
+        return;
+      }
+      positionPopup(activeCell);
+    });
+  };
+
+  const positionActivePopup = () => {
+    if (!activeCell) {
+      return;
+    }
+    if (!document.body.contains(activeCell)) {
+      closePopup();
+      return;
+    }
+    positionPopup(activeCell);
+  };
+
+  rowsContainer.addEventListener("focusin", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const input = event.target.closest("[data-pricing-class-input]");
+    if (!input) {
+      return;
+    }
+    const cell = input.closest(".pricing-class-cell");
+    if (!cell) {
+      return;
+    }
+    openPopup(cell);
+  });
+
+  rowsContainer.addEventListener("pointerdown", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const input = event.target.closest("[data-pricing-class-input]");
+    if (!input) {
+      return;
+    }
+    const cell = input.closest(".pricing-class-cell");
+    if (!cell) {
+      return;
+    }
+    openPopup(cell);
+  });
+
+  document.addEventListener("pointerdown", (event) => {
+    if (!activeCell) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest(".pricing-class-cell") === activeCell) {
+      return;
+    }
+    closePopup();
+  });
+
+  document.addEventListener("focusin", (event) => {
+    if (!activeCell) {
+      return;
+    }
+    if (event.target instanceof Element && event.target.closest(".pricing-class-cell") === activeCell) {
+      return;
+    }
+    closePopup();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closePopup();
+    }
+  });
+
+  window.addEventListener("resize", positionActivePopup);
+  window.addEventListener("scroll", positionActivePopup, true);
+};
+
 const setupPricingSubmit = (onSaved, options = {}) => {
   const submitButton = document.querySelector("[data-pricing-submit]");
   const rowsContainer = document.querySelector("[data-pricing-form-rows]");
@@ -837,11 +986,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setupPricingPriceInputs();
   const { getServiceType } = setupPricingTabs(classes, rooms);
   setupPricingClassSelection(classes, rooms, getServiceType);
+  setupPricingClassPopupPositioning();
   setupPricingRowAdd(classes, rooms, getServiceType);
   setupPricingRowDelete();
   setupPricingRowDuplicate(classes, rooms, getServiceType);
   setupPricingSubmit(() => {
-    showToast("저장되었습니다.");
+    showToast("변경된 설정을 저장했습니다.");
   }, { getServiceType, classes });
   setupPricingDetailModal(classes, rooms);
 });

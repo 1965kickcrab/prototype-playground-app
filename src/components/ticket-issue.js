@@ -4,6 +4,10 @@ import {
   computeIssueAvailability,
   matchesIssueSearch,
 } from "../services/ticket-issue-service.js";
+import {
+  buildActiveReservationCountByMemberType,
+  getMemberReservableCountByTypeFromReservations,
+} from "../services/member-reservable-count.js";
 import { renderIssueRows } from "./ticket-issue-view.js";
 import {
   formatTicketCount,
@@ -14,6 +18,7 @@ import {
 } from "../services/ticket-service.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { getDateKeyFromParts, getDatePartsFromKey, getZonedParts } from "../utils/date.js";
+import { initReservationStorage } from "../storage/reservation-storage.js";
 
 function toDateKey(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
@@ -70,11 +75,13 @@ export function initTicketIssueModal({ modal }) {
 
   let members = [];
   let membersById = new Map();
+  const reservationStorage = initReservationStorage();
 
   const state = {
     ticket: null,
     selections: new Map(),
     query: "",
+    activeReservationCountsByMemberType: new Map(),
   };
 
   const summaryName = modal.querySelector("[data-ticket-issue-name]");
@@ -117,6 +124,19 @@ export function initTicketIssueModal({ modal }) {
 
   const getFilteredMembers = () =>
     members.filter((member) => matchesIssueSearch(member, state.query));
+
+  const getSelectedTicketCountType = () =>
+    state.ticket?.type === "pickdrop"
+      ? (normalizePickdropType(state.ticket?.pickdropType || state.ticket?.name) === "왕복"
+        ? "roundtrip"
+        : "oneway")
+      : (state.ticket?.type || "school");
+
+  const refreshActiveReservationCounts = () => {
+    const reservations = reservationStorage.loadReservations();
+    state.activeReservationCountsByMemberType =
+      buildActiveReservationCountByMemberType(reservations);
+  };
 
   const updateSummary = () => {
     if (!summaryName || !summaryMeta || !summaryType) {
@@ -189,17 +209,19 @@ export function initTicketIssueModal({ modal }) {
     const availabilityMap = new Map(
       filteredMembers.map((member) => {
         const quantity = state.selections.get(member.id) || 1;
-        const type = state.ticket?.type === "pickdrop"
-          ? (normalizePickdropType(state.ticket?.pickdropType || state.ticket?.name) === "왕복"
-            ? "roundtrip"
-            : "oneway")
-          : (state.ticket?.type || "school");
+        const type = getSelectedTicketCountType();
+        const baseReservable = getMemberReservableCountByTypeFromReservations(
+          member,
+          type,
+          state.activeReservationCountsByMemberType
+        );
         const availability = computeIssueAvailability(
           member,
           state.ticket?.quantity,
           quantity,
           state.selections.has(member.id),
-          type
+          type,
+          baseReservable
         );
         availability.totalReservable = Number.isFinite(availability.overage)
           && availability.overage > 0
@@ -298,6 +320,7 @@ export function initTicketIssueModal({ modal }) {
     state.ticket = ticket;
     resetState();
     refreshMembers();
+    refreshActiveReservationCounts();
     updateSummary();
     render();
     modalControls.openModal();
@@ -315,14 +338,17 @@ export function initTicketIssueModal({ modal }) {
     if (!member) {
       return;
     }
+    const ticketCountType = getSelectedTicketCountType();
+    const baseReservable = getMemberReservableCountByTypeFromReservations(
+      member,
+      ticketCountType,
+      state.activeReservationCountsByMemberType
+    );
     const quantity = getDefaultIssueQuantity(
       state.ticket.quantity,
       member,
-      state.ticket?.type === "pickdrop"
-        ? (normalizePickdropType(state.ticket?.pickdropType || state.ticket?.name) === "왕복"
-          ? "roundtrip"
-          : "oneway")
-        : (state.ticket.type || "school")
+      ticketCountType,
+      baseReservable
     );
     state.selections.set(memberId, quantity);
   };
@@ -417,11 +443,14 @@ export function initTicketIssueModal({ modal }) {
   });
 
   window.addEventListener("storage", (event) => {
-    if (event.key !== "memberList") {
+    if (event.key !== "memberList" && event.key !== "reservations") {
       return;
     }
     if (!modal.classList.contains("is-open")) {
       return;
+    }
+    if (event.key === "reservations") {
+      refreshActiveReservationCounts();
     }
     render();
   });

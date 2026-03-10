@@ -63,6 +63,7 @@ import { getTimeZone } from "../utils/timezone.js";
 import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
 import { createId } from "../utils/id.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
+import { loadMemberTagCatalog } from "../storage/member-tag-catalog.js";
 import { getPickdropReservableTotal } from "../services/pickdrop-policy.js";
 import {
   PAYMENT_METHODS,
@@ -1547,7 +1548,7 @@ document.addEventListener("DOMContentLoaded", () => {
     syncDetailSaveState();
     refreshCalendarStats();
     renderListForKey(reservationState.selectedDateKey);
-    showToast("저장되었습니다.");
+    showToast("변경된 설정을 저장했습니다.");
     closeDetailModal();
   };
 
@@ -1939,6 +1940,7 @@ document.addEventListener("DOMContentLoaded", () => {
       pastCheckout: "",
       futureCheckin: "",
     },
+    selectedTagFilters: [],
   };
 
   const getNearestCheckoutSelectionKeys = (baseKey, checkoutKeys, checkinKeys) => {
@@ -2627,6 +2629,14 @@ document.addEventListener("DOMContentLoaded", () => {
       memberInput,
       memberResults,
       members: loadIssueMembers(),
+      tagCatalog: loadMemberTagCatalog(),
+      selectedTags: modalState.selectedTagFilters,
+      tagFilterMode: "all",
+      onTagFilterChange: (tags) => {
+        modalState.selectedTagFilters = Array.isArray(tags) ? tags : [];
+        renderMemberResults();
+        memberResults?.classList.add("is-open");
+      },
       onSelect: (member) => {
         applyMemberSelection(member);
         if (memberInput) {
@@ -2649,6 +2659,7 @@ document.addEventListener("DOMContentLoaded", () => {
     modalState.checkout = null;
     modalState.availableRoomIds = null;
     modalState.pickdrops = new Set();
+    modalState.selectedTagFilters = [];
     const checkinTimeInput = reservationModal?.querySelector(
       "[data-hoteling-checkin-time]"
     );
@@ -3133,5 +3144,4 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
 });
-
 

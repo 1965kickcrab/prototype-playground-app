@@ -11,222 +11,73 @@
 import { writeStorageValue } from "./storage-utils.js";
 import { autoApplyIssuedTicketsToReservations } from "../services/ticket-auto-assign.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
+import { sanitizeTagList } from "../utils/tags.js";
 
 const STORAGE_KEY = "memberList";
 const SERVICE_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
 
-const DEFAULT_MEMBERS = [
-  {
-    id: 1,
-    petName: "구름",
-    breed: "비숑 프리제",
-    guardianName: "김이나",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
+function createEmptyCountMap() {
+  return {
+    school: 0,
+    daycare: 0,
+    hoteling: 0,
+    oneway: 0,
+    roundtrip: 0,
+  };
+}
+
+function createDefaultMemberSchema({
+  id = "",
+  petName = "",
+  breed = "",
+  guardianName = "",
+} = {}) {
+  return {
+    id: String(id),
+    dogName: petName,
+    petName,
+    breed,
+    owner: guardianName,
+    guardianName,
+    phoneNumber: "",
+    phone: "",
+    address: "",
+    memo: "",
+    birthDate: "",
+    birthday: "",
+    animalRegistrationNumber: "",
+    registrationNumber: "",
+    coatColor: "",
+    weight: "",
+    gender: "",
+    neuteredStatus: "",
+    profileImageUrl: "",
+    siblings: [],
+    ownerTags: [],
+    petTags: [],
+    remainingCountByType: createEmptyCountMap(),
+    totalReservableCountByType: createEmptyCountMap(),
+    totalReservedCountByType: createEmptyCountMap(),
     tickets: [],
-  },
-  {
-    id: 2,
-    petName: "하늘",
-    breed: "푸들",
-    guardianName: "이서현",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 3,
-    petName: "바다",
-    breed: "코카 스패니얼",
-    guardianName: "박지수",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 4,
-    petName: "산",
-    breed: "말티즈",
-    guardianName: "최수연",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 5,
-    petName: "숲",
-    breed: "세퍼드",
-    guardianName: "정이라",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 6,
-    petName: "강가",
-    breed: "닥스훈트",
-    guardianName: "조홍준",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 7,
-    petName: "들판",
-    breed: "비글",
-    guardianName: "윤서진",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 8,
-    petName: "저녁",
-    breed: "위너",
-    guardianName: "김미려",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 9,
-    petName: "아침",
-    breed: "리트리버",
-    guardianName: "이정훈",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
-  {
-    id: 10,
-    petName: "밤하늘",
-    breed: "스피츠",
-    guardianName: "박서준",
-    remainingCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    totalReservableCountByType: {
-      school: 0,
-      daycare: 0,
-      hoteling: 0,
-      oneway: 0,
-      roundtrip: 0,
-    },
-    tickets: [],
-  },
+  };
+}
+
+const DEFAULT_MEMBER_PROFILES = [
+  { id: 1, petName: "구름", breed: "비숑 프리제", guardianName: "김이나" },
+  { id: 2, petName: "하늘", breed: "푸들", guardianName: "이서현" },
+  { id: 3, petName: "바다", breed: "코카 스패니얼", guardianName: "박지수" },
+  { id: 4, petName: "산", breed: "말티즈", guardianName: "최수연" },
+  { id: 5, petName: "숲", breed: "세퍼드", guardianName: "정이라" },
+  { id: 6, petName: "강가", breed: "닥스훈트", guardianName: "조홍준" },
+  { id: 7, petName: "들판", breed: "비글", guardianName: "윤서진" },
+  { id: 8, petName: "저녁", breed: "위너", guardianName: "김미려" },
+  { id: 9, petName: "아침", breed: "리트리버", guardianName: "이정훈" },
+  { id: 10, petName: "밤하늘", breed: "스피츠", guardianName: "박서준" },
 ];
+
+const DEFAULT_MEMBERS = DEFAULT_MEMBER_PROFILES.map((profile) =>
+  createDefaultMemberSchema(profile)
+);
 
 function cloneMember(member) {
   return JSON.parse(JSON.stringify(member));
@@ -278,8 +129,32 @@ function normalizeMember(item) {
   return {
     id: String(id),
     dogName,
+    petName: source.petName ?? dogName,
     breed,
     owner,
+    guardianName: source.guardianName ?? owner,
+    phoneNumber: source.phoneNumber ?? source.phone ?? source.guardianPhone ?? source.ownerPhone ?? "",
+    phone: source.phone ?? source.phoneNumber ?? source.guardianPhone ?? source.ownerPhone ?? "",
+    address: source.address ?? "",
+    memo: source.memo ?? "",
+    birthDate: source.birthDate ?? source.birthday ?? "",
+    birthday: source.birthday ?? source.birthDate ?? "",
+    animalRegistrationNumber:
+      source.animalRegistrationNumber ?? source.registrationNumber ?? "",
+    registrationNumber:
+      source.registrationNumber ?? source.animalRegistrationNumber ?? "",
+    coatColor: source.coatColor ?? "",
+    weight: source.weight ?? "",
+    gender: source.gender ?? "",
+    neuteredStatus:
+      source.neuteredStatus
+      ?? source.neuteringStatus
+      ?? source.isNeutered
+      ?? "",
+    profileImageUrl: source.profileImageUrl ?? source.profileImage ?? "",
+    siblings: Array.isArray(source.siblings) ? source.siblings : [],
+    ownerTags: sanitizeTagList(source.ownerTags),
+    petTags: sanitizeTagList(source.petTags),
     totalReservableCountByType,
     remainingCountByType,
     totalReservedCountByType,
@@ -492,6 +367,57 @@ export function ensureMemberDefaults() {
   const members = readStorage();
   recalculateTicketCounts();
   return readStorage();
+}
+
+export function updateIssueMember(memberId, patch = {}) {
+  const targetId = String(memberId || "").trim();
+  if (!targetId || !patch || typeof patch !== "object") {
+    return null;
+  }
+  const source = readStorage();
+  if (!Array.isArray(source) || source.length === 0) {
+    return null;
+  }
+
+  let updatedMember = null;
+  const next = source.map((item) => {
+    const currentId = String(item?.id ?? item?.memberId ?? "").trim();
+    if (currentId !== targetId) {
+      return item;
+    }
+    const nextPatch = { ...patch };
+    if ("ownerTags" in nextPatch) {
+      nextPatch.ownerTags = sanitizeTagList(nextPatch.ownerTags);
+    }
+    if ("petTags" in nextPatch) {
+      nextPatch.petTags = sanitizeTagList(nextPatch.petTags);
+    }
+    const merged = { ...item, ...nextPatch };
+    updatedMember = normalizeMember(merged);
+    return merged;
+  });
+
+  if (!updatedMember) {
+    return null;
+  }
+  writeStorageValue(STORAGE_KEY, next);
+  return updatedMember;
+}
+
+export function replaceIssueMembers(members = []) {
+  if (!Array.isArray(members)) {
+    return [];
+  }
+  const next = members.map((member) => {
+    const source = member && typeof member === "object" ? member : {};
+    return {
+      ...source,
+      ownerTags: sanitizeTagList(source.ownerTags),
+      petTags: sanitizeTagList(source.petTags),
+    };
+  });
+  writeStorageValue(STORAGE_KEY, next);
+  return next.map((item) => normalizeMember(item));
 }
 
 

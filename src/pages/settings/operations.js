@@ -180,7 +180,7 @@ function setupOperations() {
   saveButton?.addEventListener("click", () => {
     state.settings = storage.saveSettings(state.settings);
     savedSignature = getOperationsSettingsSignature(state.settings);
-    showToast("저장되었습니다.");
+    showToast("변경된 설정을 저장했습니다.");
     renderAll();
   });
 

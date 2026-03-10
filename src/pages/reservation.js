@@ -17,6 +17,7 @@ import {
   applyReservationToMemberTickets,
   loadIssueMembers,
 } from "../storage/ticket-issue-members.js";
+import { loadMemberTagCatalog } from "../storage/member-tag-catalog.js";
 import {
   getDateKeyFromParts,
   getDatePartsFromKey,
@@ -594,6 +595,19 @@ function renderServiceOptions(container, serviceOptions, selectedServices) {
   });
 }
 
+function getContextFilteredServiceOptions(serviceOptions, classes, context = "school") {
+  const normalizedContext = String(context || "school").trim().toLowerCase();
+  if (!Array.isArray(serviceOptions) || !Array.isArray(classes)) {
+    return [];
+  }
+  return serviceOptions.filter((option) => {
+    const optionValue = typeof option === "string" ? option : option?.value;
+    const match = classes.find((item) => item.name === optionValue);
+    const type = String(match?.type || "school").trim().toLowerCase();
+    return normalizedContext === "daycare" ? type === "daycare" : type === "school";
+  });
+}
+
 function applyServiceSelection(state, value, checked) {
   if (!checked) {
     return;
@@ -654,16 +668,28 @@ function resetForm(state, elements, options = {}) {
     elements.memoInput.value = "";
   }
 
-  renderTicketOptions(
-    elements.ticketContainer,
-    elements.ticketPlaceholder,
-    [],
-    [],
-    new Map(),
-    false,
-    0,
-    new Set()
-  );
+  [ 
+    [elements.schoolTicketContainer, elements.schoolTicketPlaceholder],
+    [elements.daycareTicketContainer, elements.daycareTicketPlaceholder],
+  ].forEach(([container, placeholder]) => {
+    renderTicketOptions(
+      container,
+      placeholder,
+      [],
+      [],
+      new Map(),
+      false,
+      0,
+      new Set()
+    );
+    if (container) {
+      container.hidden = true;
+      container.textContent = "";
+    }
+    if (placeholder) {
+      placeholder.hidden = true;
+    }
+  });
 
   if (elements.serviceContainer) {
     elements.serviceContainer
@@ -777,7 +803,7 @@ function getEligibleTicketOptions(ticketOptions, selectedServices, classes) {
     ticketIdSet.has(String(ticket.ticketId || ""))
   );
   if (linkedOptions.length > 0) {
-    return linkedOptions;
+    return linkedOptions.filter((ticket) => ticket.type === selectedType);
   }
   return ticketOptions.filter((ticket) => ticket.type === selectedType);
 }
@@ -1037,8 +1063,10 @@ export function setupReservationModal(state, storage) {
     ? Array.from(serviceMenu.querySelectorAll("[data-reservation-entry-option]"))
     : [];
   const serviceContainer = modal.querySelector("[data-reservation-services]");
-  const ticketContainer = modal.querySelector("[data-reservation-tickets]");
-  const ticketPlaceholder = modal.querySelector("[data-reservation-tickets-empty]");
+  const schoolTicketContainer = modal.querySelector("[data-reservation-school-tickets]");
+  const schoolTicketPlaceholder = modal.querySelector("[data-reservation-school-tickets-empty]");
+  const daycareTicketContainer = modal.querySelector("[data-reservation-daycare-tickets]");
+  const daycareTicketPlaceholder = modal.querySelector("[data-reservation-daycare-tickets-empty]");
   const memberInput = modal.querySelector("[data-member-input]");
   const memberResults = modal.querySelector("[data-member-results]");
   const memberClear = modal.querySelector("[data-member-clear]");
@@ -1061,12 +1089,15 @@ export function setupReservationModal(state, storage) {
   const daycareEndTime = modal.querySelector("[data-reservation-end-time]");
   const daycareFeeValue = modal.querySelector("[data-reservation-daycare-fee]");
   const schoolFeeList = modal.querySelector("[data-reservation-fee-school-list]");
+  const daycareFeeList = modal.querySelector("[data-reservation-fee-daycare-list]");
   const pickdropFeeList = modal.querySelector("[data-reservation-fee-pickdrop-list]");
-  const schoolFeeTotal = modal.querySelector("[data-reservation-school-fee-total]"); // New
-  const pickdropFeeTotal = modal.querySelector("[data-reservation-pickdrop-fee-total]"); // New
-  const schoolTicketTotal = modal.querySelector("[data-reservation-school-ticket-total]"); // New
-  const pickdropTicketTotal = modal.querySelector("[data-reservation-pickdrop-ticket-total]"); // New
-  const paymentTotalAll = modal.querySelector("[data-reservation-payment-total]"); // New
+  const schoolFeeTotal = modal.querySelector("[data-reservation-school-fee-total]");
+  const daycareFeeTotal = modal.querySelector("[data-reservation-daycare-fee-total]");
+  const pickdropFeeTotal = modal.querySelector("[data-reservation-pickdrop-fee-total]");
+  const schoolTicketTotal = modal.querySelector("[data-reservation-school-ticket-total]");
+  const daycareTicketTotal = modal.querySelector("[data-reservation-daycare-ticket-total]");
+  const pickdropTicketTotal = modal.querySelector("[data-reservation-pickdrop-ticket-total]");
+  const paymentTotalAll = modal.querySelector("[data-reservation-payment-total]");
   const otherPaymentType = modal.querySelector("[data-reservation-other-type]");
   const otherPaymentAmount = modal.querySelector("[data-reservation-other-amount]");
   const pricingTotalValue = modal.querySelector("[data-reservation-total]");
@@ -1097,8 +1128,10 @@ export function setupReservationModal(state, storage) {
     miniPrev,
     miniNext,
     serviceContainer,
-    ticketContainer,
-    ticketPlaceholder,
+    schoolTicketContainer,
+    schoolTicketPlaceholder,
+    daycareTicketContainer,
+    daycareTicketPlaceholder,
     pickdropInputs,
     countCurrent,
     countLimit,
@@ -1113,10 +1146,13 @@ export function setupReservationModal(state, storage) {
     daycareEndTime,
     daycareFeeValue,
     schoolFeeList,
+    daycareFeeList,
     pickdropFeeList,
     schoolFeeTotal,
+    daycareFeeTotal,
     pickdropFeeTotal,
     schoolTicketTotal,
+    daycareTicketTotal,
     pickdropTicketTotal,
     paymentTotalAll,
     otherPaymentType,
@@ -1168,6 +1204,7 @@ export function setupReservationModal(state, storage) {
     miniViewDate: new Date(state.currentDate),
     autoSelected: false,
     context: "school",
+    selectedTagFilters: [],
   };
 
   const renderContextualLabels = () => {
@@ -1206,6 +1243,85 @@ export function setupReservationModal(state, storage) {
         modal.removeAttribute("data-reservation-context");
       }
     }
+  };
+
+  const getServiceContextKey = () =>
+    formState.context === "daycare" ? "daycare" : "school";
+
+  const getActiveServiceFeeTargets = () => {
+    const contextKey = getServiceContextKey();
+    return contextKey === "daycare"
+      ? {
+        contextKey,
+        activeList: elements.daycareFeeList,
+        activeTotal: elements.daycareFeeTotal,
+        inactiveList: elements.schoolFeeList,
+        inactiveTotal: elements.schoolFeeTotal,
+      }
+      : {
+        contextKey,
+        activeList: elements.schoolFeeList,
+        activeTotal: elements.schoolFeeTotal,
+        inactiveList: elements.daycareFeeList,
+        inactiveTotal: elements.daycareFeeTotal,
+      };
+  };
+
+  const getActiveServiceTicketTargets = () => {
+    const contextKey = getServiceContextKey();
+    return contextKey === "daycare"
+      ? {
+        contextKey,
+        activeContainer: elements.daycareTicketContainer,
+        activePlaceholder: elements.daycareTicketPlaceholder,
+        activeTotal: elements.daycareTicketTotal,
+        inactiveContainer: elements.schoolTicketContainer,
+        inactivePlaceholder: elements.schoolTicketPlaceholder,
+        inactiveTotal: elements.schoolTicketTotal,
+      }
+      : {
+        contextKey,
+        activeContainer: elements.schoolTicketContainer,
+        activePlaceholder: elements.schoolTicketPlaceholder,
+        activeTotal: elements.schoolTicketTotal,
+        inactiveContainer: elements.daycareTicketContainer,
+        inactivePlaceholder: elements.daycareTicketPlaceholder,
+        inactiveTotal: elements.daycareTicketTotal,
+      };
+  };
+
+  const resetAmountDisplay = (amountEl) => {
+    if (!amountEl) {
+      return;
+    }
+    amountEl.innerHTML = `
+      <span class="reservation-ticket-row__meta">
+        <span class="as-is">-</span>
+      </span>
+    `;
+    amountEl.classList.toggle("is-empty", false);
+    delete amountEl.dataset.feeAmount;
+  };
+
+  const syncServiceOptionsForContext = (fallbackToFirst = false) => {
+    const classes = classStorage.ensureDefaults();
+    const filteredServiceOptions = getContextFilteredServiceOptions(
+      serviceOptions,
+      classes,
+      formState.context
+    );
+    const selectedName = Array.from(formState.services)[0] || "";
+    const validValues = new Set(
+      filteredServiceOptions.map((option) => String(option?.value || ""))
+    );
+    if (!selectedName || !validValues.has(selectedName)) {
+      if (fallbackToFirst && filteredServiceOptions.length > 0) {
+        formState.services = new Set([filteredServiceOptions[0].value]);
+      } else if (selectedName && !validValues.has(selectedName)) {
+        formState.services = new Set();
+      }
+    }
+    renderServiceOptions(serviceContainer, filteredServiceOptions, formState.services);
   };
 
   const syncFeeDisclosure = (isPickdropMode) => {
@@ -1262,12 +1378,14 @@ export function setupReservationModal(state, storage) {
 
     // Context-aware Fee Segment Folding
     // Area 2 (Payment) Segments:
-    const schoolTicketSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-school-ticket-total])`);
-    const pickdropTicketSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-pickdrop-ticket-total])`);
+    const schoolTicketSegment = modal.querySelector('[data-reservation-fee-segment="school-ticket"]');
+    const daycareTicketSegment = modal.querySelector('[data-reservation-fee-segment="daycare-ticket"]');
+    const pickdropTicketSegment = modal.querySelector('[data-reservation-fee-segment="pickdrop-ticket"]');
 
     // Area 1 (Fee) Segments:
-    const schoolFeeSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-school-fee-total])`);
-    const pickdropFeeSegment = modal.querySelector(`.reservation-fee-segment:has([data-reservation-pickdrop-fee-total])`);
+    const schoolFeeSegment = modal.querySelector('[data-reservation-fee-segment="school-fee"]');
+    const daycareFeeSegment = modal.querySelector('[data-reservation-fee-segment="daycare-fee"]');
+    const pickdropFeeSegment = modal.querySelector('[data-reservation-fee-segment="pickdrop-fee"]');
 
     const toggleSegment = (segment, shouldOpen) => {
       if (!segment) return;
@@ -1281,17 +1399,35 @@ export function setupReservationModal(state, storage) {
       }
     };
 
+    const serviceContextKey = getServiceContextKey();
+    const activeServiceTicketSegment = serviceContextKey === "daycare"
+      ? daycareTicketSegment
+      : schoolTicketSegment;
+    const inactiveServiceTicketSegment = serviceContextKey === "daycare"
+      ? schoolTicketSegment
+      : daycareTicketSegment;
+    const activeServiceFeeSegment = serviceContextKey === "daycare"
+      ? daycareFeeSegment
+      : schoolFeeSegment;
+    const inactiveServiceFeeSegment = serviceContextKey === "daycare"
+      ? schoolFeeSegment
+      : daycareFeeSegment;
+
     if (enabled) {
       // Pickdrop Mode: Fold School, Open Pickdrop
-      toggleSegment(schoolTicketSegment, false);
-      toggleSegment(schoolFeeSegment, false);
+      toggleSegment(activeServiceTicketSegment, false);
+      toggleSegment(activeServiceFeeSegment, false);
+      toggleSegment(inactiveServiceTicketSegment, false);
+      toggleSegment(inactiveServiceFeeSegment, false);
 
       toggleSegment(pickdropTicketSegment, true);
       toggleSegment(pickdropFeeSegment, true);
     } else {
-      // School Mode: Open School, Fold Pickdrop
-      toggleSegment(schoolTicketSegment, true);
-      toggleSegment(schoolFeeSegment, true);
+      // Service Mode: Open active context segment, fold others/pickdrop
+      toggleSegment(activeServiceTicketSegment, true);
+      toggleSegment(activeServiceFeeSegment, true);
+      toggleSegment(inactiveServiceTicketSegment, false);
+      toggleSegment(inactiveServiceFeeSegment, false);
 
       toggleSegment(pickdropTicketSegment, false);
       toggleSegment(pickdropFeeSegment, false);
@@ -1501,28 +1637,32 @@ export function setupReservationModal(state, storage) {
   const syncFeeCardState = () => {
     const mode = getReservationMode(elements);
     const activeDates = getActiveDates(formState, elements);
-    const schoolSelectionOrder = mode === "pickdrop" ? formState.schoolSelections : formState.ticketSelections;
+    const serviceSelectionOrder = mode === "pickdrop" ? formState.schoolSelections : formState.ticketSelections;
     const pickdropSelectionOrder = mode === "pickdrop" ? formState.ticketSelections : [];
 
-    const hasSchoolSelection = schoolSelectionOrder.length > 0;
+    const hasServiceSelection = serviceSelectionOrder.length > 0;
     const hasPickdropSelection = pickdropSelectionOrder.length > 0;
 
     const classes = classStorage.ensureDefaults();
-    const schoolType = getSelectedServiceType(formState, classes, elements, true);
+    const serviceType = getSelectedServiceType(formState, classes, elements, true);
+    const serviceTicketTargets = getActiveServiceTicketTargets();
 
-    // 1. School Payment Area (Area 2)
-    if (elements.schoolTicketTotal) {
-      if (hasSchoolSelection) {
-        const totalReservable = formState.selectedMember?.totalReservableCountByType?.[schoolType] || 0;
+    // 1. Service Payment Area (Area 2) by current context
+    if (serviceTicketTargets.inactiveTotal) {
+      resetAmountDisplay(serviceTicketTargets.inactiveTotal);
+    }
+    if (serviceTicketTargets.activeTotal) {
+      if (hasServiceSelection) {
+        const totalReservable = formState.selectedMember?.totalReservableCountByType?.[serviceType] || 0;
         // Use activeDates.size for overbooking calculation
         const requestedUsage = activeDates.size;
-        setAmountRange(elements.schoolTicketTotal, totalReservable, totalReservable - requestedUsage);
+        setAmountRange(
+          serviceTicketTargets.activeTotal,
+          totalReservable,
+          totalReservable - requestedUsage
+        );
       } else {
-        elements.schoolTicketTotal.innerHTML = `
-          <span class="reservation-ticket-row__meta">
-            <span class="as-is">-</span>
-          </span>
-        `;
+        resetAmountDisplay(serviceTicketTargets.activeTotal);
       }
     }
 
@@ -1560,7 +1700,7 @@ export function setupReservationModal(state, storage) {
     if (elements.paymentTotalAll) {
       const activeTab = modal.querySelector(".reservation-fee-tab.is-active")?.dataset.feeTab;
       if (activeTab === "ticket") {
-        if (hasSchoolSelection || hasPickdropSelection) {
+        if (hasServiceSelection || hasPickdropSelection) {
           elements.paymentTotalAll.textContent = "이용권 사용";
         } else {
           elements.paymentTotalAll.textContent = "-";
@@ -1608,11 +1748,19 @@ export function setupReservationModal(state, storage) {
     const activeDates = getActiveDates(formState, elements);
     const serviceDates = mode === "pickdrop" ? formState.selectedDates : activeDates;
     const pickdropDates = mode === "pickdrop" ? formState.pickdropDates : activeDates;
+    const serviceFeeTargets = getActiveServiceFeeTargets();
+
+    if (serviceFeeTargets.inactiveList) {
+      serviceFeeTargets.inactiveList.textContent = "";
+    }
+    if (serviceFeeTargets.inactiveTotal) {
+      resetAmountDisplay(serviceFeeTargets.inactiveTotal);
+    }
 
     renderPricingBreakdown({
-      schoolFeeContainer: elements.schoolFeeList,
+      schoolFeeContainer: serviceFeeTargets.activeList,
       pickdropFeeContainer: elements.pickdropFeeList,
-      schoolTotalEl: elements.schoolFeeTotal,
+      schoolTotalEl: serviceFeeTargets.activeTotal,
       pickdropTotalEl: elements.pickdropFeeTotal,
       totalEl: elements.pricingTotalValue,
       pricingItems: pricingStorage.loadPricingItems(),
@@ -1705,11 +1853,21 @@ export function setupReservationModal(state, storage) {
   const syncTicketSection = () => {
     const classes = classStorage.ensureDefaults();
     const mode = getReservationMode(elements);
-    if (elements.ticketContainer) {
-      elements.ticketContainer.hidden = false;
+    const serviceTicketTargets = getActiveServiceTicketTargets();
+    const ticketContainer = serviceTicketTargets.activeContainer;
+    const ticketPlaceholder = serviceTicketTargets.activePlaceholder;
+    if (ticketContainer) {
+      ticketContainer.hidden = false;
     }
-    if (elements.ticketPlaceholder) {
-      elements.ticketPlaceholder.hidden = !formState.selectedMember;
+    if (ticketPlaceholder) {
+      ticketPlaceholder.hidden = !formState.selectedMember;
+    }
+    if (serviceTicketTargets.inactiveContainer) {
+      serviceTicketTargets.inactiveContainer.hidden = true;
+      serviceTicketTargets.inactiveContainer.textContent = "";
+    }
+    if (serviceTicketTargets.inactivePlaceholder) {
+      serviceTicketTargets.inactivePlaceholder.hidden = true;
     }
     const schoolType = getSelectedServiceType(formState, classes, elements, true);
     const totalLimitValue = Number(
@@ -1719,11 +1877,11 @@ export function setupReservationModal(state, storage) {
       && Number.isFinite(totalLimitValue)
       && totalLimitValue <= 0;
     if (hasNoReservableTickets) {
-      if (elements.ticketContainer) {
-        elements.ticketContainer.textContent = "";
+      if (ticketContainer) {
+        ticketContainer.textContent = "";
       }
-      if (elements.ticketPlaceholder) {
-        elements.ticketPlaceholder.hidden = !formState.selectedMember;
+      if (ticketPlaceholder) {
+        ticketPlaceholder.hidden = !formState.selectedMember;
       }
       formState.ticketSelections = [];
       formState.schoolSelections = [];
@@ -2022,10 +2180,21 @@ export function setupReservationModal(state, storage) {
         formState.ticketOptions,
         serviceOptions
       );
-      if (!classNames.length && serviceOptions.length > 0) {
-        classNames.push(serviceOptions[0].value);
+      const contextType = formState.context === "daycare" ? "daycare" : "school";
+      const contextClassNames = classNames.filter((name) => {
+        const match = classes.find((item) => item.name === name);
+        return (match?.type || "school") === contextType;
+      });
+      const nextClassNames = contextClassNames.length > 0 ? contextClassNames : [];
+      if (!nextClassNames.length && serviceOptions.length > 0) {
+        const fallbackOption = serviceOptions.find((option) => {
+          const match = classes.find((item) => item.name === option.value);
+          return (match?.type || "school") === contextType;
+        }) || serviceOptions[0];
+        nextClassNames.push(fallbackOption.value);
       }
-      applyMemberClassSelection(formState, elements, classNames);
+      applyMemberClassSelection(formState, elements, nextClassNames);
+      syncServiceOptionsForContext(true);
       const autoOverrides = getMemberAutoSelectionOptions(
         formState,
         classes,
@@ -2041,6 +2210,14 @@ export function setupReservationModal(state, storage) {
       memberInput: elements.memberInput,
       memberResults: elements.memberResults,
       members: loadIssueMembers(),
+      tagCatalog: loadMemberTagCatalog(),
+      selectedTags: formState.selectedTagFilters,
+      tagFilterMode: "all",
+      onTagFilterChange: (tags) => {
+        formState.selectedTagFilters = Array.isArray(tags) ? tags : [];
+        renderMemberResults();
+        elements.memberResults?.classList.add("is-open");
+      },
       onSelect: (member) => {
         formState.selectedMember = member;
         if (elements.memberInput) {
@@ -2079,10 +2256,17 @@ export function setupReservationModal(state, storage) {
     return true;
   };
 
-  const openModal = () => {
+  const openModal = (options = {}) => {
+    if (options.context) {
+      formState.context = String(options.context).trim().toLowerCase() === "daycare"
+        ? "daycare"
+        : "school";
+    }
     modal.classList.add("is-open");
     modal.setAttribute("aria-hidden", "false");
+    formState.selectedTagFilters = [];
     setPickdropMode(false);
+    syncServiceOptionsForContext(false);
     if (elements.stepOne) {
       elements.stepOne.hidden = false;
     }
@@ -2139,13 +2323,14 @@ export function setupReservationModal(state, storage) {
       ? "daycare"
       : "school";
     renderContextualLabels();
+    syncServiceOptionsForContext(false);
     const serviceName = pickServiceNameByType(targetType);
     if (!serviceName) {
       syncDaycareUI();
       return;
     }
     formState.services = new Set([serviceName]);
-    renderServiceOptions(serviceContainer, serviceOptions, formState.services);
+    syncServiceOptionsForContext(false);
     const conflicts = pruneConflictingDates(formState, storage);
     formState.conflicts = conflicts;
     renderMiniCalendar(formState, elements, conflicts, {
@@ -2222,7 +2407,7 @@ export function setupReservationModal(state, storage) {
     return maxSequence;
   };
 
-  renderServiceOptions(serviceContainer, serviceOptions, formState.services);
+  syncServiceOptionsForContext(false);
   pickdropInputs.forEach((input) => {
     syncFilterChip(input);
   });
@@ -2241,8 +2426,7 @@ export function setupReservationModal(state, storage) {
     button.addEventListener("click", () => {
       const targetType = String(button.dataset.reservationEntryOption || "school");
       closeServiceMenu();
-      formState.context = targetType === "daycare" ? "daycare" : "school";
-      openModal();
+      openModal({ context: targetType });
       applyEntryServiceType(targetType);
     });
   });
@@ -2819,9 +3003,11 @@ export function setupReservationModal(state, storage) {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   };
 
-  ticketContainer?.addEventListener("click", handleTicketRowClick);
+  elements.schoolTicketContainer?.addEventListener("click", handleTicketRowClick);
+  elements.daycareTicketContainer?.addEventListener("click", handleTicketRowClick);
   elements.pickdropTicketField?.addEventListener("click", handleTicketRowClick);
-  ticketContainer?.addEventListener("change", handleTicketSelectionChange);
+  elements.schoolTicketContainer?.addEventListener("change", handleTicketSelectionChange);
+  elements.daycareTicketContainer?.addEventListener("change", handleTicketSelectionChange);
   elements.pickdropTicketField?.addEventListener("change", handleTicketSelectionChange);
 
   pickdropInputs.forEach((input) => {

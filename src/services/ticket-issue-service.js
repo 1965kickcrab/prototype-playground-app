@@ -1,6 +1,19 @@
-export function getDefaultIssueQuantity(ticketQuantity, member, ticketType = "school") {
+function getBaseReservable(member, ticketType, baseReservableOverride) {
+  if (Number.isFinite(Number(baseReservableOverride))) {
+    return Number(baseReservableOverride);
+  }
   const totalMap = member?.totalReservableCountByType;
   const totalReservable = Number(totalMap?.[ticketType]);
+  return Number.isFinite(totalReservable) ? totalReservable : null;
+}
+
+export function getDefaultIssueQuantity(
+  ticketQuantity,
+  member,
+  ticketType = "school",
+  baseReservableOverride = null
+) {
+  const totalReservable = getBaseReservable(member, ticketType, baseReservableOverride);
   const overage = Number.isFinite(totalReservable) && totalReservable < 0
     ? Math.abs(totalReservable)
     : 0;
@@ -32,13 +45,11 @@ export function computeIssueAvailability(
   ticketQuantity,
   issueQuantity,
   isSelected,
-  ticketType
+  ticketType,
+  baseReservableOverride = null
 ) {
   const type = ticketType || "school";
-  const totalByType = member?.totalReservableCountByType;
-  const baseRemaining = Number.isFinite(totalByType?.[type])
-    ? totalByType[type]
-    : null;
+  const baseRemaining = getBaseReservable(member, type, baseReservableOverride);
   let remaining = baseRemaining;
   let overage = Number.isFinite(remaining) && remaining < 0 ? Math.abs(remaining) : 0;
   const canApply =

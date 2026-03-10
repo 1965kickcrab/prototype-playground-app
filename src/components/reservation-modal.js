@@ -67,15 +67,17 @@ const buildReservationModal = ({
 
 const buildReservationFeeSegment = ({
   title,
+  segmentAttr = "",
+  titleAttr = "",
   amountAttr = "",
   bodyAttr = "",
   contentHtml = "",
   assetPrefix,
   open = true,
 }) => `
-  <div class="reservation-fee-segment">
+  <div class="reservation-fee-segment" ${segmentAttr}>
     <div class="reservation-fee-segment__header" data-fee-toggle>
-      <span class="reservation-fee-segment__title">${title}</span>
+      <span class="reservation-fee-segment__title" ${titleAttr}>${title}</span>
       <span class="reservation-fee-segment__amount" ${amountAttr}>
         <span class="reservation-ticket-row__meta">
           <span class="as-is">-</span>
@@ -266,12 +268,21 @@ export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
           <div class="reservation-fee-segments">
             ${buildReservationFeeSegment({
       title: "유치원",
+      segmentAttr: 'data-reservation-fee-segment="school-fee"',
       amountAttr: 'data-reservation-school-fee-total',
       bodyAttr: 'data-reservation-fee-school-list',
       assetPrefix,
     })}
             ${buildReservationFeeSegment({
+      title: "데이케어",
+      segmentAttr: 'data-reservation-fee-segment="daycare-fee"',
+      amountAttr: 'data-reservation-daycare-fee-total',
+      bodyAttr: 'data-reservation-fee-daycare-list',
+      assetPrefix,
+    })}
+            ${buildReservationFeeSegment({
       title: "픽드랍",
+      segmentAttr: 'data-reservation-fee-segment="pickdrop-fee"',
       amountAttr: 'data-reservation-pickdrop-fee-total',
       bodyAttr: 'data-reservation-fee-pickdrop-list',
       assetPrefix,
@@ -296,15 +307,27 @@ export function getSchoolReservationModalMarkup({ assetPrefix = "../" } = {}) {
               <div class="reservation-fee-segments">
                 ${buildReservationFeeSegment({
       title: "유치원",
+      segmentAttr: 'data-reservation-fee-segment="school-ticket"',
       amountAttr: 'data-reservation-school-ticket-total',
       contentHtml: `
-                    <div class="reservation-ticket-list" data-reservation-tickets></div>
-                    <p class="reservation-ticket-placeholder" data-reservation-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                    <div class="reservation-ticket-list" data-reservation-school-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-reservation-school-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
+                  `,
+      assetPrefix,
+    })}
+                ${buildReservationFeeSegment({
+      title: "데이케어",
+      segmentAttr: 'data-reservation-fee-segment="daycare-ticket"',
+      amountAttr: 'data-reservation-daycare-ticket-total',
+      contentHtml: `
+                    <div class="reservation-ticket-list" data-reservation-daycare-tickets></div>
+                    <p class="reservation-ticket-placeholder" data-reservation-daycare-tickets-empty hidden>사용 가능한 이용권이 없습니다.</p>
                   `,
       assetPrefix,
     })}
                 ${buildReservationFeeSegment({
       title: "픽드랍",
+      segmentAttr: 'data-reservation-fee-segment="pickdrop-ticket"',
       amountAttr: 'data-reservation-pickdrop-ticket-total',
       contentHtml: `
                     <div class="reservation-pickdrop-ticket-list" data-reservation-pickdrop-tickets></div>

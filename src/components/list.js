@@ -75,6 +75,7 @@ const PICKDROP_TYPES = {
 };
 
 const STATUS_MENU_ORDER = ["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT", "CANCELED"];
+const STATUSES_WITHOUT_TIMES = new Set(["PLANNED", "ABSENT"]);
 
 const SERVICE_RESERVATION_TYPES = new Set(["school", "daycare"]);
 const SCHOOL_RESERVATION_TYPE = "school";
@@ -1010,6 +1011,18 @@ function applySelectedStatus(row, selectedKey) {
   return nextState;
 }
 
+function shouldClearTimesForStatus(statusKey) {
+  return STATUSES_WITHOUT_TIMES.has(String(statusKey || "").trim().toUpperCase());
+}
+
+function clearRowTimeDatasets(row) {
+  if (!row?.dataset) {
+    return;
+  }
+  delete row.dataset.checkinTime;
+  delete row.dataset.checkoutTime;
+}
+
 function syncReservationRow(row, state, storage) {
   if (!state) {
     return;
@@ -1024,8 +1037,9 @@ function syncReservationRow(row, state, storage) {
   }
 
   const baseStatusKey = row.dataset.baseStatus || "PLANNED";
-  const checkinTime = row.dataset.checkinTime || "";
-  const checkoutTime = row.dataset.checkoutTime || "";
+  const shouldClearTimes = shouldClearTimesForStatus(baseStatusKey);
+  const checkinTime = shouldClearTimes ? "" : (row.dataset.checkinTime || "");
+  const checkoutTime = shouldClearTimes ? "" : (row.dataset.checkoutTime || "");
 
   const updateReservationItem = (item) => {
     const updated = updateReservationDateEntry(
@@ -1147,6 +1161,9 @@ function setupStatusMenu(list, storage, state, onUpdate) {
       }
     }
     applySelectedStatus(activeRow, nextKey);
+    if (shouldClearTimesForStatus(nextKey)) {
+      clearRowTimeDatasets(activeRow);
+    }
     if (nextKey === "CHECKIN") {
       activeRow.dataset.checkinTime = getCurrentTimeString(timeZone);
     }
@@ -1841,7 +1858,7 @@ function setupDetailModal(list, state, storage, refresh) {
     if (statusOption && statusMenu?.contains(statusOption)) {
       const nextStatus = statusOption.dataset.statusOption || "";
       updateStatusDisplay(nextStatus);
-      if (nextStatus === "PLANNED" || nextStatus === "CANCELED") {
+      if (shouldClearTimesForStatus(nextStatus) || nextStatus === "CANCELED") {
         if (checkinInput instanceof HTMLInputElement) {
           checkinInput.value = "";
         }
@@ -1917,11 +1934,14 @@ function setupDetailModal(list, state, storage, refresh) {
     const nextCheckout = checkoutInput instanceof HTMLInputElement
       ? checkoutInput.value
       : "";
+    const shouldClearTimes = shouldClearTimesForStatus(nextStatusKey);
+    const resolvedCheckinTime = shouldClearTimes ? "" : nextCheckin;
+    const resolvedCheckoutTime = shouldClearTimes ? "" : nextCheckout;
     const classes = classStorage.ensureDefaults();
     const classType = classes.find((item) => item.name === nextClass)?.type || "school";
-    if (classType === "daycare") {
-      const durationMinutes = getDaycareDurationMinutes(nextCheckin, nextCheckout);
-      if (!nextCheckin || !nextCheckout) {
+    if (classType === "daycare" && !shouldClearTimes) {
+      const durationMinutes = getDaycareDurationMinutes(resolvedCheckinTime, resolvedCheckoutTime);
+      if (!resolvedCheckinTime || !resolvedCheckoutTime) {
         showToast("데이케어 시작/종료 시간을 입력하세요.");
         return;
       }
@@ -1937,8 +1957,8 @@ function setupDetailModal(list, state, storage, refresh) {
         reservations: storage?.loadReservations?.() || [],
         member,
         dateKey: conflictDateKey,
-        checkinTime: nextCheckin,
-        checkoutTime: nextCheckout,
+        checkinTime: resolvedCheckinTime,
+        checkoutTime: resolvedCheckoutTime,
         storage,
         excludeReservationId: activeReservationId,
       })) {
@@ -1965,8 +1985,8 @@ function setupDetailModal(list, state, storage, refresh) {
       dateKey: nextDateKey,
       serviceType: classType,
       classId,
-      checkinTime: nextCheckin,
-      checkoutTime: nextCheckout,
+      checkinTime: resolvedCheckinTime,
+      checkoutTime: resolvedCheckoutTime,
       pickup: pickdropFlags.hasPickup,
       dropoff: pickdropFlags.hasDropoff,
       pricingItems: pricingStorage.loadPricingItems(),
@@ -1979,8 +1999,8 @@ function setupDetailModal(list, state, storage, refresh) {
         class: nextClass,
         service: nextClass,
         baseStatusKey: nextStatusKey,
-        checkinTime: nextCheckin,
-        checkoutTime: nextCheckout,
+        checkinTime: resolvedCheckinTime,
+        checkoutTime: resolvedCheckoutTime,
         pickup: pickdropFlags.hasPickup,
         dropoff: pickdropFlags.hasDropoff,
       }));
@@ -2382,6 +2402,4 @@ export function setupList(state, storage) {
 
   void state;
 }
-
-
 

@@ -1,81 +1,67 @@
 import {
-  formatReservableCountText,
-  getMemberPhone,
   getMemberReservableCountFromReservations,
   isReservableOver,
 } from "../services/member-page-service.js";
-import { sanitizeTagList } from "../utils/tags.js";
-import { renderMemberTagChips } from "./member-tags.js";
 
-function createCell(text) {
-  const cell = document.createElement("span");
-  cell.textContent = text;
-  return cell;
+function createOverBadge() {
+  const badge = document.createElement("span");
+  badge.className = "member-list__badge";
+  badge.textContent = "초과";
+  return badge;
 }
 
-function createIssueButton(memberId) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "ticket-issue-button";
-  button.textContent = "지급";
-  button.dataset.memberIssue = "true";
-  button.dataset.memberId = String(memberId || "");
-  return button;
+function createChevron() {
+  const chevron = document.createElement("img");
+  chevron.className = "member-list__chevron";
+  chevron.src = "../../assets/iconChevronRight.svg";
+  chevron.alt = "";
+  chevron.setAttribute("aria-hidden", "true");
+  return chevron;
 }
 
-function createDogCell(member) {
-  const cell = document.createElement("span");
-  cell.className = "member-table__dog-cell";
-
-  const name = document.createElement("strong");
-  name.className = "member-table__dog-name";
-  name.textContent = member?.dogName || "-";
-  cell.appendChild(name);
-
-  const tags = sanitizeTagList(member?.petTags).slice(0, 3);
-  if (!tags.length) {
-    return cell;
-  }
-
-  const tagList = document.createElement("div");
-  tagList.className = "member-tags member-tags--pet";
-  renderMemberTagChips(tagList, tags, { limit: 3 });
-  cell.appendChild(tagList);
-  return cell;
-}
-
-function createRow(member, activeReservationCountsByMemberType = null) {
+function createRow(member, activeReservationCountsByMemberType = null, selectedMemberIds = new Set()) {
   const row = document.createElement("div");
-  row.className = "ticket-table__row member-table__row";
+  row.className = "member-list__item member-table__row";
   row.dataset.memberId = String(member?.id || "");
   row.dataset.memberRow = "true";
   row.setAttribute("role", "button");
   row.setAttribute("tabindex", "0");
-
-  row.appendChild(createDogCell(member));
-  row.appendChild(createCell(member?.owner || "-"));
-  row.appendChild(createCell(getMemberPhone(member)));
+  if (selectedMemberIds.has(String(member?.id || ""))) {
+    row.classList.add("is-selected");
+  }
 
   const count = getMemberReservableCountFromReservations(
     member,
     activeReservationCountsByMemberType
   );
-  const countCell = createCell(formatReservableCountText(count));
-  if (isReservableOver(count)) {
-    countCell.classList.add("member-table__count-over");
-  }
-  row.appendChild(countCell);
 
-  const actionCell = document.createElement("span");
-  actionCell.appendChild(createIssueButton(member?.id));
-  row.appendChild(actionCell);
+  const textWrap = document.createElement("span");
+  textWrap.className = "member-list__text";
+
+  if (isReservableOver(count)) {
+    textWrap.appendChild(createOverBadge());
+  }
+
+  const name = document.createElement("strong");
+  name.className = "member-list__name member-table__dog-name";
+  name.textContent = member?.dogName || "-";
+  textWrap.appendChild(name);
+
+  const breed = document.createElement("span");
+  breed.className = "member-list__breed";
+  breed.textContent = member?.breed || "-";
+  textWrap.appendChild(breed);
+
+  row.appendChild(textWrap);
+  row.appendChild(createChevron());
   return row;
 }
 
 export function renderMemberRows(
   container,
   members,
-  activeReservationCountsByMemberType = null
+  activeReservationCountsByMemberType = null,
+  selectedMemberIds = new Set()
 ) {
   if (!container) {
     return;
@@ -84,14 +70,14 @@ export function renderMemberRows(
 
   if (!Array.isArray(members) || members.length === 0) {
     const empty = document.createElement("div");
-    empty.className = "ticket-table__row ticket-table__row--empty";
+    empty.className = "member-list__empty";
     empty.textContent = "회원 데이터가 없습니다.";
     container.appendChild(empty);
     return;
   }
 
   members.forEach((member) => {
-    container.appendChild(createRow(member, activeReservationCountsByMemberType));
+    container.appendChild(createRow(member, activeReservationCountsByMemberType, selectedMemberIds));
   });
 }
 
@@ -115,6 +101,10 @@ export function renderMemberPagination(container, totalPages, currentPage) {
   container.innerHTML = "";
 
   const safeTotalPages = Math.max(1, Number(totalPages) || 1);
+  container.hidden = safeTotalPages <= 1;
+  if (safeTotalPages <= 1) {
+    return;
+  }
   const safeCurrentPage = Math.min(Math.max(1, Number(currentPage) || 1), safeTotalPages);
   const prevPage = Math.max(1, safeCurrentPage - 1);
   const nextPage = Math.min(safeTotalPages, safeCurrentPage + 1);

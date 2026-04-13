@@ -81,11 +81,12 @@ export function renderTicketOptions(
 
     const meta = document.createElement("span");
     meta.className = "class-ticket-row__meta";
-    meta.textContent = `${formatTicketCount(ticket.quantity)} · ${formatTicketValidity(
-      ticket.validity,
-      ticket.unit,
-      ticket.unlimitedValidity
-    )}`;
+    meta.textContent = `${formatTicketCount(
+      Number(ticket?.totalHours) > 0 && ticket?.type === "daycare"
+        ? Number(ticket.totalHours)
+        : Number(ticket.quantity) || 0,
+      ticket?.type || ""
+    )} · ${formatTicketValidity(ticket.validity, ticket.unit, ticket.unlimitedValidity)}`;
 
     row.appendChild(name);
     row.appendChild(meta);
@@ -122,13 +123,6 @@ function collectRoomPricingExtraFees(root) {
     result[key] = input.value.trim();
   });
   return result;
-}
-
-function hasAnyExtraFeeValue(extraFees) {
-  if (!extraFees || typeof extraFees !== "object") {
-    return false;
-  }
-  return Object.values(extraFees).some((value) => String(value ?? "").trim() !== "");
 }
 
 export function syncRoomPricingExtraModeVisibility(root) {
@@ -496,10 +490,7 @@ export function fillClassForm(root, classItem, holidayDefault, defaultClassType,
     ? pricingItem.extraFees
     : {};
   if (roomPricingExtraEnabled instanceof HTMLInputElement) {
-    const fallbackEnabled = hasAnyExtraFeeValue(extraFees);
-    roomPricingExtraEnabled.checked = typeof pricingItem?.extraFeeEnabled === "boolean"
-      ? pricingItem.extraFeeEnabled
-      : fallbackEnabled;
+    roomPricingExtraEnabled.checked = Boolean(pricingItem?.extraFeeEnabled);
   }
   root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
     if (!(input instanceof HTMLInputElement)) {

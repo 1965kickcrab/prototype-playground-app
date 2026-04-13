@@ -49,18 +49,16 @@ export function buildRoomHotelingPricingItem({ existingItem, roomId, pricingInpu
   const extraFeesInput = input.extraFees && typeof input.extraFees === "object"
     ? input.extraFees
     : {};
-  const extraFees = Object.fromEntries(
+  const normalizedExtraFees = Object.fromEntries(
     Object.entries(extraFeesInput).map(([key, value]) => [key, String(value ?? "")])
-  );
-  const hasAnyExtraFee = Object.values(extraFees).some(
-    (value) => String(value ?? "").trim() !== ""
   );
   const fallbackEnabled = typeof existingItem?.extraFeeEnabled === "boolean"
     ? existingItem.extraFeeEnabled
-    : hasAnyExtraFee;
+    : false;
   const extraFeeEnabled = typeof input.extraFeeEnabled === "boolean"
     ? input.extraFeeEnabled
     : fallbackEnabled;
+  const extraFees = extraFeeEnabled ? normalizedExtraFees : {};
 
   return {
     id: ensurePricingId(existingItem),

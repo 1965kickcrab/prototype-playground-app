@@ -1,11 +1,15 @@
 import {
   formatTicketDisplayName,
   formatTicketPrice,
+  getTicketUnitLabel,
   normalizePickdropType,
 } from "../services/ticket-service.js";
+import {
+  calculateDaycareBillingUnits,
+  getDaycareDurationMinutes,
+} from "../services/daycare-duration.js";
 import { normalizeNumericInput } from "../utils/number.js";
 import { getDatePartsFromKey, getWeekdayIndex } from "../utils/date.js";
-import { calculateDateEntryFee } from "../services/reservation-date-fee.js";
 
 function parsePriceValue(value) {
   const digits = normalizeNumericInput(value);
@@ -19,6 +23,20 @@ function parsePriceValue(value) {
 function parseRangeValue(value) {
   const parsed = Number.parseFloat(String(value || "").trim());
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeLinkedClassId(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw.startsWith("room:")) {
+    return raw.slice(5);
+  }
+  if (raw.startsWith("class:")) {
+    return raw.slice(6);
+  }
+  return raw;
 }
 
 function matchesPickdropType(item, type) {
@@ -135,6 +153,22 @@ function getHotelingWeekdayCount(weekdays, weekdayCounts, fallbackCount) {
   return { count, matched: count > 0 };
 }
 
+function formatDaycareDurationLabel(durationMinutes) {
+  const safeMinutes = Number(durationMinutes);
+  if (!Number.isFinite(safeMinutes) || safeMinutes <= 0) {
+    return "-";
+  }
+  const hours = Math.floor(safeMinutes / 60);
+  const minutes = safeMinutes % 60;
+  if (hours > 0 && minutes > 0) {
+    return `${hours}시간 ${minutes}분`;
+  }
+  if (hours > 0) {
+    return `${hours}시간`;
+  }
+  return `${minutes}분`;
+}
+
 export function renderPickdropTickets(
   container,
   ticketOptions,
@@ -236,17 +270,17 @@ export function renderPickdropTickets(
       if (remainingBefore <= 2) {
         beforeValue.classList.add("is-low");
       }
-      beforeValue.textContent = `${remainingBefore}회`;
+      beforeValue.textContent = `${remainingBefore}${getTicketUnitLabel(ticket?.type)}`;
       const afterValue = document.createElement("span");
       afterValue.className = "reservation-ticket-row__meta-value";
       if (remainingAfter <= 2) {
         afterValue.classList.add("is-low");
       }
-      afterValue.textContent = `${remainingAfter}회`;
+      afterValue.textContent = `${remainingAfter}${getTicketUnitLabel(ticket?.type)}`;
       meta.append(beforeValue, " → ", afterValue);
     } else {
       const remaining = Number(ticket.remainingCount) || 0;
-      meta.textContent = `총 잔여 ${remaining}회`;
+      meta.textContent = `총 잔여 ${remaining}${getTicketUnitLabel(ticket?.type)}`;
     }
 
     info.appendChild(name);
@@ -372,6 +406,7 @@ export function renderPricingBreakdown({
   timeZone = undefined,
   serviceTimeRange = null,
   serviceLabelOverride = "",
+  serviceTypeOverride = "",
 }) {
   const serviceCount = Number.isFinite(Number(serviceDateCount))
     ? Number(serviceDateCount)
@@ -424,58 +459,56 @@ export function renderPricingBreakdown({
     if (!classInfo?.id) {
       return;
     }
-    const classType = classInfo.type || "school";
+    const classType = String(serviceTypeOverride || classInfo.type || "school").trim().toLowerCase();
     if (classType === "daycare") {
-      const dateKeys = [];
-      if (selectedWeekdayCounts instanceof Map) {
-        const weekdayToIndex = new Map([
-          ["일", 0], ["월", 1], ["화", 2], ["수", 3], ["목", 4], ["금", 5], ["토", 6],
-        ]);
-        selectedWeekdayCounts.forEach((count, label) => {
-          const repeats = Number(count) || 0;
-          for (let i = 0; i < repeats; i += 1) {
-            dateKeys.push(`weekday:${weekdayToIndex.get(label) ?? -1}:${i}`);
-          }
-        });
-      }
-      const fallbackCount = Math.max(serviceCount, 0);
       const pricingList = pricingByType.get("daycare") || [];
-      let daycareTotal = 0;
-      let daycareLineCount = 0;
-      const syntheticDateKeys = dateKeys.length > 0
-        ? dateKeys
-        : Array.from({ length: fallbackCount }, (_, index) => `count:${index}`);
-      syntheticDateKeys.forEach((key) => {
-        const fee = calculateDateEntryFee({
-          dateKey: key.startsWith("weekday:") ? "" : "",
-          serviceType: "daycare",
-          classId: String(classInfo.id || ""),
-          checkinTime: serviceTimeRange?.checkinTime || "",
-          checkoutTime: serviceTimeRange?.checkoutTime || "",
-          pickup: false,
-          dropoff: false,
-          pricingItems: pricingList,
-          memberWeight: weightValue,
-          timeZone,
-        });
-        const amount = Number(fee?.daycare) || 0;
-        if (amount > 0) {
-          daycareTotal += amount;
-          daycareLineCount += 1;
+      const durationMinutes = getDaycareDurationMinutes(
+        serviceTimeRange?.checkinTime || "",
+        serviceTimeRange?.checkoutTime || ""
+      );
+      const durationLabel = formatDaycareDurationLabel(durationMinutes);
+      pricingList.forEach((item) => {
+        const classIds = Array.isArray(item?.classIds)
+          ? item.classIds.map((id) => normalizeLinkedClassId(id))
+          : [];
+        if (classIds.length > 0 && !classIds.includes(normalizeLinkedClassId(classInfo.id))) {
+          return;
         }
-      });
-      if (daycareLineCount > 0) {
+        if (!matchesWeightRange(item, weightValue)) {
+          return;
+        }
+        const priceValue = parsePriceValue(item?.price);
+        if (priceValue === null) {
+          return;
+        }
+        const weekdayResult = getWeekdayMatchCount(
+          item?.weekdays,
+          selectedWeekdayCounts,
+          serviceCount
+        );
+        if (weekdayResult.count <= 0) {
+          return;
+        }
+        const units = calculateDaycareBillingUnits({
+          durationMinutes,
+          deductionValue: item?.deductionValue,
+          deductionUnit: item?.deductionUnit,
+        });
+        if (!Number.isFinite(units) || units <= 0) {
+          return;
+        }
         serviceLines.push({
           label: serviceLabelOverride || service,
           lineLabel: service,
-          priceValue: null,
-          count: daycareLineCount,
-          matchedWeekdays: true,
+          priceValue,
+          count: weekdayResult.count,
+          matchedWeekdays: weekdayResult.matched,
           unit: "회",
-          fixedTotal: daycareTotal,
+          daycareDurationLabel: durationLabel,
+          daycareUnits: units,
           isDaycare: true,
         });
-      }
+      });
       return;
     }
     const candidates = (pricingByType.get(classType) || []).filter((item) => {
@@ -554,14 +587,18 @@ export function renderPricingBreakdown({
     const shouldApplyPrice = line.matchedWeekdays !== false;
     const lineTotal = Number.isFinite(Number(line.fixedTotal))
       ? Number(line.fixedTotal)
-      : (shouldApplyPrice ? line.priceValue * line.count : 0);
+      : (shouldApplyPrice
+        ? (line.isDaycare
+          ? line.priceValue * (Number(line.daycareUnits) || 0) * line.count
+          : line.priceValue * line.count)
+        : 0);
     serviceTotal += lineTotal;
     if (schoolFeeContainer) {
       schoolFeeContainer.appendChild(
         createFeeLine(
           line.lineLabel || line.label,
           line.isDaycare
-            ? `${formatTicketPrice(lineTotal)}`
+            ? `${formatTicketPrice(line.priceValue)} x ${line.count}회 x ${line.daycareDurationLabel}`
             : line.matchedWeekdays === false
             ? `${line.count}${line.unit}`
             : `${formatTicketPrice(line.priceValue)} x ${line.count}${line.unit}`
@@ -612,8 +649,3 @@ export function renderPricingBreakdown({
     pickdropFeeContainer.textContent = "등록된 요금이 없습니다.";
   }
 }
-
-
-
-
-

@@ -8,45 +8,20 @@ import {
   buildActiveReservationCountByMemberType,
   getMemberReservableCountByTypeFromReservations,
 } from "../services/member-reservable-count.js";
+import {
+  buildTicketIssueEntries,
+  createTicketIssueDateContext,
+} from "../services/ticket-issue-entry-service.js";
 import { renderIssueRows } from "./ticket-issue-view.js";
 import {
   formatTicketCount,
   formatTicketDisplayName,
+  getTicketQuantityValue,
   normalizePickdropType,
   formatTicketType,
   formatTicketValidity,
 } from "../services/ticket-service.js";
-import { getTimeZone } from "../utils/timezone.js";
-import { getDateKeyFromParts, getDatePartsFromKey, getZonedParts } from "../utils/date.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
-
-function toDateKey(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function addValidityToDate(dateKey, validity, unit) {
-  const parsed = getDatePartsFromKey(dateKey);
-  if (!parsed || !Number.isFinite(validity) || validity <= 0 || !unit) {
-    return "";
-  }
-  const date = new Date(parsed.year, parsed.month - 1, parsed.day);
-  if (unit === "일") {
-    date.setDate(date.getDate() + validity);
-  } else if (unit === "주") {
-    date.setDate(date.getDate() + validity * 7);
-  } else if (unit === "개월") {
-    date.setMonth(date.getMonth() + validity);
-  } else if (unit === "년") {
-    date.setFullYear(date.getFullYear() + validity);
-  }
-  return toDateKey(date);
-}
 
 function setupModal(modal, options = {}) {
   const overlay = modal.querySelector(options.overlaySelector || "");
@@ -151,14 +126,15 @@ export function initTicketIssueModal({ modal }) {
       return;
     }
 
-    const countText = formatTicketCount(state.ticket.quantity);
+    const ticketUnits = getTicketQuantityValue(state.ticket);
+    const countText = formatTicketCount(ticketUnits, state.ticket?.type || "");
     const validityText = formatTicketValidity(
       state.ticket.validity,
       state.ticket.unit,
       state.ticket.unlimitedValidity
     );
     summaryName.textContent = formatTicketDisplayName(state.ticket);
-    summaryMeta.textContent = `총횟수: ${countText} / 유효기간: ${validityText}`;
+    summaryMeta.textContent = `총수량: ${countText} / 유효기간: ${validityText}`;
     summaryType.textContent = formatTicketType(state.ticket.type);
     if (state.ticket.type) {
       summaryType.setAttribute("data-type", state.ticket.type);
@@ -217,7 +193,7 @@ export function initTicketIssueModal({ modal }) {
         );
         const availability = computeIssueAvailability(
           member,
-          state.ticket?.quantity,
+          getTicketQuantityValue(state.ticket),
           quantity,
           state.selections.has(member.id),
           type,
@@ -245,49 +221,19 @@ export function initTicketIssueModal({ modal }) {
     if (!state.ticket || state.selections.size === 0) {
       return [];
     }
-    const timeZone = getTimeZone();
-    const issuedDate = getDateKeyFromParts(
-      getZonedParts(new Date(), timeZone)
-    );
-    const issuedAtBase = Date.now();
-    const ticketUnitCount = Number(state.ticket.quantity) || 0;
+    const issueContext = createTicketIssueDateContext();
     const issues = [];
     let issueIndex = 0;
     Array.from(state.selections.entries()).forEach(([memberId, quantity]) => {
-      const issueQuantity = Math.max(1, Number(quantity) || 1);
-      for (let i = 0; i < issueQuantity; i += 1) {
-        issues.push({
-          id: `${issuedAtBase}-${issueIndex}`,
-          ticketId: state.ticket.id,
-          memberId,
-          quantity: 1,
-          issuedDate,
-          issueDate: issuedDate,
-          timeZone,
-          name: state.ticket.name || "",
-          pickdropType: state.ticket.type === "pickdrop"
-            ? normalizePickdropType(state.ticket.pickdropType || state.ticket.name)
-            : "",
-          type: state.ticket.type || "",
-          totalCount: ticketUnitCount,
-          validity: Number(state.ticket.validity) || 0,
-          unit: state.ticket.unit || "",
-          startPolicy: state.ticket.startDatePolicy || "first-attendance",
-          reservationDateRule: state.ticket.reservationDateRule || "expiry",
-          startDate: state.ticket.startDatePolicy === "issue-date" ? issuedDate : "",
-          usedCount: 0,
-          reservableCount: ticketUnitCount,
-          expiryDate:
-            state.ticket.unlimitedValidity || state.ticket.startDatePolicy !== "issue-date"
-              ? ""
-              : addValidityToDate(
-                  issuedDate,
-                  Number(state.ticket.validity) || 0,
-                  state.ticket.unit || ""
-                ),
-        });
-        issueIndex += 1;
-      }
+      const nextIssues = buildTicketIssueEntries({
+        memberId,
+        ticket: state.ticket,
+        quantity,
+        ...issueContext,
+        startIndex: issueIndex,
+      });
+      issues.push(...nextIssues);
+      issueIndex += nextIssues.length;
     });
     return issues;
   };
@@ -345,7 +291,7 @@ export function initTicketIssueModal({ modal }) {
       state.activeReservationCountsByMemberType
     );
     const quantity = getDefaultIssueQuantity(
-      state.ticket.quantity,
+      getTicketQuantityValue(state.ticket),
       member,
       ticketCountType,
       baseReservable
@@ -425,7 +371,7 @@ export function initTicketIssueModal({ modal }) {
     if (!issues.length || !state.ticket) {
       return;
     }
-    applyIssueToMembers(issues, state.ticket.quantity);
+    applyIssueToMembers(issues, getTicketQuantityValue(state.ticket));
     const memberId = Array.from(state.selections.keys())[0];
     if (!memberId) {
       return;
@@ -438,7 +384,7 @@ export function initTicketIssueModal({ modal }) {
     if (!issues.length || !state.ticket) {
       return;
     }
-    applyIssueToMembers(issues, state.ticket.quantity);
+    applyIssueToMembers(issues, getTicketQuantityValue(state.ticket));
     modalControls.closeModal();
   });
 

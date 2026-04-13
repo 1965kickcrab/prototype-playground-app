@@ -88,7 +88,7 @@ export function renderDayoffCalendar(container, model) {
         remove.className = "dayoff-calendar__remove";
         remove.setAttribute("aria-hidden", "true");
         const removeIcon = document.createElement("img");
-        removeIcon.src = "../../../assets/iconClose.svg";
+        removeIcon.src = "/../../assets/iconClose.svg";
         removeIcon.alt = "";
         removeIcon.setAttribute("aria-hidden", "true");
         remove.appendChild(removeIcon);

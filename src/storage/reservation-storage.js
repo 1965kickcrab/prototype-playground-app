@@ -93,6 +93,32 @@ function normalizeTimeOrNull(value) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeCreatedAt(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+  const dateMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateMatch) {
+    return `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T00:00:00.000Z`;
+  }
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return parsed.toISOString();
+}
+
+function deriveCreatedAtFallback(item = {}) {
+  const dates = Array.isArray(item?.dates) ? item.dates : [];
+  const dateKeys = dates
+    .map((entry) => String(entry?.date || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  const firstDate = dateKeys[0] || String(item?.date || "").trim();
+  return firstDate ? `${firstDate}T00:00:00.000Z` : "";
+}
+
 function hasPersistablePayment(payment) {
   if (!payment || typeof payment !== "object") {
     return false;
@@ -130,6 +156,7 @@ function normalizeReservation(item = {}) {
             date: d.date,
             kind: d.kind, // 'checkin', 'checkout', 'stay'
             baseStatusKey: entryStatusKey,
+            canceledAt: normalizeCreatedAt(d.canceledAt),
             ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
             ...normalizePickdropFlags(d, item),
             checkinTime: normalizeTimeOrNull(
@@ -161,6 +188,7 @@ function normalizeReservation(item = {}) {
             date: d.date,
             service: d.service || service,
             baseStatusKey: statusKey,
+            canceledAt: normalizeCreatedAt(d.canceledAt),
             ticketUsages: normalizeTicketUsages(d.ticketUsages, d.ticketUsage),
             ...normalizePickdropFlags(d, item),
             checkinTime: normalizeTimeOrNull(d.checkinTime ?? item.checkinTime),
@@ -173,6 +201,12 @@ function normalizeReservation(item = {}) {
     id,
     type,
     memberId,
+    createdAt: normalizeCreatedAt(
+      item.createdAt
+      || item.createdDate
+      || item.createdDateKey
+      || deriveCreatedAtFallback(item)
+    ),
     memo,
     service,
     room,
@@ -228,7 +262,10 @@ export function initReservationStorage() {
     },
     addReservation(reservation) {
         const existing = readReservations();
-        const normalized = normalizeReservation(reservation);
+        const normalized = normalizeReservation({
+          ...reservation,
+          createdAt: reservation?.createdAt || new Date().toISOString(),
+        });
         const next = [...existing, normalized];
         writeReservations(next);
         return next;

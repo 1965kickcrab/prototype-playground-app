@@ -1,4 +1,9 @@
-import { formatTicketDisplayName, formatTicketType } from "../services/ticket-service.js";
+import {
+  formatTicketDisplayName,
+  formatTicketType,
+  getTicketReservableValue,
+  getTicketUnitLabel,
+} from "../services/ticket-service.js";
 
 export function renderTicketOptions(
   container,
@@ -65,13 +70,13 @@ export function renderTicketOptions(
     name.appendChild(badge);
     name.appendChild(nameText);
 
-    const reservableRaw = Number(ticket?.reservableCount);
+    const reservableRaw = Number(getTicketReservableValue(ticket));
     const remainingRaw = Number(ticket?.remainingCount);
     const remainingBefore = Number.isFinite(reservableRaw)
       ? reservableRaw
       : (Number.isFinite(remainingRaw) ? remainingRaw : 0);
 
-    const unitLabel = ticket.type === "hoteling" ? "박" : "회";
+    const unitLabel = getTicketUnitLabel(ticket.type);
     const meta = document.createElement("span");
     meta.className = "reservation-ticket-row__meta";
     if (selectedSet.has(ticket.id)) {

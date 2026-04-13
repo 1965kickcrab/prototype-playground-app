@@ -110,7 +110,7 @@
           <div class="ticket-table__header" role="row">
             <span role="columnheader">유형</span>
             <span role="columnheader">이용권</span>
-            <span role="columnheader">총횟수</span>
+            <span role="columnheader">총수량</span>
             <span role="columnheader">유효기간</span>
             <span role="columnheader">등원 요일</span>
             <span role="columnheader">금액</span>
@@ -276,7 +276,7 @@
             </div>
           </div>
           <div class="ticket-form__row">
-            <label class="ticket-form__label" for="ticket-create-quantity">총 횟수 <span class="text-accent">*</span></label>
+            <label class="ticket-form__label" for="ticket-create-quantity" data-ticket-quantity-label>총 횟수 <span class="text-accent">*</span></label>
             <div class="ticket-input-group">
               <input class="form-field__control" id="ticket-create-quantity" type="number" min="1" max="999" placeholder="최대 999" data-ticket-quantity required>
               <span class="ticket-input-suffix" data-ticket-quantity-suffix>회</span>
@@ -449,7 +449,7 @@
             </div>
           </div>
           <div class="ticket-form__row">
-            <label class="ticket-form__label" for="ticket-edit-quantity">총 횟수 <span class="text-accent">*</span></label>
+            <label class="ticket-form__label" for="ticket-edit-quantity" data-ticket-quantity-label>총 횟수 <span class="text-accent">*</span></label>
             <div class="ticket-input-group">
               <input class="form-field__control" id="ticket-edit-quantity" type="number" min="1" max="999" placeholder="최대 999" data-ticket-quantity required>
               <span class="ticket-input-suffix" data-ticket-quantity-suffix>회</span>
@@ -487,13 +487,13 @@
               <span class="ticket-issue__badge" data-ticket-issue-type>-</span>
               <span class="ticket-issue__name" data-ticket-issue-name>-</span>
             </div>
-            <span class="ticket-issue__meta" data-ticket-issue-meta>총횟수: - / 유효기간: -</span>
+            <span class="ticket-issue__meta" data-ticket-issue-meta>총수량: - / 유효기간: -</span>
           </div>
         </div>
         <div class="ticket-issue__toolbar">
           <h3>회원 목록</h3>
           <label class="search ticket-issue__search">
-            <img src="../../assets/searchIcon.svg" alt="" aria-hidden="true">
+            <img src="../../assets/iconSearch.svg" alt="" aria-hidden="true">
             <input type="search" placeholder="반려견 / 보호자 검색" data-ticket-issue-search>
           </label>
         </div>

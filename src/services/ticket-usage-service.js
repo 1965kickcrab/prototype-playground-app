@@ -41,7 +41,11 @@ export function mergeTicketUsagesForDate(serviceUsage, pickdropUsages = []) {
     merged.push(normalized);
   };
 
-  appendUsage(serviceUsage);
+  if (Array.isArray(serviceUsage)) {
+    serviceUsage.forEach((usage) => appendUsage(usage));
+  } else {
+    appendUsage(serviceUsage);
+  }
   if (Array.isArray(pickdropUsages)) {
     pickdropUsages.forEach((usage) => appendUsage(usage));
   }

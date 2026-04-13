@@ -8,10 +8,13 @@ import { setupList } from "../components/list.js";
 import { setupReservationModal } from "./reservation.js";
 import { setupFilterPanel } from "../components/filter-panel.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
+import { setupServiceSwitcher } from "../utils/service-switcher.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { setupSidebarReservationBadges } from "../utils/sidebar-reservation-badge.js";
+import { loadMemberTagCatalog } from "../storage/member-tag-catalog.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
   const storage = initReservationStorage();
   const timeZone = getTimeZone();
   const classStorage = initClassStorage();
@@ -41,8 +44,9 @@ document.addEventListener("DOMContentLoaded", () => {
     paid: true,
     unpaid: true,
   };
+  const selectedTags = {};
   const existingReservations = storage.loadReservations().filter(
-    (r) => r?.type === "school" || r?.type === "daycare"
+    (r) => r?.type === "school" || r?.type === "daycare" || r?.type === "pickdrop"
   );
   const state = initState(existingReservations, {
     selectedServices,
@@ -51,8 +55,22 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedTeachers,
     selectedPaymentStatuses,
     paymentStatusOptions: ["paid", "unpaid"],
+    selectedTags,
+    tagOptions: loadMemberTagCatalog(),
     classTeachers,
   });
+  const selectedDateParam = params.get("dateKey") || "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(selectedDateParam)) {
+    const [yearText, monthText, dayText] = selectedDateParam.split("-");
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+    const parsedDate = new Date(year, month - 1, day);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      state.currentDate = new Date(parsedDate);
+      state.selectedDate = new Date(parsedDate);
+    }
+  }
   const filterPanel = document.querySelector("[data-filter-panel]");
 
   setupFilterPanel(filterPanel, classes, state);
@@ -62,6 +80,7 @@ document.addEventListener("DOMContentLoaded", () => {
     iconOpen: "../assets/menuIcon_sidebar_open.svg",
     iconClose: "../assets/menuIcon_sidebar_close.svg",
   });
+  setupServiceSwitcher(document);
   setupSidebarReservationBadges({ storage, timeZone });
   setupReservationModal(state, storage);
 });

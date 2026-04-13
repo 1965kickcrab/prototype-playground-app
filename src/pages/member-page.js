@@ -1,4 +1,8 @@
-import { ensureMemberDefaults, loadIssueMembers } from "../storage/ticket-issue-members.js";
+import {
+  ensureMemberDefaults,
+  loadIssueMembers,
+  updateIssueMembersPetTags,
+} from "../storage/ticket-issue-members.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 import { setupSidebarToggle } from "../utils/sidebar.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
@@ -10,29 +14,12 @@ import {
   filterMembersByTags,
   getPagedMembers,
 } from "../services/member-page-service.js";
-import { initMemberTicketIssueModal } from "../components/member-ticket-issue-modal.js";
 import { buildActiveReservationCountByMemberType } from "../services/member-reservable-count.js";
 import { sanitizeTagList, toTagQuery } from "../utils/tags.js";
 import { loadMemberTagCatalog } from "../storage/member-tag-catalog.js";
-import { applyMemberTagCatalogEdits } from "../services/member-tag-management-service.js";
+import { initTagInput } from "../components/tag-input.js";
 
 const PAGE_SIZE = 10;
-
-function bindIssueButtonNavigation(root, onIssue) {
-  root?.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement
-      ? event.target.closest("[data-member-issue]")
-      : null;
-    if (!target) {
-      return;
-    }
-    const memberId = target.dataset.memberId || "";
-    if (!memberId || typeof onIssue !== "function") {
-      return;
-    }
-    onIssue(memberId);
-  });
-}
 
 function bindRowNavigation(root) {
   const moveToDetail = (memberId) => {
@@ -45,7 +32,11 @@ function bindRowNavigation(root) {
 
   root?.addEventListener("click", (event) => {
     const element = event.target instanceof HTMLElement ? event.target : null;
-    if (!element || element.closest("[data-member-issue]")) {
+    if (
+      !element
+      || element.closest("[data-member-issue]")
+      || element.closest("[data-member-select-control]")
+    ) {
       return;
     }
     const row = element.closest("[data-member-row]");
@@ -60,6 +51,9 @@ function bindRowNavigation(root) {
       return;
     }
     const element = event.target instanceof HTMLElement ? event.target : null;
+    if (element?.closest?.("[data-member-select-control]")) {
+      return;
+    }
     const row = element?.closest?.("[data-member-row]");
     if (!row) {
       return;
@@ -98,157 +92,45 @@ function escapeHtml(value) {
     .replaceAll("\"", "&quot;");
 }
 
-function mapSelectedTagsAfterCatalogEdit(selectedTagMap, editResult) {
-  const source = selectedTagMap && typeof selectedTagMap === "object" ? selectedTagMap : {};
-  const renameMap = editResult?.renameMap && typeof editResult.renameMap === "object"
-    ? editResult.renameMap
-    : {};
-  const deletedKeys = new Set(Array.isArray(editResult?.deletedKeys) ? editResult.deletedKeys : []);
-  const next = {};
-
-  Object.keys(source).forEach((tag) => {
-    if (source[tag] !== true) {
-      return;
-    }
-    const sourceKey = toTagQuery(tag);
-    if (!sourceKey || deletedKeys.has(sourceKey)) {
-      return;
-    }
-    const mapped = renameMap[sourceKey];
-    const finalTag = String(mapped || tag).trim();
-    if (!finalTag) {
-      return;
-    }
-    next[finalTag] = true;
-  });
-  return next;
+function getSelectedMembers(allMembers, selectedMemberIds) {
+  const list = Array.isArray(allMembers) ? allMembers : [];
+  const selectedIds = selectedMemberIds instanceof Set ? selectedMemberIds : new Set();
+  return list.filter((member) => selectedIds.has(String(member?.id || "")));
 }
 
-function initMemberTagManageModal(options = {}) {
-  const {
-    modal,
-    onSaved = null,
-  } = options;
-  if (!modal) {
-    return null;
+function collectPetTags(members) {
+  const list = Array.isArray(members) ? members : [];
+  const tags = [];
+  list.forEach((member) => {
+    tags.push(...(Array.isArray(member?.petTags) ? member.petTags : []));
+  });
+  return sanitizeTagList(tags);
+}
+
+function collectCommonPetTags(members) {
+  const list = Array.isArray(members) ? members : [];
+  if (!list.length) {
+    return [];
   }
-  const overlay = modal.querySelector("[data-member-tag-manage-overlay]");
-  const closeButton = modal.querySelector("[data-member-tag-manage-close]");
-  const cancelButton = modal.querySelector("[data-member-tag-manage-cancel]");
-  const saveButton = modal.querySelector("[data-member-tag-manage-save]");
-  const list = modal.querySelector("[data-member-tag-manage-list]");
-  if (!overlay || !closeButton || !cancelButton || !saveButton || !list) {
-    return null;
-  }
-
-  const state = { drafts: [] };
-
-  const close = () => {
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
-  };
-
-  const open = () => {
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
-  };
-
-  const render = () => {
-    list.innerHTML = "";
-    if (!state.drafts.length) {
-      const empty = document.createElement("div");
-      empty.className = "member-tag-manage__empty";
-      empty.textContent = "등록된 태그가 없습니다.";
-      list.appendChild(empty);
-      return;
-    }
-    state.drafts.forEach((draft, index) => {
-      const row = document.createElement("div");
-      row.className = "member-tag-manage__row";
-      if (draft.isDeleted) {
-        row.classList.add("is-deleted");
-      }
-      row.dataset.tagDraftIndex = String(index);
-      row.innerHTML = `
-        <input class="form-field__control" type="text" value="${escapeHtml(draft.nextTag)}" data-tag-draft-input>
-        <button
-          class="member-tag-manage__delete${draft.isDeleted ? " is-deleted" : ""}"
-          type="button"
-          data-tag-draft-delete
-          aria-label="${draft.isDeleted ? "삭제 복구" : "태그 삭제"}"
-        >
-          ${draft.isDeleted
-    ? "복구"
-    : "<img src=\"../../assets/iconDelete.svg\" alt=\"\" aria-hidden=\"true\">"}
-        </button>
-      `;
-      list.appendChild(row);
-    });
-  };
-
-  const resetDrafts = () => {
-    const catalog = loadMemberTagCatalog();
-    state.drafts = catalog.map((tag) => ({
-      sourceTag: tag,
-      nextTag: tag,
-      isDeleted: false,
-    }));
-    render();
-  };
-
-  overlay.addEventListener("click", close);
-  closeButton.addEventListener("click", close);
-  cancelButton.addEventListener("click", close);
-
-  saveButton.addEventListener("click", () => {
-    const result = applyMemberTagCatalogEdits(state.drafts);
-    if (typeof onSaved === "function") {
-      onSaved(result);
-    }
-    close();
-  });
-
-  list.addEventListener("click", (event) => {
-    const button = event.target instanceof HTMLElement
-      ? event.target.closest("[data-tag-draft-delete]")
-      : null;
-    if (!button) {
-      return;
-    }
-    const row = button.closest("[data-tag-draft-index]");
-    const index = Number.parseInt(row?.dataset.tagDraftIndex || "", 10);
-    if (!Number.isFinite(index) || !state.drafts[index]) {
-      return;
-    }
-    state.drafts[index].isDeleted = !state.drafts[index].isDeleted;
-    render();
-  });
-
-  list.addEventListener("input", (event) => {
-    const input = event.target;
-    if (!(input instanceof HTMLInputElement) || !input.matches("[data-tag-draft-input]")) {
-      return;
-    }
-    const row = input.closest("[data-tag-draft-index]");
-    const index = Number.parseInt(row?.dataset.tagDraftIndex || "", 10);
-    if (!Number.isFinite(index) || !state.drafts[index]) {
-      return;
-    }
-    state.drafts[index].nextTag = input.value;
-  });
-
-  return {
-    openModal() {
-      resetDrafts();
-      open();
-    },
-  };
+  const [first, ...rest] = list;
+  const initial = sanitizeTagList(first?.petTags);
+  return initial.filter((tag) =>
+    rest.every((member) => sanitizeTagList(member?.petTags).includes(tag))
+  );
 }
 
 function initMembersView() {
   const rowsContainer = document.querySelector("[data-member-rows]");
   const paginationContainer = document.querySelector("[data-member-pagination]");
   const searchInput = document.querySelector("[data-member-search]");
+  const memberCount = document.querySelector("[data-member-count-value]");
+  const memberSelectAll = document.querySelector("[data-member-select-all]");
+  const bulkActions = document.querySelector("[data-member-bulk-actions]");
+  const bulkCount = document.querySelector("[data-member-bulk-count]");
+  const bulkTagToggle = document.querySelector("[data-member-bulk-tag-toggle]");
+  const bulkTagPopover = document.querySelector("[data-member-bulk-tag-popover]");
+  const bulkCommonTags = document.querySelector("[data-member-bulk-common-tags]");
+  const bulkTagEditor = document.querySelector("[data-member-bulk-tag-editor]");
   const filterPanel = document.querySelector("[data-filter-panel]");
   const filterToggle = filterPanel?.querySelector("[data-filter-toggle]");
   const filterBody = filterPanel?.querySelector("[data-filter-panel-body]");
@@ -257,12 +139,19 @@ function initMembersView() {
   const filterBadge = filterPanel?.querySelector("[data-filter-badge]");
   const filterReset = filterPanel?.querySelector("[data-filter-reset]");
   const tagManageOpenButton = filterPanel?.querySelector("[data-member-tag-manage-open]");
-  const tagManageModal = document.querySelector("[data-member-tag-manage-modal]");
   const reservationStorage = initReservationStorage();
   if (
     !rowsContainer
     || !paginationContainer
     || !searchInput
+    || !memberCount
+    || !memberSelectAll
+    || !bulkActions
+    || !bulkCount
+    || !bulkTagToggle
+    || !bulkTagPopover
+    || !bulkCommonTags
+    || !bulkTagEditor
     || !filterPanel
     || !filterToggle
     || !filterBody
@@ -271,7 +160,6 @@ function initMembersView() {
     || !filterBadge
     || !filterReset
     || !tagManageOpenButton
-    || !tagManageModal
   ) {
     return;
   }
@@ -283,29 +171,9 @@ function initMembersView() {
   let currentPage = 1;
   let currentQuery = "";
   let selectedTagMap = {};
-  const issueModal = document.querySelector("[data-member-ticket-issue-modal]");
-
-  const issueModalController = initMemberTicketIssueModal({
-    modal: issueModal,
-    onIssued: () => {
-      allMembers = loadIssueMembers();
-      renderTagMenu();
-      updateFilterDisplay();
-      render();
-    },
-  });
-
-  const tagManageController = initMemberTagManageModal({
-    modal: tagManageModal,
-    onSaved: (editResult) => {
-      allMembers = loadIssueMembers();
-      selectedTagMap = mapSelectedTagsAfterCatalogEdit(selectedTagMap, editResult);
-      renderTagMenu();
-      updateFilterDisplay();
-      currentPage = 1;
-      render();
-    },
-  });
+  let selectedMemberIds = new Set();
+  let currentPageMemberIds = [];
+  let bulkTagInputController = null;
 
   const closeTagMenu = () => {
     tagMenu.hidden = true;
@@ -326,6 +194,103 @@ function initMembersView() {
   const openFilterPanel = () => {
     filterBody.hidden = false;
     filterToggle.setAttribute("aria-expanded", "true");
+  };
+
+  const closeBulkTagPopover = () => {
+    bulkTagPopover.hidden = true;
+    bulkTagToggle.setAttribute("aria-expanded", "false");
+  };
+
+  const syncBulkActionPosition = () => {
+    if (bulkActions.hidden) {
+      bulkActions.style.removeProperty("--member-bulk-left");
+      bulkActions.style.removeProperty("--member-bulk-top");
+      return;
+    }
+    const rect = memberSelectAll.getBoundingClientRect();
+    if (!rect.width && !rect.height) {
+      return;
+    }
+    const left = rect.right + 12;
+    const top = Math.max(56, rect.top - 48);
+    bulkActions.style.setProperty("--member-bulk-left", `${Math.round(left)}px`);
+    bulkActions.style.setProperty("--member-bulk-top", `${Math.round(top)}px`);
+  };
+
+  const getSelectedMembersOnPage = () => getSelectedMembers(allMembers, selectedMemberIds);
+
+  const getBulkTagCatalog = () => {
+    return sanitizeTagList([
+      ...loadMemberTagCatalog(),
+      ...collectAvailableTags(allMembers),
+    ]);
+  };
+
+  const renderBulkCommonTags = () => {
+    const commonTags = collectCommonPetTags(getSelectedMembersOnPage());
+    bulkCommonTags.innerHTML = "";
+    if (!commonTags.length) {
+      const empty = document.createElement("div");
+      empty.className = "member-bulk-actions__common-empty";
+      empty.textContent = "선택한 회원 모두에게 공통으로 붙은 태그가 없습니다.";
+      bulkCommonTags.appendChild(empty);
+      return;
+    }
+
+    commonTags.forEach((tag) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "member-tag-editor__chip member-bulk-actions__common-tag";
+      chip.dataset.memberBulkRemoveTag = tag;
+      chip.innerHTML = `
+        <span>${escapeHtml(tag)}</span>
+        <span class="member-bulk-actions__common-tag-remove" aria-hidden="true">×</span>
+      `;
+      bulkCommonTags.appendChild(chip);
+    });
+  };
+
+  const renderBulkTagEditor = () => {
+    renderBulkCommonTags();
+    bulkTagEditor.innerHTML = `
+      <div class="member-tag-editor__selected" data-member-tag-selected hidden></div>
+      <div class="member-tag-editor__input-wrap">
+        <input class="form-field__control" type="text" placeholder="옵션 선택 또는 생성" data-member-tag-input>
+        <div class="member-tag-editor__suggestions" data-member-tag-suggestions hidden></div>
+      </div>
+    `;
+    bulkTagInputController = initTagInput({
+      container: bulkTagEditor,
+      initialTags: [],
+      getCatalog: () => getBulkTagCatalog(),
+      onChange: (tags) => {
+        if (!tags.length || selectedMemberIds.size === 0) {
+          return;
+        }
+        allMembers = updateIssueMembersPetTags([...selectedMemberIds], tags, "add");
+        renderTagMenu();
+        updateFilterDisplay();
+        render();
+        if (selectedMemberIds.size > 0) {
+          openBulkTagPopover();
+        }
+      },
+    });
+  };
+
+  const openBulkTagPopover = () => {
+    bulkTagPopover.hidden = false;
+    bulkTagToggle.setAttribute("aria-expanded", "true");
+    renderBulkTagEditor();
+    bulkTagEditor.querySelector("[data-member-tag-input]")?.focus();
+  };
+
+  const clearSelection = () => {
+    selectedMemberIds = new Set();
+    currentPageMemberIds = [];
+    memberSelectAll.checked = false;
+    memberSelectAll.indeterminate = false;
+    closeBulkTagPopover();
   };
 
   const getSelectedTags = () =>
@@ -371,6 +336,19 @@ function initMembersView() {
     });
   };
 
+  const updateBulkActions = () => {
+    const selectedCount = selectedMemberIds.size;
+    bulkActions.hidden = selectedCount === 0;
+    bulkCount.textContent = `${selectedCount}명 선택됨`;
+    if (selectedCount === 0) {
+      closeBulkTagPopover();
+    }
+    const pageSelectedCount = currentPageMemberIds.filter((memberId) => selectedMemberIds.has(memberId)).length;
+    memberSelectAll.checked = currentPageMemberIds.length > 0 && pageSelectedCount === currentPageMemberIds.length;
+    memberSelectAll.indeterminate = pageSelectedCount > 0 && pageSelectedCount < currentPageMemberIds.length;
+    syncBulkActionPosition();
+  };
+
   const render = () => {
     const filteredByQuery = filterMembers(allMembers, currentQuery);
     const filtered = filterMembersByTags(filteredByQuery, getSelectedTags());
@@ -379,17 +357,25 @@ function initMembersView() {
       reservationStorage.loadReservations()
     );
     currentPage = pageData.currentPage;
+    currentPageMemberIds = pageData.items.map((member) => String(member?.id || ""));
+    selectedMemberIds = new Set(
+      [...selectedMemberIds].filter((memberId) => currentPageMemberIds.includes(memberId))
+    );
+    memberCount.textContent = String(filtered.length);
     renderMemberRows(
       rowsContainer,
       pageData.items,
-      activeReservationCountsByMemberType
+      activeReservationCountsByMemberType,
+      selectedMemberIds
     );
     renderMemberPagination(paginationContainer, pageData.totalPages, pageData.currentPage);
+    updateBulkActions();
   };
 
   searchInput.addEventListener("input", () => {
     currentQuery = searchInput.value || "";
     currentPage = 1;
+    clearSelection();
     render();
   });
 
@@ -405,6 +391,7 @@ function initMembersView() {
       return;
     }
     currentPage = nextPage;
+    clearSelection();
     render();
   });
 
@@ -434,14 +421,12 @@ function initMembersView() {
     renderTagMenu();
     updateFilterDisplay();
     currentPage = 1;
+    clearSelection();
     render();
   });
 
   tagManageOpenButton.addEventListener("click", () => {
     closeTagMenu();
-    if (tagManageController) {
-      tagManageController.openModal();
-    }
   });
 
   tagMenu.addEventListener("change", (event) => {
@@ -456,7 +441,67 @@ function initMembersView() {
     selectedTagMap[tag] = input.checked;
     updateFilterDisplay();
     currentPage = 1;
+    clearSelection();
     render();
+  });
+
+  rowsContainer.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.matches("[data-member-select]")) {
+      return;
+    }
+    const memberId = String(input.dataset.memberId || "");
+    if (!memberId) {
+      return;
+    }
+    if (input.checked) {
+      selectedMemberIds.add(memberId);
+    } else {
+      selectedMemberIds.delete(memberId);
+    }
+    closeBulkTagPopover();
+    render();
+  });
+
+  memberSelectAll.addEventListener("change", () => {
+    if (memberSelectAll.checked) {
+      currentPageMemberIds.forEach((memberId) => selectedMemberIds.add(memberId));
+    } else {
+      currentPageMemberIds.forEach((memberId) => selectedMemberIds.delete(memberId));
+    }
+    closeBulkTagPopover();
+    render();
+  });
+
+  bulkTagToggle.addEventListener("click", () => {
+    if (selectedMemberIds.size === 0) {
+      return;
+    }
+    if (bulkTagPopover.hidden) {
+      openBulkTagPopover();
+      return;
+    }
+    closeBulkTagPopover();
+  });
+
+  bulkCommonTags.addEventListener("click", (event) => {
+    const button = event.target instanceof HTMLElement
+      ? event.target.closest("[data-member-bulk-remove-tag]")
+      : null;
+    if (!button || selectedMemberIds.size === 0) {
+      return;
+    }
+    const tag = button.dataset.memberBulkRemoveTag || "";
+    if (!tag) {
+      return;
+    }
+    allMembers = updateIssueMembersPetTags([...selectedMemberIds], [tag], "remove");
+    renderTagMenu();
+    updateFilterDisplay();
+    render();
+    if (selectedMemberIds.size > 0) {
+      openBulkTagPopover();
+    }
   });
 
   document.addEventListener("click", (event) => {
@@ -470,13 +515,32 @@ function initMembersView() {
     closeFilterPanel();
   });
 
-  bindIssueButtonNavigation(rowsContainer, (memberId) => {
-    const member = allMembers.find((item) => String(item?.id || "") === String(memberId));
-    if (!member || !issueModalController) {
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target) {
       return;
     }
-    issueModalController.openModalWithMember(member);
+    if (bulkActions.contains(target)) {
+      return;
+    }
+    closeBulkTagPopover();
   });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    closeBulkTagPopover();
+  });
+
+  window.addEventListener("resize", () => {
+    syncBulkActionPosition();
+  });
+
+  window.addEventListener("scroll", () => {
+    syncBulkActionPosition();
+  }, { passive: true });
+
   bindRowNavigation(rowsContainer);
   renderTagMenu();
   updateFilterDisplay();

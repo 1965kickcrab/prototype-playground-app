@@ -170,6 +170,46 @@ function renderPaymentMenu(container, state) {
   });
 }
 
+function renderTagMenu(container, state) {
+  if (!container) {
+    return;
+  }
+
+  const options = Array.isArray(state.tagOptions) ? state.tagOptions : [];
+  if (!state.selectedTags || typeof state.selectedTags !== "object") {
+    state.selectedTags = {};
+  }
+
+  container.innerHTML = "";
+  if (!options.length) {
+    const empty = document.createElement("div");
+    empty.className = "menu-option menu-option--empty";
+    empty.innerHTML = '<span class="menu-option__title">등록된 태그가 없습니다.</span>';
+    container.appendChild(empty);
+    return;
+  }
+
+  options.forEach((name) => {
+    const label = document.createElement("label");
+    label.className = "menu-option";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = name;
+    input.checked = state.selectedTags[name] === true;
+    input.setAttribute("data-tag-filter", "");
+
+    const title = document.createElement("span");
+    title.className = "menu-option__title";
+    title.textContent = name;
+
+    label.appendChild(input);
+    label.appendChild(title);
+    updateMenuOptionState(label);
+    container.appendChild(label);
+  });
+}
+
 function updateFilterSummary(panel) {
   const classButton = panel.querySelector("[data-filter-button='class']");
   const classInputs = panel.querySelectorAll("[data-class-filter]");
@@ -209,6 +249,22 @@ function updateFilterSummary(panel) {
     paymentLabelMap
   );
 
+  const tagButton = panel.querySelector("[data-filter-button='tag']");
+  const tagInputs = panel.querySelectorAll("[data-tag-filter]");
+  const tagSelected = Array.from(tagInputs)
+    .filter((input) => input.checked)
+    .map((input) => input.value);
+  if (tagButton) {
+    if (tagSelected.length === 0) {
+      tagButton.textContent = "태그";
+    } else if (tagSelected.length === 1) {
+      tagButton.textContent = tagSelected[0];
+    } else {
+      const sorted = [...tagSelected].sort((a, b) => a.localeCompare(b, "ko"));
+      tagButton.textContent = `${sorted[0]} 외 ${tagSelected.length - 1}`;
+    }
+  }
+
   const badge = panel.querySelector("[data-filter-badge]");
   if (badge) {
     let activeCount = 0;
@@ -219,6 +275,9 @@ function updateFilterSummary(panel) {
       activeCount += 1;
     }
     if (paymentInputs.length > 0 && paymentSelected.length !== paymentInputs.length) {
+      activeCount += 1;
+    }
+    if (tagSelected.length > 0) {
       activeCount += 1;
     }
     badge.textContent = String(activeCount);
@@ -254,11 +313,13 @@ export function setupFilterPanel(panel, classes, state) {
   const classMenu = panel.querySelector("[data-filter-menu='class']");
   const teacherMenu = panel.querySelector("[data-filter-menu='teacher']");
   const paymentMenu = panel.querySelector("[data-filter-menu='payment']");
-  const menus = [classMenu, teacherMenu, paymentMenu].filter(Boolean);
+  const tagMenu = panel.querySelector("[data-filter-menu='tag']");
+  const menus = [classMenu, teacherMenu, paymentMenu, tagMenu].filter(Boolean);
 
   renderClassMenu(classMenu, classes, state);
   renderTeacherMenu(teacherMenu, classes, state);
   renderPaymentMenu(paymentMenu, state);
+  renderTagMenu(tagMenu, state);
   updateFilterSummary(panel);
   closeAllMenus(menus);
 
@@ -314,10 +375,18 @@ export function setupFilterPanel(panel, classes, state) {
           updateMenuOptionState(input.closest(".menu-option"));
         }
       });
+      panel.querySelectorAll("[data-tag-filter]").forEach((input) => {
+        if (input instanceof HTMLInputElement) {
+          input.checked = false;
+          state.selectedTags[input.value] = false;
+          updateMenuOptionState(input.closest(".menu-option"));
+        }
+      });
       updateFilterSummary(panel);
       document.dispatchEvent(new CustomEvent("service-filter:change"));
       document.dispatchEvent(new CustomEvent("teacher-filter:change"));
       document.dispatchEvent(new CustomEvent("payment-filter:change"));
+      document.dispatchEvent(new CustomEvent("tag-filter:change"));
     }
   });
 
@@ -360,6 +429,13 @@ export function setupFilterPanel(panel, classes, state) {
       updateMenuOptionState(input.closest(".menu-option"));
       updateFilterSummary(panel);
       document.dispatchEvent(new CustomEvent("payment-filter:change"));
+      return;
+    }
+    if (input.matches("[data-tag-filter]")) {
+      state.selectedTags[input.value] = input.checked;
+      updateMenuOptionState(input.closest(".menu-option"));
+      updateFilterSummary(panel);
+      document.dispatchEvent(new CustomEvent("tag-filter:change"));
     }
   });
 

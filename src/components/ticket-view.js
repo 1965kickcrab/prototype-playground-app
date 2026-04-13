@@ -5,6 +5,7 @@ import {
   formatTicketType,
   formatTicketValidity,
   formatTicketWeekdays,
+  getTicketQuantityValue,
 } from "../services/ticket-service.js";
 
 function createCell(value, className) {
@@ -39,7 +40,10 @@ export function renderTicketRows(container, tickets) {
       createCell(formatTicketDisplayName(ticket), "ticket-table__name")
     );
     row.appendChild(
-      createCell(formatTicketCount(ticket.quantity), "ticket-table__count")
+      createCell(
+        formatTicketCount(getTicketQuantityValue(ticket), ticket.type),
+        "ticket-table__count"
+      )
     );
     row.appendChild(
       createCell(

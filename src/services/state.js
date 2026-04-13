@@ -18,6 +18,8 @@
     paymentStatusOptions: Array.isArray(options.paymentStatusOptions)
       ? options.paymentStatusOptions
       : ["paid", "unpaid"],
+    selectedTags: options.selectedTags || {},
+    tagOptions: Array.isArray(options.tagOptions) ? options.tagOptions : [],
     classTeachers: options.classTeachers || {},
   };
 }

@@ -8,6 +8,10 @@ import { getDateKeyFromParts, getDatePartsFromKey, getZonedParts, sortDateKeys }
 import { getTimeZone } from "../utils/timezone.js";
 import { getIssuedTicketOptions } from "./ticket-reservation-service.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
+import {
+    getDefaultLinkedTicketSelection,
+    getLinkedTargetKeysBySelection,
+} from "./ticket-linking.js";
 
 const { STATUS } = initReservationStorage();
 export { STATUS };
@@ -223,39 +227,58 @@ export function getHotelingTicketOptions(tickets, memberTickets) {
     );
 }
 
-export function getHotelingRoomIdsForTickets(tickets, ticketOptions, selectionOrder) {
-    const list = Array.isArray(ticketOptions) ? ticketOptions : [];
-    const ticketMap = new Map((Array.isArray(tickets) ? tickets : []).map((ticket) => [String(ticket?.id ?? ""), ticket]));
-    const optionMap = new Map(list.map((option) => [option.id, option]));
-    const selected = Array.isArray(selectionOrder) && selectionOrder.length > 0 ? selectionOrder : list.map((option) => option.id);
-    const roomIds = new Set();
-
-    for (const optionId of selected) {
-        const option = optionMap.get(optionId);
-        const ticketId = String(option?.ticketId ?? "");
-        if (!ticketId) continue;
-        
-        const ticket = ticketMap.get(ticketId);
-        if (!ticket || ticket.type !== "hoteling") continue;
-
-        const classIds = Array.isArray(ticket.classIds) ? ticket.classIds : [];
-        for (const id of classIds) {
-            const normalized = normalizeRoomId(id);
-            if (normalized) roomIds.add(normalized);
-        }
-    }
-    return roomIds;
+export function getDefaultHotelingTicketSelection(rooms, ticketOptions) {
+    return getDefaultLinkedTicketSelection(
+        rooms,
+        ticketOptions,
+        (room) => room?.ticketIds
+    );
 }
 
-export function buildHotelingEntriesForDate(reservations, dateKey) {
+export function getEligibleHotelingTicketOptions(rooms, ticketOptions, roomId) {
+    const optionList = Array.isArray(ticketOptions) ? ticketOptions : [];
+    const normalizedRoomId = normalizeRoomId(roomId);
+    if (!normalizedRoomId || optionList.length === 0) {
+        return optionList;
+    }
+
+    const room = (Array.isArray(rooms) ? rooms : []).find(
+        (item) => normalizeRoomId(item?.id) === normalizedRoomId
+    );
+    const ticketIds = Array.isArray(room?.ticketIds) ? room.ticketIds : [];
+    if (ticketIds.length === 0) {
+        return optionList;
+    }
+
+    const ticketIdSet = new Set(ticketIds.map((ticketId) => String(ticketId ?? "")));
+    return optionList.filter((option) =>
+        ticketIdSet.has(String(option?.ticketId ?? ""))
+    );
+}
+
+export function getHotelingRoomIdsForTickets(rooms, ticketOptions, selectionOrder) {
+    return getLinkedTargetKeysBySelection(
+        rooms,
+        ticketOptions,
+        selectionOrder,
+        {
+            getTicketIds: (room) => room?.ticketIds,
+            getTargetKey: (room) => normalizeRoomId(room?.id),
+        }
+    );
+}
+
+export function buildHotelingEntriesForDate(reservations, dateKey, options = {}) {
     const groups = { checkin: [], checkout: [], stay: [] };
     if (!dateKey) return groups;
+    const includeCanceled = Boolean(options?.includeCanceled);
 
     const hotelingReservations = reservations.filter(r => r.type === 'hoteling');
 
     for (const reservation of hotelingReservations) {
         for (const entry of reservation.dates) {
-            if (entry.date !== dateKey || entry.status === STATUS.CANCELED) continue;
+            if (entry.date !== dateKey) continue;
+            if (!includeCanceled && entry.status === STATUS.CANCELED) continue;
             
             const groupEntry = { reservation, entry };
             if (entry.kind === "checkin") groups.checkin.push(groupEntry);

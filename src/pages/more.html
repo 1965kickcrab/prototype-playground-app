@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 더보기</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" hidden></aside>
+
+    <main class="main more-page">
+      <header class="topbar more-page__topbar">
+        <div class="topbar__left"></div>
+        <div class="topbar__actions">
+          <button class="icon-button icon-button--secondary more-page__notice-button" type="button" aria-label="알림">
+            <img src="../../assets/menuIcon_notification.svg" alt="" aria-hidden="true">
+          </button>
+        </div>
+      </header>
+
+      <div class="main__content more-page__content">
+        <section class="more-page__profile-section" aria-label="프로필">
+          <div class="more-page__profile">
+            <div class="more-page__avatar" aria-hidden="true">
+              <img src="../../assets/defaultProfile_dog.svg" alt="">
+            </div>
+            <div class="more-page__profile-text">
+              <span class="more-page__profile-label">아이디</span>
+              <strong class="more-page__profile-id">dialodog</strong>
+            </div>
+          </div>
+
+          <div class="more-page__shortcut-grid">
+            <a class="more-page__shortcut" href="./hotels.html">
+              <img class="more-page__shortcut-icon" src="../../assets/menuIcon_hotel_on.svg" alt="" aria-hidden="true">
+              <span>호텔링 설정</span>
+            </a>
+            <a class="more-page__shortcut" href="./tickets.html">
+              <img class="more-page__shortcut-icon" src="../../assets/menuIcon_ticket_on.svg" alt="" aria-hidden="true">
+              <span>이용권</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="more-page__menu-section" aria-label="더보기 메뉴">
+          <div class="more-page__menu-group">
+            <a class="more-page__menu-item" href="#">
+              <span>자주 묻는 질문</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+          </div>
+
+          <div class="more-page__menu-group">
+            <a class="more-page__menu-item more-page__menu-item--divided" href="tel:">
+              <span>전화 문의</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+            <a class="more-page__menu-item" href="#">
+              <span>카톡 문의</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+          </div>
+
+          <div class="more-page__menu-group">
+            <a class="more-page__menu-item more-page__menu-item--divided" href="#">
+              <span>공지사항 &amp; 새소식</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+            <a class="more-page__menu-item more-page__menu-item--divided" href="#">
+              <span>개인정보 처리 방침</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+            <a class="more-page__menu-item" href="#">
+              <span>서비스 이용 약관</span>
+              <img src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </a>
+          </div>
+        </section>
+
+        <div class="more-page__logout-wrap">
+          <button class="more-page__logout" type="button">로그아웃</button>
+        </div>
+      </div>
+    </main>
+
+    <nav class="mobile-tabbar" aria-label="하단 메뉴">
+      <a class="mobile-tabbar__link" href="../../public/index.html">
+        <img src="../../assets/bottomNavi_schedule_on.svg" alt="" aria-hidden="true">
+        <span>일정</span>
+      </a>
+      <a class="mobile-tabbar__link" href="#">
+        <img src="../../assets/bottomNavi_report.svg" alt="" aria-hidden="true">
+        <span>알림장</span>
+      </a>
+      <a class="mobile-tabbar__link" href="./members.html">
+        <img src="../../assets/bottomNavi_member.svg" alt="" aria-hidden="true">
+        <span>회원</span>
+      </a>
+      <a class="mobile-tabbar__link mobile-tabbar__link--active" href="./more.html" aria-current="page">
+        <img src="../../assets/bottomNavi_more_on.svg" alt="" aria-hidden="true">
+        <span>더보기</span>
+      </a>
+    </nav>
+  </div>
+</body>
+</html>

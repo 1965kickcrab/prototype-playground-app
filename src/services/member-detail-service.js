@@ -1,9 +1,23 @@
 import { getMemberPhone, getMemberReservableCount } from "./member-page-service.js";
 import { sanitizeTagList } from "../utils/tags.js";
 
+const RESERVABLE_COUNT_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
+
 function valueOrDash(value) {
   const text = String(value ?? "").trim();
   return text || "-";
+}
+
+function toFiniteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildReservableCountByType(source = {}) {
+  return RESERVABLE_COUNT_TYPES.reduce((accumulator, type) => {
+    accumulator[type] = toFiniteNumber(source?.[type]);
+    return accumulator;
+  }, {});
 }
 
 export function findMemberById(members, memberId) {
@@ -33,8 +47,12 @@ export function buildMemberDetailViewModel(member) {
     coatColor: valueOrDash(member?.coatColor),
     weight: valueOrDash(member?.weight),
     gender: valueOrDash(member?.gender),
+    neuteredStatus: valueOrDash(member?.neuteredStatus),
     ownerTags: sanitizeTagList(member?.ownerTags),
     petTags: sanitizeTagList(member?.petTags),
+    reservableCountByType: buildReservableCountByType(
+      options?.reservableCountByType || member?.totalReservableCountByType
+    ),
     reservableCount: Number.isFinite(Number(options?.reservableCount))
       ? Number(options.reservableCount)
       : getMemberReservableCount(member),

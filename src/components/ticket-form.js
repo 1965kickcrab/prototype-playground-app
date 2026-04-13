@@ -4,7 +4,11 @@ import {
   normalizeNumericInput,
 } from "../utils/number.js";
 import { syncFilterChip } from "../utils/dom.js";
-import { normalizePickdropType } from "../services/ticket-service.js";
+import {
+  getTicketQuantityValue,
+  getTicketUnitLabel,
+  normalizePickdropType,
+} from "../services/ticket-service.js";
 
 function getField(root, selector) {
   return root.querySelector(selector);
@@ -44,6 +48,14 @@ function getClassLabel(root) {
 
 function getQuantitySuffix(root) {
   return getField(root, "[data-ticket-quantity-suffix]");
+}
+
+function getQuantityLabel(root) {
+  return getField(root, "[data-ticket-quantity-label]");
+}
+
+function shouldHideWeekdayRow(type) {
+  return type === "daycare" || type === "hoteling" || type === "pickdrop";
 }
 
 function updateClassCount(root) {
@@ -150,11 +162,10 @@ export function readTicketForm(root) {
   const validity = Number.parseInt(validityValue, 10);
   const price = parseTicketPriceValue(priceValue);
 
-  return {
+  const baseData = {
     name,
     type,
     pickdropType,
-    quantity: Number.isNaN(quantity) ? 0 : quantity,
     validity: Number.isNaN(validity) ? 0 : validity,
     unit,
     price: Number.isNaN(price) ? 0 : price,
@@ -163,6 +174,21 @@ export function readTicketForm(root) {
     unlimitedValidity,
     weekdays,
     classIds,
+  };
+
+  const normalizedQuantity = Number.isNaN(quantity) ? 0 : quantity;
+  if (type === "daycare") {
+    return {
+      ...baseData,
+      totalHours: normalizedQuantity,
+      quantity: 0,
+    };
+  }
+
+  return {
+    ...baseData,
+    quantity: normalizedQuantity,
+    totalHours: 0,
   };
 }
 
@@ -259,8 +285,12 @@ export function resetTicketForm(root) {
   setCheckedValue(root, "[data-ticket-reservation-rule]", "expiry");
   setUnlimitedState(root, false);
   const quantitySuffix = getQuantitySuffix(root);
+  const quantityLabel = getQuantityLabel(root);
   if (quantitySuffix) {
     quantitySuffix.textContent = "회";
+  }
+  if (quantityLabel) {
+    quantityLabel.textContent = "총 횟수";
   }
 }
 
@@ -284,7 +314,8 @@ export function fillTicketForm(root, ticket) {
   );
   updateTicketTypeState(root);
   if (quantity) {
-    quantity.value = ticket?.quantity ? String(ticket.quantity) : "";
+    const quantityValue = getTicketQuantityValue(ticket);
+    quantity.value = quantityValue > 0 ? String(quantityValue) : "";
   }
   if (validity) {
     validity.value = ticket?.validity ? String(ticket.validity) : "";
@@ -303,8 +334,9 @@ export function fillTicketForm(root, ticket) {
   const selectedWeekdays = new Set(
     Array.isArray(ticket?.weekdays) ? ticket.weekdays : []
   );
+  const allowWeekdaySelection = !shouldHideWeekdayRow(ticket?.type || "");
   weekdays.forEach((input) => {
-    input.checked = selectedWeekdays.has(input.value);
+    input.checked = allowWeekdaySelection && selectedWeekdays.has(input.value);
     syncFilterChip(input);
   });
   const selectedClasses = new Set(
@@ -328,8 +360,12 @@ export function fillTicketForm(root, ticket) {
 
   setUnlimitedState(root, Boolean(ticket?.unlimitedValidity));
   const quantitySuffix = getQuantitySuffix(root);
+  const quantityLabel = getQuantityLabel(root);
   if (quantitySuffix) {
-    quantitySuffix.textContent = ticket?.type === "hoteling" ? "박" : "회";
+    quantitySuffix.textContent = getTicketUnitLabel(ticket?.type || "");
+  }
+  if (quantityLabel) {
+    quantityLabel.textContent = ticket?.type === "daycare" ? "총 시간" : "총 횟수";
   }
 }
 
@@ -338,10 +374,13 @@ export function isTicketFormValid(root) {
   const validityOk = data.unlimitedValidity
     ? true
     : data.validity > 0 && data.unit.length > 0;
+  const quantityValue = data.type === "daycare"
+    ? Number(data.totalHours)
+    : Number(data.quantity);
 
   return (
     data.name.length > 0 &&
-    data.quantity > 0 &&
+    quantityValue > 0 &&
     validityOk &&
     data.price >= 0
   );
@@ -377,8 +416,9 @@ function clearTicketWeekdays(root) {
 function updateTicketTypeState(root) {
   const type = getCheckedValue(root, "[data-ticket-type]");
   const isPickdrop = type === "pickdrop";
-  const hideWeekday = isPickdrop || type === "hoteling";
+  const hideWeekday = shouldHideWeekdayRow(type);
   const quantitySuffix = getQuantitySuffix(root);
+  const quantityLabel = getQuantityLabel(root);
   const weekdayRow = getWeekdayRow(root);
   const pickdropRow = getPickdropRow(root);
 
@@ -394,7 +434,10 @@ function updateTicketTypeState(root) {
   }
 
   if (quantitySuffix) {
-    quantitySuffix.textContent = type === "hoteling" ? "박" : "회";
+    quantitySuffix.textContent = getTicketUnitLabel(type);
+  }
+  if (quantityLabel) {
+    quantityLabel.textContent = type === "daycare" ? "총 시간" : "총 횟수";
   }
   if (!isPickdrop) {
     return;

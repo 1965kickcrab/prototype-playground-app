@@ -1,2 +1,8 @@
 # prototype-playground
-향후 추가될 기능들의 컨셉을 확인해볼 수 있는 LocalStorage 기반 정적 프로토타입 서비스
+
+LocalStorage-backed static prototype for daycare reservation, ticket, and settings flows.
+
+## For agents and contributors
+- Hard policy: `AGENTS.md`
+- Harness navigation layer: `docs/README.md`
+- Repo verification entrypoint: `node scripts/harness/run-all.mjs`

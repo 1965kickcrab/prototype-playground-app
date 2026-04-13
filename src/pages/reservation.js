@@ -2,13 +2,27 @@ import { initClassStorage } from "../storage/class-storage.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { initOperationsStorage } from "../storage/operations-storage.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
+import {
+  applyReservationTicketMetaAmount,
+  bindReservationMemberSearchEvents,
+  bindReservationMonthNavigation,
+  consumeReservationModalQuery,
+  formatReservationCurrencyInput,
+  getSelectedReservationTicketMetaElement,
+  getActiveServiceFeeTargets as resolveActiveServiceFeeTargets,
+  getActiveServiceTicketTargets as resolveActiveServiceTicketTargets,
+  getServiceContextKey as resolveServiceContextKey,
+  renderReservationContextualLabels,
+  setReservationAmountRange,
+  setReservationModalVisibility,
+  createReservationModalElements,
+} from "../components/reservation-modal-dom.js";
 import { renderPricingBreakdown, renderPickdropTickets } from "../components/reservation-fee.js";
 import { renderTicketOptions } from "../components/reservation-ticket-view.js";
 import { renderMemberSearchResults } from "../components/member-search.js";
 import { syncReservationFeeTotal } from "../utils/reservation-fee-total.js";
 import { setupReservationFeeDropdowns } from "../utils/reservation-fee-dropdown.js";
 import { syncFilterChip } from "../utils/dom.js";
-import { isCanceledStatus } from "../utils/status.js";
 import { notifyReservationUpdated } from "../utils/reservation-events.js";
 import { getTimeZone } from "../utils/timezone.js";
 import { isDayoffDate } from "../utils/dayoff.js";
@@ -19,28 +33,14 @@ import {
 } from "../storage/ticket-issue-members.js";
 import { loadMemberTagCatalog } from "../storage/member-tag-catalog.js";
 import {
-  getDateKeyFromParts,
-  getDatePartsFromKey,
-  getZonedTodayParts,
-  getWeekdayIndex,
-  sortDateKeys,
-} from "../utils/date.js";
-import {
   allocateTicketUsage,
   buildPickdropUsagePlan,
   getDefaultTicketSelection,
   getIssuedTicketOptions,
-  getAutoSelectedDateKeys,
-  getSelectedTicketWeekdays,
 } from "../services/ticket-reservation-service.js";
-import { formatTicketPrice, normalizePickdropType } from "../services/ticket-service.js";
-import { getReservationEntries } from "../services/reservation-entries.js";
+import { formatTicketPrice, getTicketUnitLabel } from "../services/ticket-service.js";
+import { hasMemberDaycareTimeConflict } from "../services/member-reservation-summary.js";
 import {
-  getMemberReservationConflictDates,
-  hasMemberDaycareTimeConflict,
-} from "../services/member-reservation-summary.js";
-import {
-  buildDateTicketUsageMap,
   buildDateTicketUsagesMap,
   getEntryTicketUsages,
   mergeTicketUsagesForDate,
@@ -62,58 +62,51 @@ import {
 } from "../services/daycare-duration.js";
 import { calculateDateEntryFee } from "../services/reservation-date-fee.js";
 import { buildReservationWithBilling } from "../services/reservation-billing.js";
+import {
+  RESERVATION_LIMIT,
+  allocateCountsByClass,
+  applyAutoWeekdaySelection,
+  applyPickdropSelection,
+  applyServiceSelection,
+  buildCalendarCells,
+  buildClassTicketMap,
+  createReservationFormState,
+  filterConflictingDates,
+  formatDateKey,
+  formatMonthLabel,
+  getActiveDates,
+  getBillingExpectedByDateMap,
+  getClassRemainingMinimum,
+  getConflictDates,
+  getContextFilteredServiceOptions,
+  getEffectiveTicketLimit,
+  getEligibleTicketOptions,
+  getMemberAutoSelectionOptions,
+  getMemberTicketClassNames,
+  getMemberTotalReservableCount,
+  getNumericValue,
+  getReservationCount,
+  getReservationMode,
+  getReservableTicketOptions,
+  getSelectedReservationCount,
+  getSelectedServiceType,
+  getSelectedWeekdayCounts,
+  getServiceOptions,
+  getSortedDateKeys,
+  getModalCalendarState,
+  hasPickdropPricing,
+  pruneConflictingDates,
+  resetReservationFormState,
+  resolveReservationModalScope,
+  setCountValue,
+  splitPaymentAmountByEntries,
+  toggleDate,
+} from "../services/reservation-modal-helpers.js";
 
 const PICKDROP_OPTIONS = [
   { value: "pickup", label: "픽업" },
   { value: "dropoff", label: "드랍" },
 ];
-
-const SERVICE_OPTIONS = [
-  { value: "school", label: "유치원" },
-  { value: "daycare", label: "데이케어" },
-];
-
-const RESERVATION_LIMIT = 0;
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
-
-function formatDateKey(date) {
-  const d = date instanceof Date ? date : new Date(date);
-  if (Number.isNaN(d.getTime())) return "";
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function formatMonthLabel(date) {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
-}
-
-function buildCalendarCells(viewDate) {
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const prevMonthDays = new Date(year, month, 0).getDate();
-
-  const cells = [];
-
-  for (let i = firstDay - 1; i >= 0; i -= 1) {
-    const day = prevMonthDays - i;
-    cells.push({ day, date: new Date(year, month - 1, day), muted: true });
-  }
-
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    cells.push({ day, date: new Date(year, month, day), muted: false });
-  }
-
-  const trailing = (7 - (cells.length % 7)) % 7;
-  for (let day = 1; day <= trailing; day += 1) {
-    cells.push({ day, date: new Date(year, month + 1, day), muted: true });
-  }
-
-  return { year, month, cells };
-}
 
 function showToast(message) {
   let toast = document.querySelector("[data-toast]");
@@ -132,136 +125,11 @@ function showToast(message) {
   }, 2200);
 }
 
-function getNumericValue(element, fallback = 0) {
-  if (!element) return fallback;
-  const source = element.dataset.value ?? element.textContent ?? "";
-  const value = Number(source);
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function setCountValue(element, value, options = {}) {
-  if (!element) return;
-  const numericValue = Number(value);
-  const isNumeric = Number.isFinite(numericValue);
-  const normalized = isNumeric ? String(numericValue) : String(value);
-  const minDisplayValue = Number(options.minDisplayValue);
-  const hasMinDisplayValue = Number.isFinite(minDisplayValue);
-  const displayNumericValue = isNumeric && hasMinDisplayValue
-    ? Math.max(numericValue, minDisplayValue)
-    : numericValue;
-  const displayText = isNumeric ? String(displayNumericValue) : String(value);
-  const shouldMarkExceeded = Boolean(options.negativeAsExceeded && isNumeric && numericValue < 0);
-
-  element.dataset.value = normalized;
-  element.textContent = shouldMarkExceeded
-    ? `초과 ${Math.abs(numericValue)}`
-    : displayText;
-
-  if (options.negativeClassName) {
-    element.classList.toggle(options.negativeClassName, shouldMarkExceeded);
-  }
-}
-
-function getMemberReservableCountByType(member, type) {
-  if (!member || !type || !Array.isArray(member.tickets)) {
-    return null;
-  }
-  const matches = member.tickets.filter((ticket) => ticket?.type === type);
-  if (matches.length === 0) {
-    return null;
-  }
-  return matches.reduce((sum, ticket) => {
-    const value = Number(ticket?.reservableCount);
-    return Number.isFinite(value) ? sum + value : sum;
-  }, 0);
-}
-
-function getReservationMode(elements) {
-  return elements?.modal?.classList?.contains("is-pickdrop")
-    ? "pickdrop"
-    : "school";
-}
-
-function getSelectedServiceType(state, classes, elements, ignorePickdrop = false) {
-  if (!ignorePickdrop && getReservationMode(elements) === "pickdrop") {
-    return "pickdrop";
-  }
-  const selectedName = Array.from(state.services || [])[0] || "";
-  if (!selectedName) {
-    return "school";
-  }
-  const match = classes.find((item) => item.name === selectedName);
-  return match?.type || "school";
-}
-
-function filterConflictingDates(dates, conflicts) {
-  if (!(dates instanceof Set) || !(conflicts instanceof Set)) {
-    return dates;
-  }
-  if (conflicts.size === 0) {
-    return dates;
-  }
-  return new Set(Array.from(dates).filter((dateKey) => !conflicts.has(dateKey)));
-}
-
-function getActiveDates(state, elements) {
-  const baseDates = getReservationMode(elements) === "pickdrop"
-    ? state.pickdropDates
-    : state.selectedDates;
-  return filterConflictingDates(baseDates, state.conflicts);
-}
-
-function getMemberTotalReservableCount(state, serviceType) {
-  const member = state?.selectedMember;
-  if (!member) {
-    return null;
-  }
-  const type = serviceType || "school";
-  const totalValue = Number(member.totalReservableCountByType?.[type]);
-  if (Number.isFinite(totalValue)) {
-    return totalValue;
-  }
-  const typedCount = getMemberReservableCountByType(member, type);
-  if (Number.isFinite(typedCount)) {
-    return typedCount;
-  }
-  if (Array.isArray(member.tickets) && member.tickets.length > 0) {
-    return 0;
-  }
-  return null;
-}
-
-function getReservableTicketOptions(ticketOptions) {
-  if (!Array.isArray(ticketOptions)) {
-    return [];
-  }
-  return ticketOptions.filter((ticket) => Number(ticket?.reservableCount) >= 1);
-}
-
-function getEffectiveTicketLimit(state, classes, dateCountOverride = null) {
-  const limit = Number.isFinite(state.ticketLimit)
-    ? state.ticketLimit
-    : RESERVATION_LIMIT;
-  const isDaycare = isDaycareSelected(state, classes);
-  if (!isDaycare && state.ticketSelections.length === 0) {
-    return getSelectedReservationCount(state, dateCountOverride);
-  }
-  return limit;
-}
-
-function getReservationCount(state, elements) {
-  const activeDates = getActiveDates(state, elements);
-  const dateCount = activeDates?.size || 0;
-  if (getReservationMode(elements) === "pickdrop") {
-    return dateCount;
-  }
-  return getSelectedReservationCount(state, dateCount);
-}
-
 function syncCounts(state, elements, classes = []) {
+  const scope = resolveReservationModalScope(state, classes, elements);
   const mode = getReservationMode(elements);
   const activeDates = getActiveDates(state, elements);
-  const serviceType = getSelectedServiceType(state, classes, elements);
+  const serviceType = scope.serviceType;
   const memberLimit = getMemberTotalReservableCount(state, serviceType);
   const current = memberLimit === null
     ? getReservationCount(state, elements)
@@ -282,7 +150,7 @@ function syncCounts(state, elements, classes = []) {
   const diff = exceedsLimit ? currentValue - limitValue : 0;
   const shouldHighlightCounts = exceedsLimit
     && Boolean(state.selectedMember)
-    && state.context !== "hoteling";
+    && scope.usesCountLimit;
 
   elements.countError.hidden = !exceedsLimit;
   elements.countDiff.textContent = diff === 0 ? "" : String(diff);
@@ -291,216 +159,105 @@ function syncCounts(state, elements, classes = []) {
 }
 
 function isSubmitEnabled(state, elements) {
+  const scope = resolveReservationModalScope(state, [], elements);
   const activeDates = getActiveDates(state, elements);
   const hasService = state.services.size > 0;
   const hasMember = Boolean(state.selectedMember);
   const hasDates = activeDates.size > 0;
-  return hasService && hasMember && hasDates;
+  const hasDaycareTime = !scope.usesTimeRange || (
+    Boolean(elements.daycareStartTime?.value || "")
+    && Boolean(elements.daycareEndTime?.value || "")
+  );
+  return hasService && hasMember && hasDates && hasDaycareTime;
+}
+
+function getPickdropCtaLabel(modal, activeDateCount) {
+  if (modal?.dataset?.reservationPage === "true" && modal?.dataset?.reservationPageType === "school") {
+    return "픽드랍까지";
+  }
+  return activeDateCount > 0 ? "픽드랍까지 예약" : "픽드랍만 예약";
+}
+
+function isDedicatedPickdropPage(modal) {
+  return modal?.dataset?.reservationPage === "true"
+    && modal?.dataset?.reservationPageType === "pickdrop";
 }
 
 function syncActionState(state, elements, classes = []) {
-  const { submitButton, nextButton, overrideCheckbox, pickdropToggle, modal } = elements;
+  const {
+    submitBar,
+    submitSummary,
+    submitSummaryCurrent,
+    submitSummaryLimit,
+    submitButton,
+    nextButton,
+    overrideCheckbox,
+    pickdropToggle,
+    modal,
+  } = elements;
+  const scope = resolveReservationModalScope(state, classes, elements);
   const mode = getReservationMode(elements);
   const activeDates = getActiveDates(state, elements);
   const limit = getNumericValue(elements.countLimit, RESERVATION_LIMIT);
-  const serviceType = getSelectedServiceType(state, classes, elements);
+  const serviceType = scope.serviceType;
   const memberLimit = getMemberTotalReservableCount(state, serviceType);
   const current = memberLimit === null
     ? getReservationCount(state, elements)
     : activeDates?.size || 0;
   const exceedsLimit = current > limit;
-  const enabled = isSubmitEnabled(state, elements) && (!exceedsLimit || overrideCheckbox.checked);
+  const pageSubmitOverride = modal?.dataset?.reservationPage === "true";
+  const summarySelectedCount = activeDates?.size || 0;
+  const summaryReservableCount = Boolean(state.selectedMember) && state.services?.size
+    ? (
+      Number.isFinite(memberLimit)
+        ? Math.max(memberLimit, 0)
+        : (Number.isFinite(state.ticketLimit) ? Math.max(state.ticketLimit, 0) : 0)
+    )
+    : 0;
+  const pageExceedsLimit = scope.usesCountLimit && summarySelectedCount > summaryReservableCount;
+  const effectiveExceedsLimit = pageSubmitOverride ? pageExceedsLimit : exceedsLimit;
+  const allowOverLimit = !scope.usesCountLimit || pageSubmitOverride;
+  const enabled = isSubmitEnabled(state, elements)
+    && (!effectiveExceedsLimit || allowOverLimit || overrideCheckbox.checked);
   const isPickdropMode = Boolean(modal?.classList?.contains("is-pickdrop"));
+  const dedicatedPickdropPage = isDedicatedPickdropPage(modal);
+  if (submitBar && pageSubmitOverride) {
+    submitBar.hidden = summarySelectedCount === 0;
+  }
+  if (submitSummary && pageSubmitOverride) {
+    submitSummary.classList.toggle("is-over-limit", pageExceedsLimit);
+  }
+  if (submitSummaryCurrent && pageSubmitOverride) {
+    submitSummaryCurrent.textContent = String(summarySelectedCount);
+  }
+  if (submitSummaryLimit && pageSubmitOverride) {
+    submitSummaryLimit.textContent = `${summaryReservableCount}회`;
+  }
   if (submitButton) {
     submitButton.disabled = isPickdropMode ? false : !enabled;
+    if (dedicatedPickdropPage) {
+      submitButton.textContent = "이전";
+      submitButton.classList.remove("button-secondary--danger");
+    } else if (pageSubmitOverride) {
+      submitButton.textContent = pageExceedsLimit ? "초과 등록" : "등록";
+      submitButton.classList.toggle("button-secondary--danger", pageExceedsLimit);
+    }
   }
   const hasMember = Boolean(state.selectedMember);
   const canGoToPickdrop = hasMember;
   if (pickdropToggle) {
     pickdropToggle.disabled = isPickdropMode ? !enabled : !canGoToPickdrop;
     if (!isPickdropMode) {
-      pickdropToggle.textContent = activeDates.size > 0 ? "픽드랍까지 예약" : "픽드랍만 예약";
+      pickdropToggle.textContent = getPickdropCtaLabel(modal, activeDates.size);
     }
   }
   if (nextButton) {
     nextButton.disabled = !enabled;
   }
-  overrideCheckbox.disabled = !exceedsLimit;
+  overrideCheckbox.disabled = !scope.usesCountLimit || !exceedsLimit;
 }
 
-function isDaycareSelected(state, classes) {
-  if (!state.services || state.services.size === 0) {
-    return false;
-  }
-  const serviceNames = Array.from(state.services);
-  return serviceNames.some((name) => {
-    const match = classes.find((item) => item.name === name);
-    return match?.type === "daycare";
-  });
-}
-
-function getSelectedReservationCount(state, dateCountOverride = null) {
-  const dateCount = Number.isFinite(dateCountOverride)
-    ? dateCountOverride
-    : state.selectedDates?.size || 0;
-  const serviceCount = state.services?.size || 0;
-  return dateCount * serviceCount;
-}
-
-function getSelectedDateLimit(limit, serviceCount) {
-  if (!Number.isFinite(limit) || limit <= 0) {
-    return 0;
-  }
-  if (serviceCount <= 0) {
-    return limit;
-  }
-  return Math.floor(limit / serviceCount);
-}
-
-function buildClassTicketMap(classes, selectedServices, ticketOptions = []) {
-  const map = new Map();
-  if (!Array.isArray(classes) || !selectedServices || selectedServices.size === 0) {
-    return map;
-  }
-  const optionMap = new Map();
-  if (Array.isArray(ticketOptions)) {
-    ticketOptions.forEach((option) => {
-      const ticketId = String(option?.ticketId ?? "");
-      const optionId = String(option?.id ?? "");
-      if (!ticketId || !optionId) {
-        return;
-      }
-      if (!optionMap.has(ticketId)) {
-        optionMap.set(ticketId, []);
-      }
-      optionMap.get(ticketId).push(optionId);
-    });
-  }
-  classes.forEach((classItem) => {
-    const name = classItem?.name || "";
-    if (!selectedServices.has(name)) {
-      return;
-    }
-    const ids = Array.isArray(classItem.ticketIds) ? classItem.ticketIds : [];
-    if (optionMap.size === 0) {
-      map.set(name, new Set(ids.map((id) => String(id))));
-      return;
-    }
-    const optionIds = [];
-    ids.forEach((id) => {
-      const match = optionMap.get(String(id));
-      if (Array.isArray(match)) {
-        optionIds.push(...match);
-      }
-    });
-    map.set(name, new Set(optionIds));
-  });
-  return map;
-}
-
-function getUsedReservationCountByClass(storage, member, selectedServices) {
-  const results = new Map();
-  if (!member || !selectedServices || selectedServices.size === 0) {
-    return results;
-  }
-  const reservations = storage?.loadReservations?.() || [];
-  const memberId = String(member.id || "");
-  if (!memberId) {
-    return results;
-  }
-  getReservationEntries(reservations).forEach((entry) => {
-    const { reservation, className, baseStatusKey, statusText } = entry;
-    if (!reservation || isCanceledStatus(baseStatusKey, statusText, storage)) {
-      return;
-    }
-    if (String(reservation.memberId || "") !== memberId) {
-      return;
-    }
-    if (!selectedServices.has(className)) {
-      return;
-    }
-    const next = (results.get(className) || 0) + 1;
-    results.set(className, next);
-  });
-  return results;
-}
-
-function allocateCountsByClass({
-  classCounts,
-  classTicketMap,
-  ticketOrder,
-  ticketRemainingMap,
-}) {
-  const remainingMap = new Map(ticketRemainingMap);
-  const usedMap = new Map();
-  if (!(classCounts instanceof Map)) {
-    return { usedMap, remainingMap };
-  }
-  classCounts.forEach((count, className) => {
-    let remainingToAllocate = Number(count) || 0;
-    if (remainingToAllocate <= 0) {
-      return;
-    }
-    const allowedTickets = classTicketMap.get(className);
-    const effectiveAllowed = allowedTickets && allowedTickets.size > 0
-      ? allowedTickets
-      : new Set(ticketOrder);
-    if (effectiveAllowed.size === 0) {
-      return;
-    }
-    ticketOrder.forEach((ticketId) => {
-      if (remainingToAllocate <= 0) {
-        return;
-      }
-      if (!effectiveAllowed.has(ticketId)) {
-        return;
-      }
-      const before = remainingMap.get(ticketId) || 0;
-      if (before <= 0) {
-        return;
-      }
-      const used = Math.min(before, remainingToAllocate);
-      remainingMap.set(ticketId, before - used);
-      usedMap.set(ticketId, (usedMap.get(ticketId) || 0) + used);
-      remainingToAllocate -= used;
-    });
-  });
-  return { usedMap, remainingMap };
-}
-
-function getClassRemainingMinimum({
-  services,
-  classTicketMap,
-  ticketRemainingMap,
-}) {
-  if (!services || services.size === 0) {
-    return 0;
-  }
-  let minRemaining = null;
-  services.forEach((className) => {
-    const ticketIds = classTicketMap.get(className);
-    let total = 0;
-    if (!ticketIds || ticketIds.size === 0) {
-      ticketRemainingMap.forEach((value) => {
-        total += Number(value) || 0;
-      });
-    } else {
-      ticketIds.forEach((ticketId) => {
-        total += Number(ticketRemainingMap.get(ticketId)) || 0;
-      });
-    }
-    if (minRemaining === null || total < minRemaining) {
-      minRemaining = total;
-    }
-  });
-  return minRemaining ?? 0;
-}
-
-function getSortedDateKeys(dateSet) {
-  return sortDateKeys(Array.from(dateSet || []));
-}
-
-function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}) {
+function renderMiniCalendar(state, elements, calendarState = {}, options = {}) {
   const { miniGrid, miniCurrent } = elements;
   if (!miniGrid || !miniCurrent) return;
 
@@ -511,6 +268,12 @@ function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}
   const selectedDates = options.selectedDates instanceof Set
     ? options.selectedDates
     : state.selectedDates;
+  const blockedDates = calendarState?.blockedDates instanceof Set
+    ? calendarState.blockedDates
+    : new Set();
+  const infoDates = calendarState?.infoDates instanceof Set
+    ? calendarState.infoDates
+    : new Set();
   miniCurrent.textContent = formatMonthLabel(state.miniViewDate);
   miniGrid.innerHTML = "";
 
@@ -522,10 +285,10 @@ function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}
     if (dateKey === todayKey && !cellData.muted) {
       cell.classList.add("mini-calendar__cell--today");
     }
-    if (selectedDates.has(dateKey) || conflicts.has(dateKey)) {
+    if (selectedDates.has(dateKey) || blockedDates.has(dateKey)) {
       cell.classList.add("mini-calendar__cell--selected");
     }
-    if (conflicts.has(dateKey)) {
+    if (blockedDates.has(dateKey) || infoDates.has(dateKey)) {
       cell.classList.add("mini-calendar__cell--disabled");
       cell.setAttribute("aria-disabled", "true");
     }
@@ -548,34 +311,25 @@ function renderMiniCalendar(state, elements, conflicts = new Set(), options = {}
   });
 }
 
-function toggleDate(state, dateKey, targetDates = state.selectedDates) {
-  if (targetDates.has(dateKey)) {
-    targetDates.delete(dateKey);
-  } else {
-    targetDates.add(dateKey);
-  }
-  state.autoSelected = false;
-}
-
-function getServiceOptions(state) {
-  const services = Array.isArray(state?.serviceOptions) ? state.serviceOptions : [];
-  if (services.length) {
-    return services.map((name) => ({ value: name, label: name }));
-  }
-
-  return SERVICE_OPTIONS;
-}
-
 function renderServiceOptions(container, serviceOptions, selectedServices) {
   if (!container) {
     return;
   }
 
   container.innerHTML = "";
+  const modal = container.closest("[data-reservation-modal]");
+  const selectedOption = serviceOptions.find((option) => selectedServices.has(option.value));
+  const hasSelectedMember = Boolean(selectedOption) || Boolean(modal?.querySelector("[data-member-input]")?.value);
+  const serviceFieldValue = modal?.querySelector("[data-reservation-service-value]");
+  if (serviceFieldValue) {
+    serviceFieldValue.textContent = hasSelectedMember
+      ? (selectedOption?.label || "클래스를 선택하세요")
+      : "회원을 먼저 선택해 주세요.";
+  }
 
   serviceOptions.forEach((option) => {
     const label = document.createElement("label");
-    label.className = "filter-chip";
+    label.className = "reservation-service-option";
 
     const input = document.createElement("input");
     input.type = "radio";
@@ -590,79 +344,21 @@ function renderServiceOptions(container, serviceOptions, selectedServices) {
     label.appendChild(input);
     label.appendChild(text);
     container.appendChild(label);
-
-    syncFilterChip(input);
   });
 }
-
-function getContextFilteredServiceOptions(serviceOptions, classes, context = "school") {
-  const normalizedContext = String(context || "school").trim().toLowerCase();
-  if (!Array.isArray(serviceOptions) || !Array.isArray(classes)) {
-    return [];
-  }
-  return serviceOptions.filter((option) => {
-    const optionValue = typeof option === "string" ? option : option?.value;
-    const match = classes.find((item) => item.name === optionValue);
-    const type = String(match?.type || "school").trim().toLowerCase();
-    return normalizedContext === "daycare" ? type === "daycare" : type === "school";
-  });
-}
-
-function applyServiceSelection(state, value, checked) {
-  if (!checked) {
-    return;
-  }
-  state.services = new Set([value]);
-}
-
-function applyPickdropSelection(state, value, checked) {
-  if (checked) {
-    state.pickdrops.add(value);
-  } else {
-    state.pickdrops.delete(value);
-  }
-}
-
-function hasPickdropPricing(pricingItems, key) {
-  if (!Array.isArray(pricingItems) || !key) {
-    return false;
-  }
-  return pricingItems.some(
-    (item) =>
-      item?.serviceType === "pickdrop"
-      && normalizePickdropType(item?.pickdropType || item?.title) === key
-  );
-}
-
 
 function resetForm(state, elements, options = {}) {
-  state.services = new Set();
-  state.pickdrops = new Set();
-  state.selectedMember = null;
-  state.selectedDates = new Set();
-  state.pickdropDates = new Set();
-  state.conflicts = new Set();
-  state.ticketSelections = [];
-  state.ticketOptions = [];
-  state.ticketLimit = RESERVATION_LIMIT;
-  state.miniViewDate = new Date();
-  state.autoSelected = false;
-  state.context = "school";
-  state.pickdropSelectionsInitialized = false;
-  state.pickdropDatesInitialized = false;
-  state.daycareDefaultsInitialized = false;
-  state.daycareTimesEdited = false;
+  resetReservationFormState(state, options.currentDate);
   elements.memberInput.value = "";
-  elements.memberResults.innerHTML = "";
+  if (elements.memberResults) {
+    elements.memberResults.innerHTML = "";
+  }
   elements.overrideCheckbox.checked = false;
   if (elements.daycareStartTime instanceof HTMLInputElement) {
     elements.daycareStartTime.value = "";
   }
   if (elements.daycareEndTime instanceof HTMLInputElement) {
     elements.daycareEndTime.value = "";
-  }
-  if (elements.daycareFeeValue) {
-    elements.daycareFeeValue.textContent = "-";
   }
   if (elements.memoInput) {
     elements.memoInput.value = "";
@@ -696,13 +392,10 @@ function resetForm(state, elements, options = {}) {
       .querySelectorAll("[data-reservation-service]")
       .forEach((input) => {
         input.checked = false;
-        syncFilterChip(input);
       });
-    elements.serviceContainer
-      .querySelectorAll(".filter-chip")
-      .forEach((chip) => {
-        chip.hidden = false;
-      });
+  }
+  if (elements.serviceValue) {
+    elements.serviceValue.textContent = "회원을 먼저 선택해 주세요.";
   }
   elements.pickdropInputs.forEach((input) => {
     input.checked = false;
@@ -722,9 +415,6 @@ function resetForm(state, elements, options = {}) {
   if (elements.daycareRow) {
     elements.daycareRow.hidden = true;
   }
-  if (elements.daycareFeeRow) {
-    elements.daycareFeeRow.hidden = true;
-  }
   if (elements.countsRow) {
     elements.countsRow.hidden = false;
   }
@@ -741,73 +431,6 @@ function resetForm(state, elements, options = {}) {
   }
 }
 
-function getMemberTicketClassNames(classes, ticketOptions, serviceOptions) {
-  if (!Array.isArray(ticketOptions) || ticketOptions.length === 0) {
-    return [];
-  }
-  const availableTicketIds = new Set(
-    ticketOptions.map((option) => option.ticketId)
-  );
-  const matched = classes
-    .filter((item) =>
-      Array.isArray(item.ticketIds)
-      && item.ticketIds.some((ticketId) => availableTicketIds.has(String(ticketId)))
-    )
-    .map((item) => item.name)
-    .filter((name) => typeof name === "string" && name.trim().length > 0);
-  const optionSet = new Set(serviceOptions.map((option) => option.value));
-  const mappedMatches = matched.filter((name) => optionSet.has(name));
-  if (mappedMatches.length > 0) {
-    return mappedMatches;
-  }
-
-  const ticketTypeSet = new Set(
-    ticketOptions
-      .map((option) => String(option?.type || "").trim())
-      .filter((type) => type)
-  );
-  if (ticketTypeSet.size === 0) {
-    return [];
-  }
-  return classes
-    .filter((item) => ticketTypeSet.has(String(item?.type || "").trim()))
-    .map((item) => item.name)
-    .filter((name) => typeof name === "string" && name.trim().length > 0)
-    .filter((name) => optionSet.has(name));
-}
-
-function getEligibleTicketOptions(ticketOptions, selectedServices, classes) {
-  if (!Array.isArray(ticketOptions) || ticketOptions.length === 0) {
-    return [];
-  }
-  if (!selectedServices || selectedServices.size === 0) {
-    return [];
-  }
-  const ticketIdSet = new Set();
-  const selectedName = Array.from(selectedServices)[0] || "";
-  const selectedType = classes.find((item) => item.name === selectedName)?.type
-    || "school";
-  classes.forEach((classItem) => {
-    if (!selectedServices.has(classItem.name)) {
-      return;
-    }
-    const ids = Array.isArray(classItem.ticketIds) ? classItem.ticketIds : [];
-    ids.forEach((id) => {
-      ticketIdSet.add(String(id));
-    });
-  });
-  if (ticketIdSet.size === 0) {
-    return ticketOptions.filter((ticket) => ticket.type === selectedType);
-  }
-  const linkedOptions = ticketOptions.filter((ticket) =>
-    ticketIdSet.has(String(ticket.ticketId || ""))
-  );
-  if (linkedOptions.length > 0) {
-    return linkedOptions.filter((ticket) => ticket.type === selectedType);
-  }
-  return ticketOptions.filter((ticket) => ticket.type === selectedType);
-}
-
 function applyMemberClassSelection(state, elements, classNames) {
   const selectedName = Array.isArray(classNames) ? classNames[0] : "";
   state.services = selectedName ? new Set([selectedName]) : new Set();
@@ -821,234 +444,28 @@ function applyMemberClassSelection(state, elements, classNames) {
         return;
       }
       input.checked = input.value === selectedName;
-      syncFilterChip(input);
     });
 }
 
-function getConflictDates(state, storage) {
-  const selectedName = Array.from(state?.services || [])[0] || "";
-  if (selectedName) {
-    const classes = initClassStorage().ensureDefaults();
-    const selectedType = classes.find((item) => item.name === selectedName)?.type || "school";
-    if (selectedType === "daycare") {
-      return new Set();
-    }
-  }
-  return getMemberReservationConflictDates({
-    reservations: storage?.loadReservations?.() || [],
-    member: state.selectedMember,
-    services: state.services,
-    storage,
-  });
-}
-
-function pruneConflictingDates(state, storage) {
-  const conflicts = getConflictDates(state, storage);
-  if (conflicts.size === 0) {
-    return conflicts;
-  }
-  state.selectedDates = new Set(
-    Array.from(state.selectedDates).filter((dateKey) => !conflicts.has(dateKey))
-  );
-  state.pickdropDatesInitialized = false;
-  return conflicts;
-}
-
-function isSameDateList(selectedDates, nextDates) {
-  if (selectedDates.size !== nextDates.length) {
-    return false;
-  }
-  return nextDates.every((dateKey) => selectedDates.has(dateKey));
-}
-
-function applyAutoWeekdaySelection(
-  state,
-  conflicts,
-  timeZone,
-  force = false,
-  dayoffSettings,
-  overrides = {}
-) {
-  const reservableOptions = getReservableTicketOptions(state.ticketOptions);
-  if (reservableOptions.length === 0) {
-    state.autoSelected = false;
-    return false;
-  }
-  const overrideWeekdays = Array.isArray(overrides.weekdays)
-    ? overrides.weekdays
-    : [];
-  const weekdays = overrideWeekdays.length
-    ? overrideWeekdays
-    : getSelectedTicketWeekdays(state.ticketSelections, reservableOptions);
-  if (weekdays.length === 0) {
-    state.autoSelected = false;
-    return false;
-  }
-  if (!force && state.selectedDates.size > 0 && !state.autoSelected) {
-    return false;
-  }
-  const overrideCount = Number.isFinite(Number(overrides.count))
-    ? Math.max(Number(overrides.count), 0)
-    : null;
-  const limit = Math.max(Number(state.ticketLimit) || 0, 0);
-  const dateLimit = overrideCount === null
-    ? getSelectedDateLimit(limit, state.services?.size || 0)
-    : overrideCount;
-  if (dateLimit <= 0) {
-    state.autoSelected = false;
-    return false;
-  }
-  const nextDates = getAutoSelectedDateKeys({
-    weekdays,
-    count: dateLimit,
-    conflicts,
-    timeZone,
-    dayoffSettings,
-    startKey: overrides.startKey,
-  });
-  if (isSameDateList(state.selectedDates, nextDates)) {
-    state.autoSelected = true;
-    return false;
-  }
-  state.selectedDates = new Set(nextDates);
-  state.autoSelected = true;
-  state.pickdropDatesInitialized = false;
-  return true;
-}
-
-function getTodayKey(timeZone) {
-  return getDateKeyFromParts(getZonedTodayParts(timeZone));
-}
-
-function getSelectedWeekdayCounts(selectedDates, timeZone) {
-  const counts = new Map();
-  if (!(selectedDates instanceof Set)) {
-    return counts;
-  }
-  selectedDates.forEach((dateKey) => {
-    const parsed = getDatePartsFromKey(dateKey);
-    if (!parsed) {
-      return;
-    }
-    const weekdayIndex = getWeekdayIndex(
-      parsed.year,
-      parsed.month - 1,
-      parsed.day,
-      timeZone
-    );
-    const label = WEEKDAY_LABELS[weekdayIndex];
-    if (!label) {
-      return;
-    }
-    counts.set(label, (counts.get(label) || 0) + 1);
-  });
-  return counts;
-}
-
-function getMemberAutoSelectionOptions(state, classes, timeZone) {
-  if (!state.selectedMember || !state.services || state.services.size === 0) {
-    return null;
-  }
-  const eligibleOptions = getEligibleTicketOptions(
-    state.ticketOptions,
-    state.services,
-    classes
-  );
-  if (!eligibleOptions.length) {
-    return null;
-  }
-  const availableMap = new Map(
-    eligibleOptions.map((ticket) => {
-      const remainingRaw = Number(ticket.remainingCount);
-      const remainingAfter = Number.isFinite(remainingRaw)
-        ? Math.max(remainingRaw, 0)
-        : 0;
-      return [ticket.id, Math.max(remainingAfter, 0)];
-    })
-  );
-  const candidates = eligibleOptions.filter((ticket) => {
-    const remaining = availableMap.get(ticket.id) ?? 0;
-    return remaining > 0 && Array.isArray(ticket.weekdays) && ticket.weekdays.length > 0;
-  });
-  if (candidates.length === 0) {
-    return null;
-  }
-  let totalCount = 0;
-  const allWeekdays = new Set();
-  candidates.forEach((ticket) => {
-    totalCount += (availableMap.get(ticket.id) ?? 0);
-    ticket.weekdays.forEach((day) => allWeekdays.add(day));
-  });
-  return {
-    weekdays: Array.from(allWeekdays),
-    count: totalCount,
-    startKey: getTodayKey(timeZone),
-  };
-}
-
-function getBillingExpectedByDateMap(billing) {
-  const allocationsByDate =
-    billing && typeof billing === "object" && billing.allocationsByDate && typeof billing.allocationsByDate === "object"
-      ? billing.allocationsByDate
-      : {};
-  return Object.entries(allocationsByDate).reduce((acc, [dateKey, allocation]) => {
-    const expected = Number(allocation?.expected);
-    acc.set(dateKey, Number.isFinite(expected) && expected > 0 ? expected : 0);
-    return acc;
-  }, new Map());
-}
-
-function splitPaymentAmountByEntries(totalAmount, entries, expectedByDate) {
-  const safeTotal = Math.max(0, Math.round(Number(totalAmount) || 0));
-  const targetEntries = Array.isArray(entries) ? entries : [];
-  if (safeTotal <= 0 || targetEntries.length === 0) {
-    return targetEntries.map(() => 0);
-  }
-
-  const dateExpectedList = targetEntries.map((entry) => {
-    const dateKey = String(entry?.date || "");
-    const expected = Number(expectedByDate?.get?.(dateKey));
-    return Number.isFinite(expected) && expected > 0 ? expected : 0;
-  });
-  const expectedTotal = dateExpectedList.reduce((sum, expected) => sum + expected, 0);
-
-  if (expectedTotal <= 0) {
-    const baseAmount = Math.floor(safeTotal / targetEntries.length);
-    return targetEntries.map((_, index) =>
-      index === targetEntries.length - 1
-        ? safeTotal - baseAmount * (targetEntries.length - 1)
-        : baseAmount
-    );
-  }
-
-  const splitAmounts = targetEntries.map(() => 0);
-  let assignedTotal = 0;
-  for (let index = 0; index < targetEntries.length - 1; index += 1) {
-    const expected = dateExpectedList[index];
-    const allocated = Math.round((safeTotal * expected) / expectedTotal);
-    splitAmounts[index] = Math.max(0, allocated);
-    assignedTotal += splitAmounts[index];
-  }
-  if (assignedTotal > safeTotal) {
-    let overflow = assignedTotal - safeTotal;
-    for (let index = targetEntries.length - 2; index >= 0 && overflow > 0; index -= 1) {
-      const reducible = Math.min(splitAmounts[index], overflow);
-      splitAmounts[index] -= reducible;
-      overflow -= reducible;
-      assignedTotal -= reducible;
-    }
-  }
-  splitAmounts[targetEntries.length - 1] = Math.max(0, safeTotal - assignedTotal);
-  return splitAmounts;
-}
-
-export function setupReservationModal(state, storage) {
+export function setupReservationModal(state, storage, options = {}) {
+  const {
+    pageMode = false,
+    openOnInit = false,
+    initialContext = "school",
+    onClose = null,
+    memberSearchMode = "inline",
+  } = options;
   const openButton = document.querySelector("[data-reservation-open]");
   const serviceMenu = document.querySelector("[data-reservation-service-menu]");
   const modal = document.querySelector("[data-reservation-modal]");
 
   if (!modal) {
     return;
+  }
+  if (pageMode) {
+    modal.dataset.reservationPage = "true";
+  } else {
+    delete modal.dataset.reservationPage;
   }
 
   const timeZone = getTimeZone();
@@ -1062,118 +479,28 @@ export function setupReservationModal(state, storage) {
   const entryOptionButtons = serviceMenu
     ? Array.from(serviceMenu.querySelectorAll("[data-reservation-entry-option]"))
     : [];
-  const serviceContainer = modal.querySelector("[data-reservation-services]");
-  const schoolTicketContainer = modal.querySelector("[data-reservation-school-tickets]");
-  const schoolTicketPlaceholder = modal.querySelector("[data-reservation-school-tickets-empty]");
-  const daycareTicketContainer = modal.querySelector("[data-reservation-daycare-tickets]");
-  const daycareTicketPlaceholder = modal.querySelector("[data-reservation-daycare-tickets-empty]");
-  const memberInput = modal.querySelector("[data-member-input]");
-  const memberResults = modal.querySelector("[data-member-results]");
-  const memberClear = modal.querySelector("[data-member-clear]");
-  const memberRow = modal.querySelector(".reservation-row--member");
-  const miniGrid = modal.querySelector("[data-mini-grid]");
-  const miniCurrent = modal.querySelector("[data-mini-current]");
-  const miniPrev = modal.querySelector("[data-mini-prev]");
-  const miniNext = modal.querySelector("[data-mini-next]");
-  const pickdropInputs = modal.querySelectorAll("[data-reservation-pickdrop-option]");
-  const countCurrent = modal.querySelector("[data-reservation-count-current]");
-  const countLimit = modal.querySelector("[data-reservation-count-limit]");
-  const countError = modal.querySelector("[data-reservation-count-error]");
-  const countDiff = modal.querySelector("[data-reservation-count-diff]");
-  const overrideCheckbox = modal.querySelector("[data-reservation-override]");
-  const countsSummary = modal.querySelector(".reservation-counts");
-  const countsRow = modal.querySelector("[data-reservation-counts-row]");
-  const daycareRow = modal.querySelector("[data-reservation-daycare-row]");
-  const daycareFeeRow = modal.querySelector("[data-reservation-daycare-fee-row]");
-  const daycareStartTime = modal.querySelector("[data-reservation-start-time]");
-  const daycareEndTime = modal.querySelector("[data-reservation-end-time]");
-  const daycareFeeValue = modal.querySelector("[data-reservation-daycare-fee]");
-  const schoolFeeList = modal.querySelector("[data-reservation-fee-school-list]");
-  const daycareFeeList = modal.querySelector("[data-reservation-fee-daycare-list]");
-  const pickdropFeeList = modal.querySelector("[data-reservation-fee-pickdrop-list]");
-  const schoolFeeTotal = modal.querySelector("[data-reservation-school-fee-total]");
-  const daycareFeeTotal = modal.querySelector("[data-reservation-daycare-fee-total]");
-  const pickdropFeeTotal = modal.querySelector("[data-reservation-pickdrop-fee-total]");
-  const schoolTicketTotal = modal.querySelector("[data-reservation-school-ticket-total]");
-  const daycareTicketTotal = modal.querySelector("[data-reservation-daycare-ticket-total]");
-  const pickdropTicketTotal = modal.querySelector("[data-reservation-pickdrop-ticket-total]");
-  const paymentTotalAll = modal.querySelector("[data-reservation-payment-total]");
-  const otherPaymentType = modal.querySelector("[data-reservation-other-type]");
-  const otherPaymentAmount = modal.querySelector("[data-reservation-other-amount]");
-  const pricingTotalValue = modal.querySelector("[data-reservation-total]");
-  const balanceRow = modal.querySelector("[data-reservation-fee-balance-row]");
-  const balanceTotal = modal.querySelector("[data-reservation-fee-balance-total]");
-  const pickdropTicketField = modal.querySelector("[data-reservation-pickdrop-tickets]");
-  const pickdropTicketEmpty = modal.querySelector("[data-reservation-pickdrop-tickets-empty]");
-  const serviceFeeTitle = modal.querySelector("[data-reservation-service-fee-title]");
-  const serviceTicketTitle = modal.querySelector("[data-reservation-service-ticket-title]");
-  const memoInput = modal.querySelector("[data-reservation-memo]");
-  const pickdropToggle = modal.querySelector("[data-reservation-pickdrop-toggle]");
-  const stepOne = modal.querySelector("[data-reservation-step=\"1\"]");
-  const stepTwo = modal.querySelector("[data-reservation-step=\"2\"]");
-  const stepTitle = modal.querySelector("[data-reservation-step-title]");
-  const progress = modal.querySelector("[data-reservation-progress]");
-  const progressSteps = modal.querySelectorAll("[data-reservation-progress-step]");
-  const nextButton = modal.querySelector("[data-reservation-next]");
-  const submitButton = modal.querySelector("[data-reservation-submit]");
-  const schoolFeeSection = schoolFeeList?.closest(".reservation-fee-section");
-  const pickdropFeeSection = pickdropFeeList?.closest(".reservation-fee-section");
-
-  const elements = {
-    modal,
+  const elements = createReservationModalElements(modal);
+  const {
+    serviceContainer,
+    serviceTrigger,
+    serviceSheet,
+    serviceSheetBackdrop,
+    serviceSheetClose,
     memberInput,
     memberResults,
     miniGrid,
-    miniCurrent,
     miniPrev,
     miniNext,
-    serviceContainer,
-    schoolTicketContainer,
-    schoolTicketPlaceholder,
-    daycareTicketContainer,
-    daycareTicketPlaceholder,
     pickdropInputs,
-    countCurrent,
-    countLimit,
-    countError,
-    countDiff,
     overrideCheckbox,
-    countsSummary,
-    countsRow,
-    daycareRow,
-    daycareFeeRow,
-    daycareStartTime,
-    daycareEndTime,
-    daycareFeeValue,
-    schoolFeeList,
-    daycareFeeList,
-    pickdropFeeList,
-    schoolFeeTotal,
-    daycareFeeTotal,
-    pickdropFeeTotal,
-    schoolTicketTotal,
-    daycareTicketTotal,
-    pickdropTicketTotal,
-    paymentTotalAll,
-    otherPaymentType,
-    otherPaymentAmount,
-    pricingTotalValue,
-    balanceRow,
-    balanceTotal,
-    pickdropTicketField,
-    pickdropTicketEmpty,
-    serviceFeeTitle,
-    serviceTicketTitle,
-    memoInput,
-    pickdropToggle,
-    stepOne,
-    stepTwo,
-    stepTitle,
     progress,
     progressSteps,
-    nextButton,
+    pickdropToggle,
     submitButton,
-  };
+  } = elements;
+  let lastModalTrigger = null;
+  const memberClear = modal.querySelector("[data-member-clear]");
+  const memberRow = modal.querySelector(".reservation-row--member");
   const feeDropdownController = setupReservationFeeDropdowns(modal, {
     iconOpen: "../assets/iconDropdown.svg",
     iconFold: "../assets/iconDropdown_fold.svg",
@@ -1182,112 +509,50 @@ export function setupReservationModal(state, storage) {
     },
   });
 
-  const formState = {
-    services: new Set(),
-    pickdrops: new Set(),
-    selectedMember: null,
-    selectedDates: new Set(),
-    pickdropDates: new Set(),
-    ticketSelections: [],
-    schoolSelections: [],
-    pickdropSelectionsInitialized: false,
-    pickdropDatesInitialized: false,
-    daycareDefaultsInitialized: false,
-    daycareTimesEdited: false,
-    conflicts: new Set(),
-    ticketOptions: [],
-    ticketLimit: RESERVATION_LIMIT,
-    schoolAllocationMap: new Map(),
-    schoolRemainingMap: new Map(),
-    pickdropAllocationMap: new Map(),
-    pickdropRemainingMap: new Map(),
-    miniViewDate: new Date(state.currentDate),
-    autoSelected: false,
-    context: "school",
-    selectedTagFilters: [],
+  const formState = createReservationFormState(state.currentDate);
+
+  const getModalScope = (options = {}) => resolveReservationModalScope(
+    formState,
+    classStorage.ensureDefaults(),
+    elements,
+    options
+  );
+
+  const syncCalendarState = (scope = getModalScope()) => {
+    const calendarState = getModalCalendarState(formState, storage, scope, elements);
+    formState.conflicts = calendarState.blockedDates;
+    formState.calendarInfoDates = calendarState.infoDates;
+    renderMiniCalendar(formState, elements, calendarState, {
+      dayoffSettings: getDayoffSettings(),
+      timeZone,
+      selectedDates: getActiveDates(formState, elements),
+    });
+    return calendarState;
   };
 
   const renderContextualLabels = () => {
-    const context = formState.context || "school";
-    const baseLabel = context === "hoteling"
-      ? "호텔링 예약"
-      : context === "daycare"
-        ? "데이케어 예약"
-        : "유치원 예약";
-    const serviceSegmentLabel = context === "daycare" ? "데이케어" : "유치원";
-    if (stepTitle) {
-      stepTitle.textContent = modal?.classList?.contains("is-pickdrop")
-        ? "픽드랍 예약"
-        : baseLabel;
-    }
-    if (progressSteps && progressSteps.length) {
-      const firstStepLabel = progressSteps[0].querySelector(".reservation-progress__label");
-      if (firstStepLabel) {
-        firstStepLabel.textContent = context === "hoteling"
-          ? "호텔링"
-          : context === "daycare"
-            ? "데이케어"
-            : "유치원";
-      }
-    }
-    if (elements.serviceFeeTitle) {
-      elements.serviceFeeTitle.textContent = serviceSegmentLabel;
-    }
-    if (elements.serviceTicketTitle) {
-      elements.serviceTicketTitle.textContent = serviceSegmentLabel;
-    }
-    if (modal) {
-      if (context) {
-        modal.dataset.reservationContext = context;
-      } else {
-        modal.removeAttribute("data-reservation-context");
-      }
-    }
+    const scope = getModalScope({ ignorePickdrop: true });
+    renderReservationContextualLabels({
+      modal,
+      progressSteps: elements.progressSteps,
+      stepTitle: elements.stepTitle,
+      serviceFeeTitle: elements.serviceFeeTitle,
+      serviceTicketTitle: elements.serviceTicketTitle,
+      context: formState.context || "school",
+      scope,
+      isPickdropMode: modal?.classList?.contains("is-pickdrop"),
+    });
   };
 
   const getServiceContextKey = () =>
-    formState.context === "daycare" ? "daycare" : "school";
+    resolveServiceContextKey(getModalScope({ ignorePickdrop: true }).contextKey);
 
   const getActiveServiceFeeTargets = () => {
-    const contextKey = getServiceContextKey();
-    return contextKey === "daycare"
-      ? {
-        contextKey,
-        activeList: elements.daycareFeeList,
-        activeTotal: elements.daycareFeeTotal,
-        inactiveList: elements.schoolFeeList,
-        inactiveTotal: elements.schoolFeeTotal,
-      }
-      : {
-        contextKey,
-        activeList: elements.schoolFeeList,
-        activeTotal: elements.schoolFeeTotal,
-        inactiveList: elements.daycareFeeList,
-        inactiveTotal: elements.daycareFeeTotal,
-      };
+    return resolveActiveServiceFeeTargets(elements, getModalScope({ ignorePickdrop: true }));
   };
 
   const getActiveServiceTicketTargets = () => {
-    const contextKey = getServiceContextKey();
-    return contextKey === "daycare"
-      ? {
-        contextKey,
-        activeContainer: elements.daycareTicketContainer,
-        activePlaceholder: elements.daycareTicketPlaceholder,
-        activeTotal: elements.daycareTicketTotal,
-        inactiveContainer: elements.schoolTicketContainer,
-        inactivePlaceholder: elements.schoolTicketPlaceholder,
-        inactiveTotal: elements.schoolTicketTotal,
-      }
-      : {
-        contextKey,
-        activeContainer: elements.schoolTicketContainer,
-        activePlaceholder: elements.schoolTicketPlaceholder,
-        activeTotal: elements.schoolTicketTotal,
-        inactiveContainer: elements.daycareTicketContainer,
-        inactivePlaceholder: elements.daycareTicketPlaceholder,
-        inactiveTotal: elements.daycareTicketTotal,
-      };
+    return resolveActiveServiceTicketTargets(elements, getModalScope({ ignorePickdrop: true }));
   };
 
   const resetAmountDisplay = (amountEl) => {
@@ -1310,16 +575,23 @@ export function setupReservationModal(state, storage) {
       classes,
       formState.context
     );
+    if (!formState.selectedMember) {
+      formState.services = new Set();
+    }
     const selectedName = Array.from(formState.services)[0] || "";
     const validValues = new Set(
       filteredServiceOptions.map((option) => String(option?.value || ""))
     );
-    if (!selectedName || !validValues.has(selectedName)) {
-      if (fallbackToFirst && filteredServiceOptions.length > 0) {
-        formState.services = new Set([filteredServiceOptions[0].value]);
-      } else if (selectedName && !validValues.has(selectedName)) {
-        formState.services = new Set();
-      }
+    if (selectedName && !validValues.has(selectedName)) {
+      formState.services = new Set();
+    }
+    if (
+      fallbackToFirst
+      && !formState.services.size
+      && formState.selectedMember
+      && filteredServiceOptions.length > 0
+    ) {
+      formState.services = new Set([filteredServiceOptions[0].value]);
     }
     renderServiceOptions(serviceContainer, filteredServiceOptions, formState.services);
   };
@@ -1356,7 +628,7 @@ export function setupReservationModal(state, storage) {
         pickdropToggle.textContent = "등록";
       } else {
         const activeDates = getActiveDates(formState, elements);
-        pickdropToggle.textContent = activeDates.size > 0 ? "픽드랍까지 예약" : "픽드랍만 예약";
+        pickdropToggle.textContent = getPickdropCtaLabel(modal, activeDates.size);
       }
     }
     if (submitButton) {
@@ -1446,32 +718,44 @@ export function setupReservationModal(state, storage) {
         }
         formState.pickdropDates = new Set(initialDates);
       }
-      formState.conflicts = getConflictDates(formState, storage);
-      const pricingItems = pricingStorage.loadPricingItems();
-      const hasOneway = hasPickdropPricing(pricingItems, "편도");
-      const hasRoundtrip = hasPickdropPricing(pricingItems, "왕복");
-      const shouldSelectPickup = hasOneway || hasRoundtrip;
-      const shouldSelectDropoff = hasOneway || hasRoundtrip;
-      formState.pickdrops = new Set();
-      pickdropInputs.forEach((input) => {
-        if (!(input instanceof HTMLInputElement)) {
-          return;
-        }
-        const shouldCheck = input.value === "pickup"
-          ? shouldSelectPickup
-          : input.value === "dropoff" && shouldSelectDropoff;
-        input.checked = shouldCheck;
-        if (shouldCheck) {
-          formState.pickdrops.add(input.value);
-        }
-        syncFilterChip(input);
-      });
+      formState.conflicts = getConflictDates(formState, storage, getModalScope(), elements);
+      if (options.preservePickdropSelection === true) {
+        pickdropInputs.forEach((input) => {
+          if (!(input instanceof HTMLInputElement)) {
+            return;
+          }
+          input.checked = formState.pickdrops.has(input.value);
+          syncFilterChip(input);
+        });
+      } else {
+        const pricingItems = pricingStorage.loadPricingItems();
+        const hasOneway = hasPickdropPricing(pricingItems, "편도");
+        const hasRoundtrip = hasPickdropPricing(pricingItems, "왕복");
+        const shouldSelectPickup = hasOneway || hasRoundtrip;
+        const shouldSelectDropoff = hasOneway || hasRoundtrip;
+        formState.pickdrops = new Set();
+        pickdropInputs.forEach((input) => {
+          if (!(input instanceof HTMLInputElement)) {
+            return;
+          }
+          const shouldCheck = input.value === "pickup"
+            ? shouldSelectPickup
+            : input.value === "dropoff" && shouldSelectDropoff;
+          input.checked = shouldCheck;
+          if (shouldCheck) {
+            formState.pickdrops.add(input.value);
+          }
+          syncFilterChip(input);
+        });
+      }
       syncPricingFee();
-      formState.pickdropSelectionsInitialized = false;
+      formState.pickdropSelectionsInitialized = options.preservePickdropSelection === true
+        ? formState.pickdrops.size > 0
+        : false;
       formState.pickdropDatesInitialized = true;
     } else {
       formState.pickdrops = new Set();
-      formState.conflicts = getConflictDates(formState, storage);
+      formState.conflicts = getConflictDates(formState, storage, getModalScope(), elements);
       pickdropInputs.forEach((input) => {
         if (!(input instanceof HTMLInputElement)) {
           return;
@@ -1482,14 +766,10 @@ export function setupReservationModal(state, storage) {
       syncPricingFee();
       formState.ticketSelections = [...formState.schoolSelections];
     }
-    const conflicts = getConflictDates(formState, storage);
+    const scope = getModalScope();
+    const conflicts = getConflictDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
-    formState.conflicts = conflicts;
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
+    syncCalendarState(scope);
     syncTicketSection();
     syncPickdropTickets();
   };
@@ -1585,44 +865,46 @@ export function setupReservationModal(state, storage) {
     return { remainingBefore, remainingAfter };
   };
 
-  const setAmountRange = (amountEl, before, after, unitLabel = "회") => {
-    if (!amountEl) {
-      return;
+  const getServiceUsageUnitsPerDate = (serviceType) => {
+    if (serviceType !== "daycare") {
+      return 1;
     }
-
-    const beforeVal = `${before}${unitLabel}`;
-    let afterVal = `${after}${unitLabel}`;
-    if (after < 0) {
-      afterVal = `초과 ${Math.abs(after)}${unitLabel}`;
+    const durationMinutes = getDaycareDurationMinutes(
+      elements.daycareStartTime?.value || "",
+      elements.daycareEndTime?.value || ""
+    );
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      return 1;
     }
-    const isBeforeLow = Number(before) <= 2;
-    const isAfterLow = Number(after) <= 2;
-
-    amountEl.innerHTML = `
-      <span class="reservation-ticket-row__meta">
-        <span class="as-is ${isBeforeLow ? "is-low" : ""}">${beforeVal}</span>
-        →
-        <span class="to-be ${isAfterLow ? "is-low" : ""}">${afterVal}</span>
-      </span>
-    `;
-
-    amountEl.classList.toggle("is-empty", false);
-    delete amountEl.dataset.feeAmount;
+    return Math.max(1, Math.ceil(durationMinutes / 60));
   };
 
-  const getSelectedTicketMetaElement = (container) =>
-    container?.querySelector?.(
-      ".reservation-ticket-row.is-selected .reservation-ticket-row__meta"
-    );
+  const getServiceRequestedUsageCount = (serviceType, dateCount) => {
+    const safeDateCount = Math.max(0, Number(dateCount) || 0);
+    return safeDateCount * getServiceUsageUnitsPerDate(serviceType);
+  };
 
-  const applyTicketMetaAmount = (amountEl, metaEl) => {
-    if (!amountEl || !metaEl) {
-      return false;
+  const buildServiceUsagePlanByDate = ({
+    dateKeys,
+    selectionOrder,
+    usedMap,
+    unitsPerDate,
+  }) => {
+    const dates = Array.isArray(dateKeys) ? dateKeys : [];
+    const perDateUnits = Math.max(1, Number(unitsPerDate) || 1);
+    const usagePool = [];
+    if (usedMap instanceof Map && Array.isArray(selectionOrder)) {
+      selectionOrder.forEach((ticketId) => {
+        const count = Number(usedMap.get(ticketId)) || 0;
+        for (let index = 0; index < count; index += 1) {
+          usagePool.push(ticketId);
+        }
+      });
     }
-    amountEl.replaceChildren(metaEl.cloneNode(true));
-    amountEl.classList.toggle("is-empty", false);
-    delete amountEl.dataset.feeAmount;
-    return true;
+    return dates.map((_dateKey, index) => {
+      const startIndex = index * perDateUnits;
+      return usagePool.slice(startIndex, startIndex + perDateUnits);
+    });
   };
 
   const applyFeeAmountText = (amountEl) => {
@@ -1636,6 +918,7 @@ export function setupReservationModal(state, storage) {
 
   const syncFeeCardState = () => {
     const mode = getReservationMode(elements);
+    const scope = getModalScope({ ignorePickdrop: true });
     const activeDates = getActiveDates(formState, elements);
     const serviceSelectionOrder = mode === "pickdrop" ? formState.schoolSelections : formState.ticketSelections;
     const pickdropSelectionOrder = mode === "pickdrop" ? formState.ticketSelections : [];
@@ -1643,8 +926,7 @@ export function setupReservationModal(state, storage) {
     const hasServiceSelection = serviceSelectionOrder.length > 0;
     const hasPickdropSelection = pickdropSelectionOrder.length > 0;
 
-    const classes = classStorage.ensureDefaults();
-    const serviceType = getSelectedServiceType(formState, classes, elements, true);
+    const serviceType = scope.serviceType;
     const serviceTicketTargets = getActiveServiceTicketTargets();
 
     // 1. Service Payment Area (Area 2) by current context
@@ -1654,12 +936,12 @@ export function setupReservationModal(state, storage) {
     if (serviceTicketTargets.activeTotal) {
       if (hasServiceSelection) {
         const totalReservable = formState.selectedMember?.totalReservableCountByType?.[serviceType] || 0;
-        // Use activeDates.size for overbooking calculation
-        const requestedUsage = activeDates.size;
-        setAmountRange(
+        const requestedUsage = getServiceRequestedUsageCount(serviceType, activeDates.size);
+        setReservationAmountRange(
           serviceTicketTargets.activeTotal,
           totalReservable,
-          totalReservable - requestedUsage
+          totalReservable - requestedUsage,
+          getTicketUnitLabel(serviceType)
         );
       } else {
         resetAmountDisplay(serviceTicketTargets.activeTotal);
@@ -1669,9 +951,9 @@ export function setupReservationModal(state, storage) {
     // 2. Pickdrop Payment Area (Area 2)
     if (elements.pickdropTicketTotal) {
       if (hasPickdropSelection) {
-        const selectedMeta = getSelectedTicketMetaElement(elements.pickdropTicketField);
+        const selectedMeta = getSelectedReservationTicketMetaElement(elements.pickdropTicketField);
         if (selectedMeta) {
-          applyTicketMetaAmount(elements.pickdropTicketTotal, selectedMeta);
+          applyReservationTicketMetaAmount(elements.pickdropTicketTotal, selectedMeta);
 
           const totalReservable = getPickdropReservableTotal(formState.selectedMember?.totalReservableCountByType) || 0;
           // Calculate pickdrop usage
@@ -1681,7 +963,7 @@ export function setupReservationModal(state, storage) {
           });
           const hasAnyPickdrop = pickdropFlags.pickup || pickdropFlags.dropoff;
           const pickdropUsageCount = hasAnyPickdrop ? formState.pickdropDates?.size || 0 : 0;
-          setAmountRange(
+          setReservationAmountRange(
             elements.pickdropTicketTotal,
             totalReservable,
             totalReservable - pickdropUsageCount
@@ -1749,12 +1031,32 @@ export function setupReservationModal(state, storage) {
     const serviceDates = mode === "pickdrop" ? formState.selectedDates : activeDates;
     const pickdropDates = mode === "pickdrop" ? formState.pickdropDates : activeDates;
     const serviceFeeTargets = getActiveServiceFeeTargets();
+    const classes = classStorage.ensureDefaults();
+    const scope = getModalScope({ ignorePickdrop: true });
+    const serviceType = scope.serviceType;
 
     if (serviceFeeTargets.inactiveList) {
       serviceFeeTargets.inactiveList.textContent = "";
     }
     if (serviceFeeTargets.inactiveTotal) {
       resetAmountDisplay(serviceFeeTargets.inactiveTotal);
+    }
+
+    if (!isDaycareFeeReady()) {
+      if (serviceFeeTargets.activeList) {
+        serviceFeeTargets.activeList.textContent = "";
+      }
+      if (serviceFeeTargets.activeTotal) {
+        resetAmountDisplay(serviceFeeTargets.activeTotal);
+      }
+      if (elements.pricingTotalValue) {
+        resetAmountDisplay(elements.pricingTotalValue);
+        delete elements.pricingTotalValue.dataset.feeAmount;
+      }
+      syncFeeCardState();
+      const feeTotalGroup = modal.querySelector('[data-fee-group="total"]');
+      syncReservationFeeTotal(feeTotalGroup, elements.pricingTotalValue);
+      return;
     }
 
     renderPricingBreakdown({
@@ -1764,7 +1066,7 @@ export function setupReservationModal(state, storage) {
       pickdropTotalEl: elements.pickdropFeeTotal,
       totalEl: elements.pricingTotalValue,
       pricingItems: pricingStorage.loadPricingItems(),
-      classes: classStorage.ensureDefaults(),
+      classes,
       services: formState.services,
       pickdrops: formState.pickdrops,
       dateCount: activeDates.size,
@@ -1777,7 +1079,8 @@ export function setupReservationModal(state, storage) {
         checkinTime: elements.daycareStartTime?.value || "",
         checkoutTime: elements.daycareEndTime?.value || "",
       },
-      serviceLabelOverride: formState.context === "daycare" ? "데이케어" : "",
+      serviceLabelOverride: scope.activeServiceLabel,
+      serviceTypeOverride: serviceType,
     });
     syncFeeCardState();
     const feeTotalGroup = modal.querySelector('[data-fee-group="total"]');
@@ -1804,55 +1107,42 @@ export function setupReservationModal(state, storage) {
     formState.daycareDefaultsInitialized = true;
   };
 
-  const syncDaycareUI = () => {
-    const classes = classStorage.ensureDefaults();
-    const isDaycare = isDaycareSelected(formState, classes);
-    const isDaycareEntryContext = String(formState.context || "") === "daycare";
-    const shouldShowDaycareTimeRow = isDaycare || isDaycareEntryContext;
+  const syncScopeUI = (scope = getModalScope({ ignorePickdrop: true })) => {
+    const isDaycareContext = scope.usesTimeRange;
     if (elements.countsRow) {
-      elements.countsRow.hidden = false;
+      elements.countsRow.hidden = !scope.usesCountLimit;
     }
     if (elements.daycareRow) {
-      elements.daycareRow.hidden = !shouldShowDaycareTimeRow;
+      elements.daycareRow.hidden = !scope.usesTimeRange;
     }
-    if (elements.daycareFeeRow) {
-      elements.daycareFeeRow.hidden = !isDaycare;
-    }
-    if (elements.daycareFeeValue) {
-      if (!isDaycare) {
-        elements.daycareFeeValue.textContent = "-";
-      } else {
-        applyDaycareDefaultTimes();
-        const pricingItems = pricingStorage.loadPricingItems();
-        const serviceName = Array.from(formState.services)[0] || "";
-        const classInfo = classes.find((item) => item.name === serviceName) || null;
-        const activeDates = getActiveDates(formState, elements);
-        const memberWeight = Number(formState.selectedMember?.weight);
-        const totalFee = Array.from(activeDates).reduce((sum, dateKey) => {
-          const fee = calculateDateEntryFee({
-            dateKey,
-            serviceType: "daycare",
-            classId: String(classInfo?.id || ""),
-            checkinTime: elements.daycareStartTime?.value || "",
-            checkoutTime: elements.daycareEndTime?.value || "",
-            pickup: false,
-            dropoff: false,
-            pricingItems,
-            memberWeight: Number.isFinite(memberWeight) ? memberWeight : null,
-            timeZone,
-          });
-          return sum + fee.daycare;
-        }, 0);
-        elements.daycareFeeValue.textContent = formatTicketPrice(totalFee);
-      }
+    if (isDaycareContext) {
+      applyDaycareDefaultTimes();
     }
     syncPricingFee();
-    return isDaycare;
+    return isDaycareContext;
+  };
+
+  const isDaycareFeeReady = () => {
+    const scope = getModalScope({ ignorePickdrop: true });
+    if (!scope.usesTimeRange) {
+      return true;
+    }
+    const activeDates = getActiveDates(formState, elements);
+    const startTime = elements.daycareStartTime?.value || "";
+    const endTime = elements.daycareEndTime?.value || "";
+    const durationMinutes = getDaycareDurationMinutes(startTime, endTime);
+    return Boolean(formState.selectedMember)
+      && activeDates.size > 0
+      && Boolean(startTime)
+      && Boolean(endTime)
+      && Number.isFinite(durationMinutes)
+      && durationMinutes > 0;
   };
 
   const syncTicketSection = () => {
     const classes = classStorage.ensureDefaults();
     const mode = getReservationMode(elements);
+    const scope = getModalScope({ ignorePickdrop: true });
     const serviceTicketTargets = getActiveServiceTicketTargets();
     const ticketContainer = serviceTicketTargets.activeContainer;
     const ticketPlaceholder = serviceTicketTargets.activePlaceholder;
@@ -1869,13 +1159,29 @@ export function setupReservationModal(state, storage) {
     if (serviceTicketTargets.inactivePlaceholder) {
       serviceTicketTargets.inactivePlaceholder.hidden = true;
     }
-    const schoolType = getSelectedServiceType(formState, classes, elements, true);
-    const totalLimitValue = Number(
-      formState.selectedMember?.totalReservableCountByType?.[schoolType]
+    const schoolType = scope.serviceType;
+    const activeDates = getActiveDates(formState, elements);
+    const serviceDates = filterConflictingDates(
+      formState.selectedDates,
+      formState.conflicts
     );
-    const hasNoReservableTickets = mode !== "pickdrop"
-      && Number.isFinite(totalLimitValue)
-      && totalLimitValue <= 0;
+    const serviceUsageCount = getServiceRequestedUsageCount(
+      schoolType,
+      serviceDates.size
+    );
+    const eligibleOptions = getEligibleTicketOptions(
+      formState.ticketOptions,
+      formState.services,
+      classes,
+      schoolType
+    );
+    const pickdropOptions = formState.ticketOptions.filter(
+      (ticket) => ticket.type === "pickdrop"
+    );
+    const serviceOptions = eligibleOptions.filter(
+      (ticket) => ticket.type === schoolType
+    );
+    const hasNoReservableTickets = mode !== "pickdrop" && serviceOptions.length === 0;
     if (hasNoReservableTickets) {
       if (ticketContainer) {
         ticketContainer.textContent = "";
@@ -1894,22 +1200,6 @@ export function setupReservationModal(state, storage) {
       syncPricingFee();
       return;
     }
-    const activeDates = getActiveDates(formState, elements);
-    const serviceDates = filterConflictingDates(
-      formState.selectedDates,
-      formState.conflicts
-    );
-    const eligibleOptions = getEligibleTicketOptions(
-      formState.ticketOptions,
-      formState.services,
-      classes
-    );
-    const pickdropOptions = formState.ticketOptions.filter(
-      (ticket) => ticket.type === "pickdrop"
-    );
-    const serviceOptions = eligibleOptions.filter(
-      (ticket) => ticket.type === schoolType
-    );
     const displayOptions = serviceOptions;
     const disabledIds = mode === "pickdrop"
       ? new Set(serviceOptions.map((ticket) => ticket.id))
@@ -1972,7 +1262,7 @@ export function setupReservationModal(state, storage) {
         const selectionCounts = new Map(
           Array.from(formState.services).map((className) => [
             className,
-            serviceDates.size,
+            serviceUsageCount,
           ])
         );
         const selectionAllocation = allocateCountsByClass({
@@ -2045,7 +1335,7 @@ export function setupReservationModal(state, storage) {
       const selectionCounts = new Map(
         Array.from(formState.services).map((className) => [
           className,
-          serviceDates.size,
+          serviceUsageCount,
         ])
       );
       const selectionAllocation = allocateCountsByClass({
@@ -2080,7 +1370,9 @@ export function setupReservationModal(state, storage) {
         classTicketMap,
         ticketRemainingMap: selectedRemainingMap,
       });
-      formState.ticketLimit = minRemaining * Math.max(formState.services.size, 0);
+      formState.ticketLimit = scope.usesTimeRange
+        ? minRemaining
+        : minRemaining * Math.max(formState.services.size, 0);
       renderTicketOptions(
         ticketContainer,
         ticketPlaceholder,
@@ -2130,14 +1422,15 @@ export function setupReservationModal(state, storage) {
       availableIds.includes(id)
     );
     const classes = classStorage.ensureDefaults();
+    const scope = getModalScope();
     applyDefaultTickets(classes, forceDefaults);
-    const conflicts = pruneConflictingDates(formState, storage);
+    const conflicts = pruneConflictingDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
     const dayoffSettings = getDayoffSettings();
     syncTicketSection();
     syncPickdropTickets();
     const mode = getReservationMode(elements);
-    const selectedClassType = getSelectedServiceType(formState, classes, elements);
+    const selectedClassType = scope.serviceType;
     const totalLimitValue = Number(
       formState.selectedMember?.totalReservableCountByType?.[selectedClassType]
     );
@@ -2153,15 +1446,11 @@ export function setupReservationModal(state, storage) {
         dayoffSettings,
         autoOverrides || {}
       );
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings,
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
+    syncCalendarState(scope);
     if (autoChanged) {
       syncTicketSection();
     }
-    syncDaycareUI();
+    syncScopeUI(scope);
   };
 
   const memberSelectOptions = {
@@ -2180,21 +1469,8 @@ export function setupReservationModal(state, storage) {
         formState.ticketOptions,
         serviceOptions
       );
-      const contextType = formState.context === "daycare" ? "daycare" : "school";
-      const contextClassNames = classNames.filter((name) => {
-        const match = classes.find((item) => item.name === name);
-        return (match?.type || "school") === contextType;
-      });
-      const nextClassNames = contextClassNames.length > 0 ? contextClassNames : [];
-      if (!nextClassNames.length && serviceOptions.length > 0) {
-        const fallbackOption = serviceOptions.find((option) => {
-          const match = classes.find((item) => item.name === option.value);
-          return (match?.type || "school") === contextType;
-        }) || serviceOptions[0];
-        nextClassNames.push(fallbackOption.value);
-      }
-      applyMemberClassSelection(formState, elements, nextClassNames);
-      syncServiceOptionsForContext(true);
+      applyMemberClassSelection(formState, elements, classNames);
+      syncServiceOptionsForContext(false);
       const autoOverrides = getMemberAutoSelectionOptions(
         formState,
         classes,
@@ -2237,6 +1513,154 @@ export function setupReservationModal(state, storage) {
     });
   };
 
+  const syncMemberInputValue = (value = "") => {
+    if (elements.memberInput instanceof HTMLInputElement) {
+      elements.memberInput.value = value;
+    }
+  };
+
+  const setPaymentTab = (tabKey = "ticket") => {
+    const nextTabKey = tabKey === "other" ? "other" : "ticket";
+    const feeTabs = modal.querySelectorAll("[data-fee-tab]");
+    const feePanels = modal.querySelectorAll("[data-fee-panel]");
+    feeTabs.forEach((button) => {
+      const isActive = button.dataset.feeTab === nextTabKey;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-selected", String(isActive));
+    });
+    feePanels.forEach((panel) => {
+      const isActive = panel.dataset.feePanel === nextTabKey;
+      panel.classList.toggle("is-active", isActive);
+      panel.hidden = !isActive;
+    });
+  };
+
+  const buildMemberSearchDraft = () => ({
+    context: formState.context,
+    selectedMemberId: String(formState.selectedMember?.id || ""),
+    services: Array.from(formState.services),
+    pickdrops: Array.from(formState.pickdrops),
+    selectedDates: Array.from(formState.selectedDates),
+    pickdropDates: Array.from(formState.pickdropDates),
+    selectedTagFilters: Array.isArray(formState.selectedTagFilters)
+      ? [...formState.selectedTagFilters]
+      : [],
+    ticketSelections: [...formState.ticketSelections],
+    schoolSelections: [...formState.schoolSelections],
+    miniViewDate: formState.miniViewDate instanceof Date
+      ? formState.miniViewDate.toISOString()
+      : "",
+    memberInputValue: elements.memberInput?.value || "",
+    memo: elements.memoInput?.value || "",
+    daycareStartTime: elements.daycareStartTime?.value || "",
+    daycareEndTime: elements.daycareEndTime?.value || "",
+    paymentTab: modal.querySelector(".reservation-fee-tab.is-active")?.dataset?.feeTab || "ticket",
+    paymentMethod: elements.otherPaymentType?.value || "",
+    paymentAmount: elements.otherPaymentAmount?.value || "",
+    overrideChecked: Boolean(overrideCheckbox?.checked),
+    pickdropMode: modal.classList.contains("is-pickdrop"),
+  });
+
+  const restoreMemberSearchDraft = (draft = {}, options = {}) => {
+    if (!draft || typeof draft !== "object") {
+      return false;
+    }
+    const nextMemberId = String(options.selectedMemberId || draft.selectedMemberId || "");
+    const sameMember = nextMemberId && nextMemberId === String(draft.selectedMemberId || "");
+    resetForm(formState, elements, {
+      currentDate: state.currentDate,
+      dayoffSettings: getDayoffSettings(),
+      timeZone,
+      getClasses: () => classStorage.ensureDefaults(),
+    });
+    formState.context = String(draft.context || "").trim().toLowerCase() === "daycare"
+      ? "daycare"
+      : "school";
+    formState.selectedTagFilters = Array.isArray(draft.selectedTagFilters)
+      ? [...draft.selectedTagFilters]
+      : [];
+    if (draft.miniViewDate) {
+      const nextDate = new Date(draft.miniViewDate);
+      if (!Number.isNaN(nextDate.getTime())) {
+        formState.miniViewDate = nextDate;
+      }
+    }
+    syncMemberInputValue(draft.memberInputValue || "");
+    if (elements.memoInput) {
+      elements.memoInput.value = String(draft.memo || "");
+    }
+    if (elements.daycareStartTime instanceof HTMLInputElement) {
+      elements.daycareStartTime.value = String(draft.daycareStartTime || "");
+    }
+    if (elements.daycareEndTime instanceof HTMLInputElement) {
+      elements.daycareEndTime.value = String(draft.daycareEndTime || "");
+    }
+    if (elements.otherPaymentType instanceof HTMLSelectElement) {
+      const nextMethod = String(draft.paymentMethod || "").trim().toLowerCase();
+      elements.otherPaymentType.value = nextMethod === "transfer" ? "bank" : (nextMethod || "cash");
+    }
+    if (elements.otherPaymentAmount instanceof HTMLInputElement) {
+      const nextAmount = String(draft.paymentAmount || "").trim();
+      elements.otherPaymentAmount.value = nextAmount;
+      formatReservationCurrencyInput(elements.otherPaymentAmount);
+    }
+    if (overrideCheckbox instanceof HTMLInputElement) {
+      overrideCheckbox.checked = Boolean(draft.overrideChecked);
+    }
+    formState.pickdrops = new Set(Array.isArray(draft.pickdrops) ? draft.pickdrops : []);
+    pickdropInputs.forEach((input) => {
+      input.checked = formState.pickdrops.has(input.value);
+      syncFilterChip(input);
+    });
+    if (nextMemberId) {
+      applyMemberSelection(nextMemberId);
+    }
+    const restoredServices = Array.isArray(draft.services)
+      ? draft.services.filter((value) => typeof value === "string" && value.trim().length > 0)
+      : [];
+    if (restoredServices.length > 0) {
+      formState.services = new Set(restoredServices);
+    }
+    syncServiceOptionsForContext(false);
+    formState.selectedDates = new Set(
+      Array.isArray(draft.selectedDates)
+        ? draft.selectedDates.filter((value) => typeof value === "string" && value)
+        : []
+    );
+    formState.pickdropDates = new Set(
+      Array.isArray(draft.pickdropDates)
+        ? draft.pickdropDates.filter((value) => typeof value === "string" && value)
+        : []
+    );
+    formState.pickdropSelectionsInitialized = formState.pickdrops.size > 0;
+    formState.pickdropDatesInitialized = formState.pickdropDates.size > 0;
+    formState.ticketSelections = sameMember && Array.isArray(draft.ticketSelections)
+      ? [...draft.ticketSelections]
+      : [];
+    formState.schoolSelections = sameMember && Array.isArray(draft.schoolSelections)
+      ? [...draft.schoolSelections]
+      : [];
+    const scope = getModalScope();
+    const conflicts = pruneConflictingDates(formState, storage, scope, elements);
+    formState.conflicts = conflicts;
+    syncCalendarState(scope);
+    syncScopeUI(scope);
+    refreshTicketOptions(true);
+    if (draft.pickdropMode) {
+      setPickdropMode(true, {
+        preservePickdropSelection: Boolean(draft.useSchoolPickdropDefaults)
+          || (Array.isArray(draft.pickdrops) && draft.pickdrops.length > 0),
+      });
+    } else {
+      setPickdropMode(false);
+    }
+    setPaymentTab(draft.paymentTab);
+    syncActionState(formState, elements, classStorage.ensureDefaults());
+    syncPricingFee();
+    syncPickdropTickets();
+    return true;
+  };
+
   const applyMemberSelection = (memberId) => {
     const members = loadIssueMembers();
     const member = members.find((item) => String(item.id) === String(memberId));
@@ -2247,23 +1671,28 @@ export function setupReservationModal(state, storage) {
     if (elements.memberInput) {
       elements.memberInput.value = `${member.dogName} / ${member.owner}`;
     }
-    if (elements.memberResults) {
-      elements.memberResults.innerHTML = "";
-    }
+    elements.memberResults?.replaceChildren();
     if (typeof memberSelectOptions.onMemberSelect === "function") {
       memberSelectOptions.onMemberSelect(member);
     }
+    const classes = typeof memberSelectOptions.getClasses === "function"
+      ? memberSelectOptions.getClasses()
+      : [];
+    syncActionState(formState, elements, classes);
     return true;
   };
 
   const openModal = (options = {}) => {
+    const activeElement = document.activeElement;
+    lastModalTrigger = activeElement instanceof HTMLElement && !modal.contains(activeElement)
+      ? activeElement
+      : openButton;
     if (options.context) {
       formState.context = String(options.context).trim().toLowerCase() === "daycare"
         ? "daycare"
         : "school";
     }
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
+    setReservationModalVisibility(modal, true);
     formState.selectedTagFilters = [];
     setPickdropMode(false);
     syncServiceOptionsForContext(false);
@@ -2273,15 +1702,14 @@ export function setupReservationModal(state, storage) {
     if (elements.stepTwo) {
       elements.stepTwo.hidden = false;
     }
-    renderMemberResults(formState, elements, memberSelectOptions);
-    const conflicts = pruneConflictingDates(formState, storage);
+    if (memberSearchMode !== "page") {
+      renderMemberResults(formState, elements, memberSelectOptions);
+    }
+    const scope = getModalScope();
+    const conflicts = pruneConflictingDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
-    syncDaycareUI();
+    syncCalendarState(scope);
+    syncScopeUI(scope);
     refreshTicketOptions();
     syncPricingFee();
     syncPickdropTickets();
@@ -2296,6 +1724,19 @@ export function setupReservationModal(state, storage) {
     openButton?.setAttribute("aria-expanded", "false");
   };
 
+  const setServiceSheetOpen = (open) => {
+    const isOpen = Boolean(open);
+    if (serviceSheet) {
+      serviceSheet.hidden = !isOpen;
+    }
+    if (serviceSheetBackdrop) {
+      serviceSheetBackdrop.hidden = !isOpen;
+    }
+    if (serviceTrigger instanceof HTMLButtonElement) {
+      serviceTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    }
+  };
+
   const toggleServiceMenu = () => {
     if (!serviceMenu) {
       openModal();
@@ -2308,14 +1749,16 @@ export function setupReservationModal(state, storage) {
   };
 
   const pickServiceNameByType = (targetType) => {
-    const normalizedType = String(targetType || "").trim().toLowerCase();
     const classes = classStorage.ensureDefaults();
-    const match = classes.find((item) => {
-      const classType = String(item?.type || "").trim().toLowerCase();
-      const className = String(item?.name || "").trim();
-      return classType === normalizedType && className.length > 0;
-    });
-    return match?.name || "";
+    const availableOptions = getContextFilteredServiceOptions(
+      serviceOptions,
+      classes,
+      targetType
+    );
+    const firstOption = availableOptions[0];
+    return typeof firstOption === "string"
+      ? firstOption
+      : String(firstOption?.value || "");
   };
 
   const applyEntryServiceType = (targetType) => {
@@ -2326,48 +1769,63 @@ export function setupReservationModal(state, storage) {
     syncServiceOptionsForContext(false);
     const serviceName = pickServiceNameByType(targetType);
     if (!serviceName) {
-      syncDaycareUI();
+      syncScopeUI(getModalScope({ ignorePickdrop: true }));
       return;
     }
     formState.services = new Set([serviceName]);
     syncServiceOptionsForContext(false);
-    const conflicts = pruneConflictingDates(formState, storage);
+    const scope = getModalScope();
+    const conflicts = pruneConflictingDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
-    syncDaycareUI();
+    syncCalendarState(scope);
+    syncScopeUI(scope);
     refreshTicketOptions(true);
   };
 
   const openModalFromQuery = () => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("reservation") !== "open") {
+    const queryValues = consumeReservationModalQuery({
+      flagKey: "reservation",
+      extraKeys: ["memberId", "pickdrop"],
+    });
+    if (!queryValues) {
       return;
     }
-    const memberId = params.get("memberId");
+    const memberId = queryValues.memberId;
     openModal();
     if (memberId) {
       applyMemberSelection(memberId);
     }
-    const pickdropMode = params.get("pickdrop") === "1";
+    const pickdropMode = queryValues.pickdrop === "1";
     if (pickdropMode) {
       setPickdropMode(true);
     }
-    const url = new URL(window.location.href);
-    url.searchParams.delete("reservation");
-    url.searchParams.delete("memberId");
-    url.searchParams.delete("pickdrop");
-    window.history.replaceState({}, "", url.toString());
   };
 
   const closeModal = () => {
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
+    setServiceSheetOpen(false);
+    if (pageMode) {
+      if (typeof onClose === "function") {
+        onClose();
+        return;
+      }
+      window.history.back();
+      return;
+    }
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && modal.contains(activeElement)) {
+      const focusTarget = lastModalTrigger instanceof HTMLElement && document.contains(lastModalTrigger)
+        ? lastModalTrigger
+        : openButton;
+      if (focusTarget instanceof HTMLElement && !modal.contains(focusTarget)) {
+        focusTarget.focus();
+      } else {
+        activeElement.blur();
+      }
+    }
+    setReservationModalVisibility(modal, false);
     setPickdropMode(false);
     resetForm(formState, elements, {
+      currentDate: state.currentDate,
       dayoffSettings: getDayoffSettings(),
       timeZone,
       getClasses: () => classStorage.ensureDefaults(),
@@ -2412,11 +1870,7 @@ export function setupReservationModal(state, storage) {
     syncFilterChip(input);
   });
 
-  renderMiniCalendar(formState, elements, new Set(), {
-    dayoffSettings: getDayoffSettings(),
-    timeZone,
-    selectedDates: getActiveDates(formState, elements),
-  });
+  syncCalendarState();
 
   openButton?.addEventListener("click", (event) => {
     event.preventDefault();
@@ -2424,6 +1878,11 @@ export function setupReservationModal(state, storage) {
   });
   entryOptionButtons.forEach((button) => {
     button.addEventListener("click", () => {
+      const entryHref = String(button.dataset.reservationEntryHref || "").trim();
+      if (entryHref) {
+        window.location.href = entryHref;
+        return;
+      }
       const targetType = String(button.dataset.reservationEntryOption || "school");
       closeServiceMenu();
       openModal({ context: targetType });
@@ -2451,10 +1910,10 @@ export function setupReservationModal(state, storage) {
   const submitReservation = (options = {}) => {
     const includePickdrop = options.includePickdrop === true;
     const classes = classStorage.ensureDefaults();
-    const mode = includePickdrop ? "pickdrop" : "school";
-    const serviceType = includePickdrop
-      ? "pickdrop"
-      : getSelectedServiceType(formState, classes, elements);
+    const scope = includePickdrop
+      ? { ...getModalScope({ ignorePickdrop: true }), entryType: "pickdrop", serviceType: "pickdrop" }
+      : getModalScope();
+    const serviceType = scope.serviceType;
     const activeDates = getActiveDates(formState, elements);
     const memberLimit = getMemberTotalReservableCount(formState, serviceType);
     const limit = memberLimit === null
@@ -2464,13 +1923,13 @@ export function setupReservationModal(state, storage) {
       ? getReservationCount(formState, elements)
       : activeDates.size;
     const exceedsLimit = currentCount > limit;
-    const allowPickdropOverLimit = includePickdrop && exceedsLimit;
-    if (exceedsLimit && !overrideCheckbox.checked && !allowPickdropOverLimit) {
+    const allowOverLimit = (!scope.usesCountLimit || includePickdrop || pageMode) && exceedsLimit;
+    if (exceedsLimit && !overrideCheckbox.checked && !allowOverLimit) {
       syncActionState(formState, elements, classes);
       return;
     }
 
-    const isDaycare = isDaycareSelected(formState, classes);
+    const isDaycare = scope.usesTimeRange;
     const daycareStartTime = elements.daycareStartTime?.value || "";
     const daycareEndTime = elements.daycareEndTime?.value || "";
     if (isDaycare) {
@@ -2524,8 +1983,8 @@ export function setupReservationModal(state, storage) {
         .map((usage) => assignNextUsageSequence(usage))
         .filter(Boolean);
     };
-    const memo = memoInput instanceof HTMLTextAreaElement
-      ? memoInput.value.trim()
+    const memo = elements.memoInput instanceof HTMLTextAreaElement
+      ? elements.memoInput.value.trim()
       : "";
     const activePaymentTab = modal.querySelector(".reservation-fee-tab.is-active")?.dataset?.feeTab || "ticket";
     const rawMethod = activePaymentTab === "other"
@@ -2543,11 +2002,16 @@ export function setupReservationModal(state, storage) {
       : 0;
     const serviceName = Array.from(formState.services)[0] || "";
     const serviceClass = classes.find((item) => item.name === serviceName);
-    const primaryServiceType = serviceClass?.type || "school";
+    const primaryServiceType = scope.entryType === "pickdrop" ? "pickdrop" : scope.entryType;
     const serviceClassId = String(serviceClass?.id || "");
     const pricingItems = pricingStorage.loadPricingItems();
     const memberWeight = Number(formState.selectedMember?.weight);
     const serviceDates = getSortedDateKeys(formState.selectedDates);
+    const serviceUnitsPerDate = getServiceUsageUnitsPerDate(serviceType);
+    const serviceUsageCount = getServiceRequestedUsageCount(
+      serviceType,
+      formState.selectedDates.size
+    );
     const hasAnyPickdrop = pickdropFlags.hasPickup || pickdropFlags.hasDropoff;
     const pickdropDates = includePickdrop
       ? getSortedDateKeys(formState.pickdropDates)
@@ -2586,7 +2050,7 @@ export function setupReservationModal(state, storage) {
           const selectionCounts = new Map(
             Array.from(formState.services).map((className) => [
               className,
-              formState.selectedDates.size,
+              serviceUsageCount,
             ])
           );
           const classTicketMap = buildClassTicketMap(
@@ -2634,7 +2098,7 @@ export function setupReservationModal(state, storage) {
         const selectionCounts = new Map(
           Array.from(formState.services).map((className) => [
             className,
-            formState.selectedDates.size,
+            serviceUsageCount,
           ])
         );
         const classTicketMap = buildClassTicketMap(
@@ -2656,10 +2120,15 @@ export function setupReservationModal(state, storage) {
     const serviceSelectionOrder = includePickdrop
       ? formState.schoolSelections
       : formState.ticketSelections;
-    const serviceTicketUsageMap = buildDateTicketUsageMap(
+    const serviceUsagePlan = buildServiceUsagePlanByDate({
+      dateKeys: serviceDates,
+      selectionOrder: serviceSelectionOrder,
+      usedMap: serviceUsedMap,
+      unitsPerDate: serviceUnitsPerDate,
+    });
+    const serviceTicketUsageMap = buildDateTicketUsagesMap(
       serviceDates,
-      serviceSelectionOrder,
-      serviceUsedMap,
+      serviceUsagePlan,
       optionMap
     );
     const pickdropTicketUsagesMap = buildDateTicketUsagesMap(
@@ -2676,7 +2145,7 @@ export function setupReservationModal(state, storage) {
 
     serviceDates.forEach((dateKey) => {
       const pickdropForDate = getPickdropForDate(dateKey);
-      const serviceUsage = assignNextUsageSequence(serviceTicketUsageMap.get(dateKey) || null);
+      const serviceUsages = assignNextUsageSequences(serviceTicketUsageMap.get(dateKey) || []);
       const pickdropUsages = assignNextUsageSequences(pickdropTicketUsagesMap.get(dateKey) || []);
       reservationDates.push({
         date: dateKey,
@@ -2685,7 +2154,7 @@ export function setupReservationModal(state, storage) {
         baseStatusKey: "PLANNED",
         checkinTime: elements.daycareStartTime?.value || "",
         checkoutTime: elements.daycareEndTime?.value || "",
-        ticketUsages: mergeTicketUsagesForDate(serviceUsage, pickdropUsages),
+        ticketUsages: mergeTicketUsagesForDate(serviceUsages, pickdropUsages),
         ...pickdropForDate,
       });
     });
@@ -2831,7 +2300,6 @@ export function setupReservationModal(state, storage) {
         payment: entryPayment,
       });
     });
-
     state.reservations = persistReservations(splitReservations);
     if (hasMember && usageMap.size > 0) {
       applyReservationToMemberTickets(formState.selectedMember.id, usageMap);
@@ -2864,10 +2332,15 @@ export function setupReservationModal(state, storage) {
         );
       }
     }
-    notifyReservationUpdated();
+    const updatedDateKey = splitReservations[0]?.dates?.[0]?.date || "";
+    notifyReservationUpdated({
+      reservationId: splitReservations[0]?.id || "",
+      dateKey: updatedDateKey,
+    });
     showToast("예약이 등록되었습니다.");
     setPickdropMode(false);
     resetForm(formState, elements, {
+      currentDate: state.currentDate,
       dayoffSettings: getDayoffSettings(),
       timeZone,
       getClasses: () => classStorage.ensureDefaults(),
@@ -2899,9 +2372,23 @@ export function setupReservationModal(state, storage) {
       closeServiceMenu();
       return;
     }
+    if (event.key === "Escape" && serviceSheet && !serviceSheet.hidden) {
+      setServiceSheetOpen(false);
+      return;
+    }
     if (event.key === "Escape" && modal.classList.contains("is-open")) {
       closeModal();
     }
+  });
+
+  serviceTrigger?.addEventListener("click", () => {
+    setServiceSheetOpen(true);
+  });
+  serviceSheetBackdrop?.addEventListener("click", () => {
+    setServiceSheetOpen(false);
+  });
+  serviceSheetClose?.addEventListener("click", () => {
+    setServiceSheetOpen(false);
   });
 
   serviceContainer?.addEventListener("change", (event) => {
@@ -2917,18 +2404,19 @@ export function setupReservationModal(state, storage) {
       .forEach((serviceInput) => {
         if (serviceInput instanceof HTMLInputElement) {
           serviceInput.checked = serviceInput === input;
-          syncFilterChip(serviceInput);
         }
       });
-    const conflicts = pruneConflictingDates(formState, storage);
+    if (elements.serviceValue) {
+      const selectedLabel = input.closest("label")?.textContent?.trim();
+      elements.serviceValue.textContent = selectedLabel || input.value;
+    }
+    const scope = getModalScope();
+    const conflicts = pruneConflictingDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
-    syncDaycareUI();
+    syncCalendarState(scope);
+    syncScopeUI(scope);
     refreshTicketOptions(true);
+    setServiceSheetOpen(false);
   });
 
   const handleTicketSelectionChange = (event) => {
@@ -2953,16 +2441,12 @@ export function setupReservationModal(state, storage) {
     }
     syncTicketSection();
     const mode = getReservationMode(elements);
-    const conflicts = getConflictDates(formState, storage);
-    formState.conflicts = conflicts;
+    const scope = getModalScope();
+    const conflicts = getConflictDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
     const dayoffSettings = getDayoffSettings();
     if (mode === "pickdrop") {
-      renderMiniCalendar(formState, elements, conflicts, {
-        dayoffSettings,
-        timeZone,
-        selectedDates: getActiveDates(formState, elements),
-      });
+      syncCalendarState(scope);
       return;
     }
     const autoChanged = applyAutoWeekdaySelection(
@@ -2972,11 +2456,7 @@ export function setupReservationModal(state, storage) {
       true,
       dayoffSettings
     );
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings,
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
+    syncCalendarState(scope);
     if (autoChanged) {
       syncTicketSection();
     }
@@ -3020,42 +2500,43 @@ export function setupReservationModal(state, storage) {
     });
   });
 
-  elements.daycareStartTime?.addEventListener("input", () => {
+  const handleDaycareTimeChange = () => {
     formState.daycareTimesEdited = true;
-    syncDaycareUI();
+    const classes = classStorage.ensureDefaults();
+    syncScopeUI(getModalScope({ ignorePickdrop: true }));
+    syncActionState(formState, elements, classes);
+  };
+
+  elements.daycareStartTime?.addEventListener("input", handleDaycareTimeChange);
+  elements.daycareStartTime?.addEventListener("change", handleDaycareTimeChange);
+  elements.daycareEndTime?.addEventListener("input", handleDaycareTimeChange);
+  elements.daycareEndTime?.addEventListener("change", handleDaycareTimeChange);
+
+  bindReservationMemberSearchEvents({
+    memberInput,
+    memberResults: elements.memberResults,
+    renderMemberResults,
+    disabled: memberSearchMode === "page",
   });
 
-  elements.daycareEndTime?.addEventListener("input", () => {
-    formState.daycareTimesEdited = true;
-    syncDaycareUI();
-  });
-
-  memberInput?.addEventListener("input", () => {
-    renderMemberResults(formState, elements, memberSelectOptions);
-    elements.memberResults?.classList.add("is-open");
-  });
-
-  memberInput?.addEventListener("focus", () => {
-    renderMemberResults();
-    elements.memberResults?.classList.add("is-open");
-  });
-
-  memberInput?.addEventListener("blur", () => {
-    setTimeout(() => {
-      elements.memberResults?.classList.remove("is-open");
-    }, 100);
-  });
+  if (memberSearchMode === "page" && elements.memberInput instanceof HTMLInputElement) {
+    elements.memberInput.readOnly = true;
+  }
 
   const clearMember = modal.querySelector("[data-member-clear]");
   clearMember?.addEventListener("click", () => {
     setPickdropMode(false);
     resetForm(formState, elements, {
+      currentDate: state.currentDate,
       dayoffSettings: getDayoffSettings(),
       timeZone,
       getClasses: () => classStorage.ensureDefaults(),
     });
-    renderMemberResults(formState, elements, memberSelectOptions);
-    elements.memberResults?.classList.remove("is-open");
+    syncMemberInputValue("");
+    if (memberSearchMode !== "page") {
+      renderMemberResults(formState, elements, memberSelectOptions);
+      elements.memberResults?.classList.remove("is-open");
+    }
   });
 
   miniGrid?.addEventListener("click", (event) => {
@@ -3077,44 +2558,30 @@ export function setupReservationModal(state, storage) {
     } else {
       formState.pickdropDatesInitialized = false;
     }
-    const conflicts = getConflictDates(formState, storage);
+    const scope = getModalScope();
+    const conflicts = getConflictDates(formState, storage, scope, elements);
     formState.conflicts = conflicts;
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
+    syncCalendarState(scope);
     syncTicketSection();
     if (mode === "pickdrop") {
       syncPricingFee();
       return;
     }
-    syncDaycareUI();
+    syncScopeUI(scope);
     syncPricingFee();
   });
 
-  miniPrev?.addEventListener("click", () => {
-    const d = formState.miniViewDate;
-    formState.miniViewDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
-    const conflicts = getConflictDates(formState, storage);
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
-    syncPricingFee();
-  });
-
-  miniNext?.addEventListener("click", () => {
-    const d = formState.miniViewDate;
-    formState.miniViewDate = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-    const conflicts = getConflictDates(formState, storage);
-    renderMiniCalendar(formState, elements, conflicts, {
-      dayoffSettings: getDayoffSettings(),
-      timeZone,
-      selectedDates: getActiveDates(formState, elements),
-    });
-    syncPricingFee();
+  bindReservationMonthNavigation({
+    prevButton: miniPrev,
+    nextButton: miniNext,
+    getCurrentDate: () => formState.miniViewDate,
+    setCurrentDate: (nextDate) => {
+      formState.miniViewDate = nextDate;
+    },
+    onChange: () => {
+      syncCalendarState(getModalScope());
+      syncPricingFee();
+    },
   });
 
   overrideCheckbox?.addEventListener("change", () => {
@@ -3138,7 +2605,15 @@ export function setupReservationModal(state, storage) {
   };
 
   submitButton?.addEventListener("click", () => {
+    if (pageMode && isDedicatedPickdropPage(modal) && typeof onClose === "function") {
+      onClose();
+      return;
+    }
     if (modal.classList.contains("is-pickdrop")) {
+      if (pageMode && modal.dataset.reservationPageType === "pickdrop" && typeof onClose === "function") {
+        onClose();
+        return;
+      }
       setPickdropMode(false);
       return;
     }
@@ -3147,6 +2622,7 @@ export function setupReservationModal(state, storage) {
 
   const openPickdropModal = (memberId, options = {}) => {
     resetForm(formState, elements, {
+      currentDate: state.currentDate,
       dayoffSettings: getDayoffSettings(),
       timeZone,
       getClasses: () => classStorage.ensureDefaults(),
@@ -3160,32 +2636,31 @@ export function setupReservationModal(state, storage) {
 
   modal.addEventListener("input", (event) => {
     if (event.target instanceof HTMLInputElement && event.target.matches("[data-reservation-other-amount]")) {
-      // Input Formatting
-      let value = event.target.value.replace(/[^0-9]/g, "");
-      if (value) {
-        // Prevent infinite loop by checking if value actually changed
-        const formatted = parseInt(value, 10).toLocaleString();
-        if (event.target.value !== formatted) {
-          event.target.value = formatted;
-        }
-      } else {
-        if (event.target.value !== "") event.target.value = "";
-      }
+      formatReservationCurrencyInput(event.target);
       syncPricingFee();
     }
   });
 
   // Initialize form
   resetForm(formState, elements, {
+    currentDate: state.currentDate,
     dayoffSettings: getDayoffSettings(),
     timeZone,
     getClasses: () => classStorage.ensureDefaults(),
   });
   feeDropdownController.reset();
   setPickdropMode(false);
+  if (openOnInit) {
+    openModal({ context: initialContext });
+    applyEntryServiceType(initialContext);
+  }
 
   return {
     openModal,
     openPickdropModal,
+    buildMemberSearchDraft,
+    restoreMemberSearchDraft,
+    applyMemberSelection,
+    elements,
   };
 }

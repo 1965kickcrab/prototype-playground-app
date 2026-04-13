@@ -184,6 +184,7 @@ function ensureServiceRowExists(container, serviceType, classes, rooms) {
   const newRow = templateRow.cloneNode(true);
   resetPricingRow(newRow, serviceType, classes);
   renderPricingClassOptions(newRow, classes, rooms);
+  newRow.hidden = false;
   container.appendChild(newRow);
 }
 
@@ -446,11 +447,14 @@ const setupPricingRowAdd = (classes, rooms, getServiceType) => {
       return;
     }
 
+    const serviceType = getServiceType();
     const newRow = templateRow.cloneNode(true);
-    resetPricingRow(newRow, getServiceType(), classes);
+    resetPricingRow(newRow, serviceType, classes);
 
     renderPricingClassOptions(newRow, classes, rooms);
+    newRow.hidden = false;
     rowsContainer.appendChild(newRow);
+    updatePricingRowVisibility(rowsContainer, serviceType);
   });
 };
 
@@ -547,12 +551,15 @@ const setupPricingRowDuplicate = (classes, rooms, getServiceType) => {
       return;
     }
 
+    const serviceType = getServiceTypeFromRow(row, getServiceType());
     const newRow = row.cloneNode(true);
     renderPricingClassOptions(newRow, classes, rooms);
     copyPricingRowValues(row, newRow);
     syncPricingClassSelectionState(newRow);
-    applyServiceDefaultsToRow(newRow, getServiceType(), classes);
+    applyServiceDefaultsToRow(newRow, serviceType, classes);
+    newRow.hidden = false;
     rowsContainer.insertBefore(newRow, row.nextSibling);
+    updatePricingRowVisibility(rowsContainer, getServiceType());
   });
 };
 

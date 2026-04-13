@@ -1,3 +1,5 @@
+import { getTicketUnitLabel } from "../services/ticket-service.js";
+
 function createCell(content, className) {
   const cell = document.createElement("span");
   cell.setAttribute("role", "cell");
@@ -22,7 +24,7 @@ function createCheckbox(isChecked, label) {
 }
 
 function getAvailabilityUnit(ticketType) {
-  return ticketType === "hoteling" ? "박" : "회";
+  return getTicketUnitLabel(ticketType);
 }
 
 function createAvailability(availability, ticketType) {

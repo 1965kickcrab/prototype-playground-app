@@ -41,7 +41,7 @@ function toggleFold(target, bodySelector, arrowSelector, iconOpen, iconFold) {
   return true;
 }
 
-function resetDefaultState(root, iconOpen) {
+function resetDefaultState(root, iconOpen, iconFold) {
   const defaultTab = root.querySelector('[data-fee-tab="ticket"]');
   if (defaultTab instanceof HTMLElement) {
     switchTab(defaultTab);
@@ -51,10 +51,10 @@ function resetDefaultState(root, iconOpen) {
     const body = group.querySelector(".reservation-fee-group__body");
     const arrow = group.querySelector(".reservation-fee-group__arrow");
     if (body) {
-      body.hidden = false;
+      body.hidden = true;
     }
-    if (arrow && iconOpen) {
-      arrow.src = iconOpen;
+    if (arrow) {
+      arrow.src = iconFold || iconOpen || arrow.src;
     }
   });
 
@@ -81,7 +81,7 @@ export function setupReservationFeeDropdowns(root, options = {}) {
 
   if (root.dataset.feeDropdownBound === "true") {
     return {
-      reset: () => resetDefaultState(root, iconOpen),
+      reset: () => resetDefaultState(root, iconOpen, iconFold),
     };
   }
 
@@ -114,7 +114,6 @@ export function setupReservationFeeDropdowns(root, options = {}) {
   });
 
   return {
-    reset: () => resetDefaultState(root, iconOpen),
+    reset: () => resetDefaultState(root, iconOpen, iconFold),
   };
 }
-

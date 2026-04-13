@@ -50,6 +50,7 @@ const ROOM_PRICING_DUPLICATE_MESSAGE =
 const ROOM_PRICING_RANGE_MIN = 0;
 const ROOM_PRICING_RANGE_MAX = 99;
 const ROOM_PRICING_MIN_GAP = 0.1;
+const ROOM_PRICING_MAX_SEGMENTS = 10;
 const ROOM_PRICING_ROW_DELETE_ICON_URL = new URL(
   "../../../assets/iconDelete.svg",
   import.meta.url
@@ -112,7 +113,155 @@ function setupRoomPricingEditor(modal) {
     modal.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
+  const getBoundaryText = (boundaryIndex) => {
+    if (state.rows.length === 0) {
+      return "";
+    }
+    if (boundaryIndex === 0) {
+      return String(state.rows[0]?.start ?? "").trim();
+    }
+    const previousRow = state.rows[boundaryIndex - 1];
+    return String(previousRow?.end ?? "").trim();
+  };
+
+  const getBoundaryNumber = (boundaryIndex) => {
+    const parsed = Number.parseFloat(getBoundaryText(boundaryIndex));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const enforceBoundaryUpperBound = (boundaryIndex) => {
+    const numeric = getBoundaryNumber(boundaryIndex);
+    if (numeric === null || numeric <= ROOM_PRICING_RANGE_MAX) {
+      return;
+    }
+    setBoundaryText(boundaryIndex, formatRangeValue(ROOM_PRICING_RANGE_MAX));
+  };
+
+  const enforceAllBoundaryUpperBounds = () => {
+    for (let boundaryIndex = 0; boundaryIndex <= state.rows.length; boundaryIndex += 1) {
+      enforceBoundaryUpperBound(boundaryIndex);
+    }
+  };
+
+  const setBoundaryText = (boundaryIndex, valueText) => {
+    const text = String(valueText ?? "");
+    if (state.rows.length === 0) {
+      return;
+    }
+    if (boundaryIndex > 0) {
+      const previousRow = state.rows[boundaryIndex - 1];
+      if (previousRow) {
+        previousRow.end = text;
+      }
+    }
+    if (boundaryIndex < state.rows.length) {
+      const nextRow = state.rows[boundaryIndex];
+      if (nextRow) {
+        nextRow.start = text;
+      }
+    }
+  };
+
+  const normalizeBoundaryValue = (boundaryIndex, nextValue) => {
+    const previous = boundaryIndex > 0
+      ? getBoundaryNumber(boundaryIndex - 1)
+      : null;
+    const next = boundaryIndex < state.rows.length
+      ? getBoundaryNumber(boundaryIndex + 1)
+      : null;
+
+    let min = ROOM_PRICING_RANGE_MIN;
+    let max = ROOM_PRICING_RANGE_MAX;
+    if (previous !== null) {
+      min = Math.max(min, previous + ROOM_PRICING_MIN_GAP);
+    }
+    if (next !== null) {
+      max = Math.min(max, next - ROOM_PRICING_MIN_GAP);
+    }
+    if (min > max) {
+      return null;
+    }
+    const clamped = clampNumber(nextValue, min, max);
+    return Math.round(clamped * 10) / 10;
+  };
+
+  const syncBoundaryInputs = (boundaryIndex, sourceInput = null) => {
+    const text = getBoundaryText(boundaryIndex);
+    if (boundaryIndex > 0) {
+      const previousEnd = rowsContainer.querySelector(
+        `[data-room-pricing-template-field="end"][data-room-pricing-template-row-index="${boundaryIndex - 1}"]`
+      );
+      if (
+        previousEnd instanceof HTMLInputElement
+        && previousEnd !== sourceInput
+        && previousEnd !== document.activeElement
+      ) {
+        previousEnd.value = text;
+      }
+    }
+    if (boundaryIndex < state.rows.length) {
+      const nextStart = rowsContainer.querySelector(
+        `[data-room-pricing-template-field="start"][data-room-pricing-template-row-index="${boundaryIndex}"]`
+      );
+      if (
+        nextStart instanceof HTMLInputElement
+        && nextStart !== sourceInput
+        && nextStart !== document.activeElement
+      ) {
+        nextStart.value = text;
+      }
+    }
+  };
+
+  const clearMirroredHighlights = () => {
+    rowsContainer
+      .querySelectorAll(".room-pricing-table__range-input--mirrored")
+      .forEach((element) => element.classList.remove("room-pricing-table__range-input--mirrored"));
+  };
+
+  const highlightMirroredBoundaryInput = (boundaryIndex, sourceInput = null) => {
+    clearMirroredHighlights();
+    if (boundaryIndex > 0) {
+      const previousEnd = rowsContainer.querySelector(
+        `[data-room-pricing-template-field="end"][data-room-pricing-template-row-index="${boundaryIndex - 1}"]`
+      );
+      if (previousEnd instanceof HTMLInputElement && previousEnd !== sourceInput) {
+        previousEnd.classList.add("room-pricing-table__range-input--mirrored");
+      }
+    }
+    if (boundaryIndex < state.rows.length) {
+      const nextStart = rowsContainer.querySelector(
+        `[data-room-pricing-template-field="start"][data-room-pricing-template-row-index="${boundaryIndex}"]`
+      );
+      if (nextStart instanceof HTMLInputElement && nextStart !== sourceInput) {
+        nextStart.classList.add("room-pricing-table__range-input--mirrored");
+      }
+    }
+  };
+
+  const renderTrackSpots = () => {
+    track.innerHTML = "";
+    if (state.rows.length <= 1) {
+      return;
+    }
+    for (let boundaryIndex = 1; boundaryIndex < state.rows.length; boundaryIndex += 1) {
+      const value = getBoundaryNumber(boundaryIndex);
+      if (value === null) {
+        continue;
+      }
+      const ratio =
+        (value - ROOM_PRICING_RANGE_MIN)
+        / (ROOM_PRICING_RANGE_MAX - ROOM_PRICING_RANGE_MIN);
+      const spot = document.createElement("span");
+      spot.className = "room-pricing-range__spot";
+      spot.style.left = `${clampNumber(ratio, 0, 1) * 100}%`;
+      track.appendChild(spot);
+    }
+  };
+
   const render = () => {
+    enforceAllBoundaryUpperBounds();
+    addButton.disabled = state.rows.length >= ROOM_PRICING_MAX_SEGMENTS;
     rowsContainer.innerHTML = "";
     state.rows.forEach((segment, index) => {
       const row = document.createElement("div");
@@ -125,6 +274,8 @@ function setupRoomPricingEditor(modal) {
       const startInput = document.createElement("input");
       startInput.className = "form-field__control";
       startInput.type = "number";
+      startInput.min = String(ROOM_PRICING_RANGE_MIN);
+      startInput.max = String(ROOM_PRICING_RANGE_MAX);
       startInput.step = "0.1";
       startInput.placeholder = "0";
       startInput.value = segment?.start || "";
@@ -146,6 +297,8 @@ function setupRoomPricingEditor(modal) {
       const endInput = document.createElement("input");
       endInput.className = "form-field__control";
       endInput.type = "number";
+      endInput.min = String(ROOM_PRICING_RANGE_MIN);
+      endInput.max = String(ROOM_PRICING_RANGE_MAX);
       endInput.step = "0.1";
       endInput.placeholder = "0";
       endInput.value = segment?.end || "";
@@ -204,15 +357,21 @@ function setupRoomPricingEditor(modal) {
       row.appendChild(removeCell);
       rowsContainer.appendChild(row);
     });
-
-    track.innerHTML = "";
+    renderTrackSpots();
   };
 
   const addSegment = () => {
+    if (state.rows.length >= ROOM_PRICING_MAX_SEGMENTS) {
+      return;
+    }
     const previousTemplate = state.rows[state.rows.length - 1];
     const previousEnd = String(previousTemplate?.end ?? "").trim();
+    const previousEndNumber = Number.parseFloat(previousEnd);
+    const normalizedPreviousEnd = Number.isFinite(previousEndNumber)
+      ? formatRangeValue(clampNumber(previousEndNumber, ROOM_PRICING_RANGE_MIN, ROOM_PRICING_RANGE_MAX))
+      : previousEnd;
     state.rows.push({
-      start: previousEnd || "",
+      start: normalizedPreviousEnd || "",
       end: "",
       price: "",
     });
@@ -243,6 +402,10 @@ function setupRoomPricingEditor(modal) {
       return;
     }
     state.rows.splice(rowIndex, 1);
+    if (rowIndex > 0 && rowIndex < state.rows.length) {
+      const previousEnd = String(state.rows[rowIndex - 1]?.end ?? "").trim();
+      state.rows[rowIndex].start = previousEnd;
+    }
     render();
     notifyInput();
   });
@@ -270,41 +433,92 @@ function setupRoomPricingEditor(modal) {
     if (!target) {
       return;
     }
-    target[field] = input.value;
-    if (field === "end") {
-      const nextTemplate = state.rows[rowIndex + 1];
-      if (!nextTemplate) {
-        return;
-      }
-      nextTemplate.start = input.value;
-      const nextStartInput = rowsContainer.querySelector(
-        `[data-room-pricing-template-field="start"][data-room-pricing-template-row-index="${rowIndex + 1}"]`
-      );
-      if (
-        nextStartInput instanceof HTMLInputElement
-        && document.activeElement !== nextStartInput
-      ) {
-        nextStartInput.value = input.value;
-      }
+    if (field === "price") {
+      target.price = input.value;
+      clearMirroredHighlights();
+      notifyInput();
       return;
     }
-    if (field === "start") {
-      const previousTemplate = state.rows[rowIndex - 1];
-      if (!previousTemplate) {
-        return;
-      }
-      previousTemplate.end = input.value;
-      const previousEndInput = rowsContainer.querySelector(
-        `[data-room-pricing-template-field="end"][data-room-pricing-template-row-index="${rowIndex - 1}"]`
-      );
-      if (
-        previousEndInput instanceof HTMLInputElement
-        && document.activeElement !== previousEndInput
-      ) {
-        previousEndInput.value = input.value;
-      }
+    const boundaryIndex = field === "start" ? rowIndex : rowIndex + 1;
+    const raw = input.value.trim();
+    const parsed = Number.parseFloat(raw);
+    const normalizedInput = Number.isFinite(parsed)
+      ? formatRangeValue(clampNumber(parsed, ROOM_PRICING_RANGE_MIN, ROOM_PRICING_RANGE_MAX))
+      : input.value;
+    setBoundaryText(boundaryIndex, normalizedInput);
+    if (normalizedInput !== input.value) {
+      input.value = normalizedInput;
     }
+    syncBoundaryInputs(boundaryIndex, input);
+    highlightMirroredBoundaryInput(boundaryIndex, input);
+    renderTrackSpots();
     notifyInput();
+  });
+
+  rowsContainer.addEventListener("change", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (!input.matches("[data-room-pricing-template-field]")) {
+      return;
+    }
+    const rowIndex = Number.parseInt(
+      input.dataset.roomPricingTemplateRowIndex || "-1",
+      10
+    );
+    if (Number.isNaN(rowIndex) || rowIndex < 0) {
+      return;
+    }
+    const field = input.dataset.roomPricingTemplateField || "";
+    if (!["start", "end"].includes(field)) {
+      return;
+    }
+    const target = state.rows[rowIndex];
+    if (!target) {
+      return;
+    }
+    const boundaryIndex = field === "start" ? rowIndex : rowIndex + 1;
+    const raw = input.value.trim();
+    if (!raw) {
+      setBoundaryText(boundaryIndex, "");
+      syncBoundaryInputs(boundaryIndex, input);
+      renderTrackSpots();
+      notifyInput();
+      return;
+    }
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    const normalized = normalizeBoundaryValue(boundaryIndex, parsed);
+    if (normalized === null) {
+      setBoundaryText(boundaryIndex, formatRangeValue(ROOM_PRICING_RANGE_MAX));
+      input.value = formatRangeValue(ROOM_PRICING_RANGE_MAX);
+      syncBoundaryInputs(boundaryIndex, input);
+      renderTrackSpots();
+      clearMirroredHighlights();
+      notifyInput();
+      return;
+    }
+    const formatted = formatRangeValue(normalized);
+    setBoundaryText(boundaryIndex, formatted);
+    input.value = formatted;
+    syncBoundaryInputs(boundaryIndex, input);
+    renderTrackSpots();
+    clearMirroredHighlights();
+    notifyInput();
+  });
+
+  rowsContainer.addEventListener("focusout", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (!input.matches("[data-room-pricing-template-field='start'], [data-room-pricing-template-field='end']")) {
+      return;
+    }
+    clearMirroredHighlights();
   });
 
   const reset = () => {
@@ -321,6 +535,7 @@ function setupRoomPricingEditor(modal) {
       end: String(maxInput?.value || "").trim(),
       price: String(priceInput?.value || "").trim(),
     }];
+    enforceAllBoundaryUpperBounds();
     render();
   };
 

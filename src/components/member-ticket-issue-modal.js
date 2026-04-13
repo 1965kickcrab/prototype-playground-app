@@ -2,19 +2,25 @@ import { applyIssueToMembers } from "../storage/ticket-issue-members.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 import {
+  buildTicketIssueEntries,
+  createTicketIssueDateContext,
+} from "../services/ticket-issue-entry-service.js";
+import {
   formatTicketCount,
   formatTicketDisplayName,
   formatTicketPrice,
   formatTicketValidity,
+  getTicketQuantityValue,
   normalizePickdropType,
 } from "../services/ticket-service.js";
-import { getTimeZone } from "../utils/timezone.js";
-import { getDateKeyFromParts, getDatePartsFromKey, getZonedParts } from "../utils/date.js";
 import { initReservationStorage } from "../storage/reservation-storage.js";
 import {
   buildActiveReservationCountByMemberType,
-  getMemberReservableCountFromReservations,
 } from "../services/member-reservable-count.js";
+import {
+  buildMemberReservableCountsByType,
+  buildMemberStatusMarkup,
+} from "../services/member-status.js";
 
 function openModal(modal) {
   modal.classList.add("is-open");
@@ -27,74 +33,25 @@ function closeModal(modal) {
 }
 
 function getTicketReservableDelta(ticket) {
-  const type = String(ticket?.type || "");
-  if (type !== "school" && type !== "daycare") {
-    return 0;
-  }
-  return Number(ticket?.quantity) || 0;
+  return getTicketQuantityValue(ticket);
 }
 
-function addValidityToDate(dateKey, validity, unit) {
-  const parsed = getDatePartsFromKey(dateKey);
-  if (!parsed || !Number.isFinite(validity) || validity <= 0 || !unit) {
+function getTicketStatusKey(ticket) {
+  const type = String(ticket?.type || "").trim();
+  if (type === "pickdrop") {
+    const pickdropType = normalizePickdropType(ticket?.pickdropType || ticket?.name);
+    if (pickdropType === "왕복") {
+      return "roundtrip";
+    }
+    if (pickdropType === "편도") {
+      return "oneway";
+    }
     return "";
   }
-  const date = new Date(parsed.year, parsed.month - 1, parsed.day);
-  if (unit === "일") {
-    date.setDate(date.getDate() + validity);
-  } else if (unit === "주") {
-    date.setDate(date.getDate() + (validity * 7));
-  } else if (unit === "개월") {
-    date.setMonth(date.getMonth() + validity);
-  } else if (unit === "년") {
-    date.setFullYear(date.getFullYear() + validity);
+  if (type === "school" || type === "daycare" || type === "hoteling") {
+    return type;
   }
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function buildIssueEntries(memberId, ticket, quantity) {
-  const count = Math.max(1, Number(quantity) || 1);
-  const now = Date.now();
-  const timeZone = getTimeZone();
-  const issuedDate = getDateKeyFromParts(getZonedParts(new Date(), timeZone));
-  const entries = [];
-  for (let index = 0; index < count; index += 1) {
-    const startPolicy = ticket.startDatePolicy || "first-attendance";
-    const startDate = startPolicy === "issue-date" ? issuedDate : "";
-    const validity = Number(ticket.validity) || 0;
-    const unit = ticket.unit || "";
-    const hasUnlimitedValidity = Boolean(ticket.unlimitedValidity);
-    entries.push({
-      id: `${now}-${ticket.id}-${index}`,
-      ticketId: String(ticket.id || ""),
-      memberId: String(memberId || ""),
-      quantity: 1,
-      issuedDate,
-      issueDate: issuedDate,
-      timeZone,
-      name: ticket.name || "",
-      pickdropType: ticket.type === "pickdrop"
-        ? normalizePickdropType(ticket.pickdropType || ticket.name)
-        : "",
-      type: ticket.type || "",
-      totalCount: Number(ticket.quantity) || 0,
-      validity,
-      unit,
-      startPolicy,
-      reservationDateRule: ticket.reservationDateRule || "expiry",
-      startDate,
-      usedCount: 0,
-      reservableCount: Number(ticket.quantity) || 0,
-      expiryDate:
-        hasUnlimitedValidity || startPolicy !== "issue-date"
-          ? ""
-          : addValidityToDate(issuedDate, validity, unit),
-    });
-  }
-  return entries;
+  return "";
 }
 
 export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
@@ -105,7 +62,7 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
   const ticketStorage = initTicketStorage();
   const reservationStorage = initReservationStorage();
   const memberNameEl = modal.querySelector("[data-member-ticket-issue-member]");
-  const reservableCountEl = modal.querySelector("[data-member-ticket-issue-reservable]");
+  const memberStatusEl = modal.querySelector("[data-member-ticket-issue-status]");
   const rowsEl = modal.querySelector("[data-member-ticket-issue-rows]");
   const submitEl = modal.querySelector("[data-member-ticket-issue-submit]");
   const selectAllEl = modal.querySelector("[data-member-ticket-issue-select-all]");
@@ -172,7 +129,7 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
           <input type="checkbox" data-member-ticket-issue-select ${isSelected ? "checked" : ""} aria-label="이용권 선택">
         </span>
         <span>${formatTicketDisplayName(ticket)}</span>
-        <span>${formatTicketCount(Number(ticket.quantity) || 0)}</span>
+        <span>${formatTicketCount(getTicketQuantityValue(ticket), ticket.type)}</span>
         <span>${formatTicketValidity(ticket.validity, ticket.unit, ticket.unlimitedValidity)}</span>
         <span>${formatTicketPrice(Number(ticket.price))}</span>
         <span>
@@ -198,21 +155,24 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
       const owner = state.member?.owner || "-";
       memberNameEl.textContent = `${dog}(${breed}) / ${owner}`;
     }
-    if (reservableCountEl) {
-      const baseCount = getMemberReservableCountFromReservations(
+    if (memberStatusEl) {
+      const countsByType = buildMemberReservableCountsByType(
         state.member,
         state.activeReservationCountsByMemberType
       );
-      const addedCount = Array.from(state.selections.entries()).reduce((sum, [ticketId, issueQty]) => {
+      Array.from(state.selections.entries()).forEach(([ticketId, issueQty]) => {
         const ticket = state.tickets.find((item) => String(item?.id || "") === String(ticketId));
         if (!ticket) {
-          return sum;
+          return;
         }
-        return sum + (getTicketReservableDelta(ticket) * (Number(issueQty) || 0));
-      }, 0);
-      const count = baseCount + addedCount;
-      reservableCountEl.textContent = count < 0 ? `초과 ${Math.abs(count)}회` : `${count}회`;
-      reservableCountEl.classList.toggle("member-table__count-over", count <= 2);
+        const statusKey = getTicketStatusKey(ticket);
+        if (!statusKey) {
+          return;
+        }
+        countsByType[statusKey] = (Number(countsByType[statusKey]) || 0)
+          + (getTicketReservableDelta(ticket) * (Number(issueQty) || 0));
+      });
+      memberStatusEl.innerHTML = buildMemberStatusMarkup(countsByType);
     }
   };
 
@@ -291,14 +251,23 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
     if (!state.member || state.selections.size === 0) {
       return;
     }
+    const issueContext = createTicketIssueDateContext();
+    let issueOffset = 0;
     const selected = Array.from(state.selections.entries());
     selected.forEach(([ticketId, quantity]) => {
       const ticket = state.tickets.find((item) => String(item?.id || "") === ticketId);
       if (!ticket) {
         return;
       }
-      const issues = buildIssueEntries(state.member.id, ticket, quantity);
-      applyIssueToMembers(issues, Number(ticket.quantity) || 1);
+      const issues = buildTicketIssueEntries({
+        memberId: state.member.id,
+        ticket,
+        quantity,
+        ...issueContext,
+        startIndex: issueOffset,
+      });
+      issueOffset += issues.length;
+      applyIssueToMembers(issues, getTicketQuantityValue(ticket) || 1);
     });
     recalculateTicketCounts();
     closeModal(modal);

@@ -1,22 +1,22 @@
 :root {
-  --color-bg: #f5f6f8;
+  --color-bg: #fafafb;
   --color-surface: #ffffff;
-  --color-border: #e6e8ed;
+  --color-border: #d4d4d4;
   --color-primary: #1e78f0;
-  --color-secondary: #81889a;
-  --color-text: #333333;
-  --color-muted: #9aa3b5;
-  --color-disabled: #D7D7D9;
-  --color-holiday: #ED6060;
-  --color-warning: #FEC600;
-  --color-success: #00AA81;
-  --color-hover: #E0ECFF;
-  --radius-base: 6px;
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
+  --color-secondary: #666666;
+  --color-text: #202020;
+  --color-muted: #8a8a8a;
+  --color-disabled: #e3e3e3;
+  --color-holiday: #ed6060;
+  --color-warning: #ed6060;
+  --color-success: #3f3f3f;
+  --color-hover: #ececec;
+  --radius-base: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
   --list-table-columns: auto 5fr 3fr 3fr 3fr 10fr;
-  --shadow-card: 0 20px 40px rgba(0, 0, 0, 0.06);
+  --shadow-card: none;
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-3: 12px;
@@ -24,7 +24,9 @@
   --spacing-5: 20px;
   --spacing-6: 24px;
   --spacing-8: 32px;
-  accent-color: var(--color-primary);
+  --app-max-width: 430px;
+  --app-min-height: 100svh;
+  accent-color: var(--color-text);
 }
 
 * {
@@ -36,6 +38,7 @@ body {
   font-family: "Noto Sans KR", "Segoe UI", sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -45,10 +48,14 @@ a {
 }
 
 button,
-input {
+input,
+textarea,
+select {
   font-family: inherit;
   border: none;
   outline: none;
+  
+  box-shadow: none;
 }
 
 

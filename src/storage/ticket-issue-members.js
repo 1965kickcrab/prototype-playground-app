@@ -11,7 +11,12 @@
 import { writeStorageValue } from "./storage-utils.js";
 import { autoApplyIssuedTicketsToReservations } from "../services/ticket-auto-assign.js";
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
-import { sanitizeTagList } from "../utils/tags.js";
+import { hasTagValue, sanitizeTagList } from "../utils/tags.js";
+import {
+  getTicketReservableValue,
+  getTicketTotalValue,
+  getTicketUsedValue,
+} from "../services/ticket-service.js";
 
 const STORAGE_KEY = "memberList";
 const SERVICE_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
@@ -214,29 +219,30 @@ function getBaseMembers() {
 
 function normalizeTicketEntry(ticket) {
   const source = ticket && typeof ticket === "object" ? ticket : {};
-  const totalCount = Number(source.totalCount);
-  const reservableCount = Number.isFinite(Number(source.reservableCount))
-    ? Number(source.reservableCount)
-    : Number.isFinite(totalCount)
-      ? totalCount
-      : null;
+  const type = String(source.type || "");
+  const totalCount = getTicketTotalValue(source);
+  const reservableCount = getTicketReservableValue(source);
 
   return {
     id: String(source.id ?? source.issueId ?? ""),
     ticketId: String(source.ticketId ?? ""),
     name: source.name || "",
     pickdropType: source.pickdropType || "",
-    type: source.type || "",
-    totalCount: Number.isFinite(totalCount) ? totalCount : null,
+    type,
+    totalCount: type === "daycare" ? 0 : totalCount,
+    totalHours: type === "daycare" ? totalCount : 0,
     validity: Number(source.validity) || 0,
     unit: source.unit || "",
     startPolicy: source.startPolicy || source.startDatePolicy || "",
     reservationDateRule: source.reservationDateRule || "",
     issueDate: source.issueDate || source.issuedDate || "",
     startDate: source.startDate || "",
-    usedCount: Number(source.usedCount) || 0,
+    usedCount: type === "daycare" ? 0 : getTicketUsedValue(source),
+    usedHours: type === "daycare" ? getTicketUsedValue(source) : 0,
     reservedCount: Number(source.reservedCount) || 0,
-    reservableCount,
+    reservedHours: Number(source.reservedHours) || 0,
+    reservableCount: type === "daycare" ? 0 : reservableCount,
+    reservableHours: type === "daycare" ? reservableCount : 0,
     expiryDate: source.expiryDate || "",
     quantity: Number(source.quantity) || 0,
   };
@@ -254,20 +260,32 @@ function appendIssuedTickets(item, issues) {
       name: issue.name ?? "",
       pickdropType: issue.pickdropType ?? "",
       type: issue.type ?? "",
-      totalCount: Number.isFinite(Number(issue.totalCount)) ? Number(issue.totalCount) : 0,
+      totalCount: issue.type === "daycare" ? 0 : (Number.isFinite(Number(issue.totalCount)) ? Number(issue.totalCount) : 0),
+      totalHours: issue.type === "daycare" ? (Number.isFinite(Number(issue.totalHours)) ? Number(issue.totalHours) : 0) : 0,
       validity: Number(issue.validity) || 0,
       unit: issue.unit ?? "",
       startPolicy: issue.startPolicy ?? issue.startDatePolicy ?? "",
       reservationDateRule: issue.reservationDateRule ?? "",
       issueDate: issue.issueDate ?? issue.issuedDate ?? "",
       startDate: issue.startDate ?? "",
-      usedCount: Number(issue.usedCount) || 0,
+      usedCount: issue.type === "daycare" ? 0 : (Number(issue.usedCount) || 0),
+      usedHours: issue.type === "daycare" ? (Number(issue.usedHours) || 0) : 0,
       reservedCount: 0,
-      reservableCount: Number.isFinite(Number(issue.reservableCount))
-        ? Number(issue.reservableCount)
-        : Number.isFinite(Number(issue.totalCount))
-          ? Number(issue.totalCount)
-          : 0,
+      reservedHours: issue.type === "daycare" ? (Number(issue.reservedHours) || 0) : 0,
+      reservableCount: issue.type === "daycare"
+        ? 0
+        : (Number.isFinite(Number(issue.reservableCount))
+          ? Number(issue.reservableCount)
+          : Number.isFinite(Number(issue.totalCount))
+            ? Number(issue.totalCount)
+            : 0),
+      reservableHours: issue.type === "daycare"
+        ? (Number.isFinite(Number(issue.reservableHours))
+          ? Number(issue.reservableHours)
+          : Number.isFinite(Number(issue.totalHours))
+            ? Number(issue.totalHours)
+            : 0)
+        : 0,
       expiryDate: issue.expiryDate ?? "",
       quantity: issue.quantity ?? 0,
     });
@@ -312,17 +330,32 @@ export function applyIssueToMembers(issues, ticketQuantity) {
     }
     const normalizedIssues = memberIssues.map((issue) => {
       const total = Number(issue.totalCount);
-      const computedTotal = Number.isFinite(total)
-        ? total
-        : ticketQuantity * (Number(issue.quantity) || 0);
-      const reservable = Number.isFinite(Number(issue.reservableCount))
-        ? Number(issue.reservableCount)
-        : computedTotal;
+      const totalHours = Number(issue.totalHours);
+      const isDaycare = issue?.type === "daycare";
+      const computedTotal = isDaycare
+        ? (Number.isFinite(totalHours)
+          ? totalHours
+          : ticketQuantity * (Number(issue.quantity) || 0))
+        : (Number.isFinite(total)
+          ? total
+          : ticketQuantity * (Number(issue.quantity) || 0));
+      const reservable = isDaycare
+        ? (Number.isFinite(Number(issue.reservableHours))
+          ? Number(issue.reservableHours)
+          : computedTotal)
+        : (Number.isFinite(Number(issue.reservableCount))
+          ? Number(issue.reservableCount)
+          : computedTotal);
       return {
         ...issue,
-        totalCount: computedTotal,
-        reservableCount: reservable,
-        usedCount: Number(issue.usedCount) || 0,
+        totalCount: isDaycare ? 0 : computedTotal,
+        totalHours: isDaycare ? computedTotal : 0,
+        reservableCount: isDaycare ? 0 : reservable,
+        reservableHours: isDaycare ? reservable : 0,
+        usedCount: isDaycare ? 0 : (Number(issue.usedCount) || 0),
+        usedHours: isDaycare ? (Number(issue.usedHours) || 0) : 0,
+        reservedCount: isDaycare ? 0 : (Number(issue.reservedCount) || 0),
+        reservedHours: isDaycare ? (Number(issue.reservedHours) || 0) : 0,
       };
     });
     appendIssuedTickets(item, normalizedIssues);
@@ -402,6 +435,127 @@ export function updateIssueMember(memberId, patch = {}) {
   }
   writeStorageValue(STORAGE_KEY, next);
   return updatedMember;
+}
+
+export function updateIssueMembersPetTags(memberIds = [], tags = [], mode = "add") {
+  const idSet = new Set(
+    (Array.isArray(memberIds) ? memberIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+  const normalizedTags = sanitizeTagList(tags);
+  const action = String(mode || "").trim().toLowerCase();
+  if (!idSet.size || !normalizedTags.length || (action !== "add" && action !== "remove")) {
+    return readStorage();
+  }
+
+  const source = readStorage();
+  if (!Array.isArray(source) || source.length === 0) {
+    return [];
+  }
+
+  const next = source.map((item) => {
+    const currentId = String(item?.id ?? item?.memberId ?? "").trim();
+    if (!idSet.has(currentId)) {
+      return item;
+    }
+
+    const currentTags = sanitizeTagList(item?.petTags);
+    const nextTags = action === "add"
+      ? sanitizeTagList([...currentTags, ...normalizedTags])
+      : currentTags.filter((tag) => !normalizedTags.some((candidate) => hasTagValue([tag], candidate)));
+
+    return {
+      ...item,
+      petTags: nextTags,
+    };
+  });
+
+  writeStorageValue(STORAGE_KEY, next);
+  return next.map((item) => normalizeMember(item));
+}
+
+export function updateMemberTicketQuantity(memberId, issuedTicketId, delta = 0) {
+  const targetMemberId = String(memberId || "").trim();
+  const targetTicketId = String(issuedTicketId || "").trim();
+  const step = Number(delta);
+  if (!targetMemberId || !targetTicketId || !Number.isFinite(step) || step === 0) {
+    return null;
+  }
+
+  const source = readStorage();
+  if (!Array.isArray(source) || source.length === 0) {
+    return null;
+  }
+
+  let updatedMember = null;
+  let didUpdate = false;
+  const next = source.map((item) => {
+    const currentId = String(item?.id ?? item?.memberId ?? "").trim();
+    if (currentId !== targetMemberId) {
+      return item;
+    }
+
+    const tickets = Array.isArray(item?.tickets) ? item.tickets : [];
+    const nextTickets = tickets.map((ticket) => {
+      const currentTicketId = String(ticket?.id ?? ticket?.issueId ?? "").trim();
+      if (currentTicketId !== targetTicketId) {
+        return ticket;
+      }
+
+      const type = String(ticket?.type || "").trim();
+      if (type === "daycare") {
+        const currentTotal = Number(ticket?.totalHours) || 0;
+        const nextTotal = Math.max(0, currentTotal + step);
+        if (nextTotal === currentTotal) {
+          return ticket;
+        }
+        didUpdate = true;
+        return {
+          ...ticket,
+          totalHours: nextTotal,
+        };
+      }
+
+      const currentTotal = Number(ticket?.totalCount) || 0;
+      const nextTotal = Math.max(0, currentTotal + step);
+      if (nextTotal === currentTotal) {
+        return ticket;
+      }
+      didUpdate = true;
+      return {
+        ...ticket,
+        totalCount: nextTotal,
+      };
+    });
+
+    const merged = {
+      ...item,
+      tickets: nextTickets,
+    };
+    updatedMember = normalizeMember(merged);
+    return merged;
+  });
+
+  if (!didUpdate || !updatedMember) {
+    return null;
+  }
+
+  writeStorageValue(STORAGE_KEY, next);
+  recalculateTicketCounts();
+  return findIssuedTicketById(loadIssueMembers(), targetMemberId, targetTicketId);
+}
+
+function findIssuedTicketById(members, memberId, ticketId) {
+  const member = (Array.isArray(members) ? members : []).find(
+    (item) => String(item?.id || "").trim() === String(memberId || "").trim()
+  );
+  if (!member || !Array.isArray(member?.tickets)) {
+    return null;
+  }
+  return member.tickets.find(
+    (ticket) => String(ticket?.id || "").trim() === String(ticketId || "").trim()
+  ) || null;
 }
 
 export function replaceIssueMembers(members = []) {

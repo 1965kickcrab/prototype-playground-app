@@ -1,0 +1,58 @@
+[
+  {
+    "name": "school-reservation-create",
+    "entrypoint": "src/pages/school-reservation-create.html",
+    "controller": "src/pages/school-reservation-create.js",
+    "sharedModule": "src/pages/reservation-create-page-shared.js",
+    "sharedComponentSource": "src/components/reservation-modal.js",
+    "duplicateCandidates": [
+      "public/index.html"
+    ],
+    "authorityDecision": "Dedicated school reservation create uses the generated component path, not the static home modal."
+  },
+  {
+    "name": "school-pickdrop-create",
+    "entrypoint": "src/pages/school-pickdrop-create.html",
+    "controller": "src/pages/school-pickdrop-create.js",
+    "sharedModule": "src/pages/reservation-create-page-shared.js",
+    "sharedComponentSource": "src/components/reservation-modal.js",
+    "duplicateCandidates": [
+      "public/index.html"
+    ],
+    "authorityDecision": "Dedicated pickdrop create uses the generated component path, not the static home modal."
+  },
+  {
+    "name": "home-reservation-entry",
+    "entrypoint": "public/index.html",
+    "controller": "src/pages/main.js",
+    "sharedModule": "src/pages/reservation.js",
+    "sharedComponentSource": "public/index.html",
+    "duplicateCandidates": [
+      "src/components/reservation-modal.js"
+    ],
+    "authorityDecision": "Home reservation entry still uses the static modal path in public/index.html."
+  },
+  {
+    "name": "hoteling-reservation-entry",
+    "entrypoint": "src/pages/hotels.html",
+    "controller": "src/pages/hotels.js",
+    "sharedModule": "src/pages/reservation.js",
+    "sharedComponentSource": "src/components/hoteling-reservation-modal.js",
+    "duplicateCandidates": [
+      "src/components/reservation-modal.js"
+    ],
+    "authorityDecision": "Hoteling entry is driven by hotels.html plus shared reservation and hoteling components."
+  },
+  {
+    "name": "member-search-page",
+    "entrypoint": "src/pages/member-search.html",
+    "controller": "src/pages/member-search-page.js",
+    "sharedModule": "src/pages/reservation-create-page-shared.js",
+    "sharedComponentSource": "src/pages/member-search.html",
+    "duplicateCandidates": [
+      "src/components/member-search.js",
+      "src/components/reservation-modal.js"
+    ],
+    "authorityDecision": "Dedicated member-search page is authoritative for the mobile reservation-create member selection flow."
+  }
+]

@@ -314,7 +314,7 @@ export function initTicketPage(options = {}) {
     if (targetIndex === -1) {
       return;
     }
-    tickets[targetIndex] = { ...tickets[targetIndex], ...updated };
+    tickets[targetIndex] = { id: tickets[targetIndex].id, ...updated };
     storage.saveTickets(tickets);
     syncLinkedClassRoomSelections();
     updateView();

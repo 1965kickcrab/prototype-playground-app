@@ -2,6 +2,8 @@ import {
   getPickdropCountType,
   resolvePickdropTicketCountType,
 } from "./pickdrop-policy.js";
+import { getDaycareDurationMinutes } from "./daycare-duration.js";
+import { getTicketTotalValue } from "./ticket-service.js";
 
 const SERVICE_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
 const DEFAULT_DISPLAY_TYPES = ["school", "daycare"];
@@ -35,6 +37,17 @@ function resolveReservationServiceType(reservation, entry) {
   return "school";
 }
 
+function getDaycareUsageUnits(entry = {}) {
+  const durationMinutes = getDaycareDurationMinutes(
+    entry?.checkinTime || "",
+    entry?.checkoutTime || ""
+  );
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    return 1;
+  }
+  return Math.max(1, Math.ceil(durationMinutes / 60));
+}
+
 function getTicketCountType(ticket = {}) {
   if (ticket?.type === "pickdrop") {
     return resolvePickdropTicketCountType(ticket);
@@ -54,7 +67,7 @@ function getIssuedTotalsByType(member) {
     if (!countType || totals[countType] === undefined) {
       return;
     }
-    totals[countType] += toNumber(ticket?.totalCount);
+    totals[countType] += toNumber(getTicketTotalValue(ticket));
   });
   return totals;
 }
@@ -88,7 +101,9 @@ export function buildActiveReservationCountByMemberType(reservations) {
 
       const serviceType = resolveReservationServiceType(reservation, entry);
       if (serviceType && countMap[serviceType] !== undefined) {
-        countMap[serviceType] += 1;
+        countMap[serviceType] += serviceType === "daycare"
+          ? getDaycareUsageUnits(entry)
+          : 1;
       }
 
       if (reservation?.type === "hoteling") {

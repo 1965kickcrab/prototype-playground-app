@@ -53,14 +53,49 @@ export function getMemberReservationConflictDates({
   services,
   storage,
 }) {
+  return getMemberReservationDatesByType({
+    reservations,
+    member,
+    services,
+    storage,
+    reservationType: "school",
+  });
+}
+
+export function getMemberDaycareReservationDates({
+  reservations,
+  member,
+  services,
+  storage,
+}) {
+  return getMemberReservationDatesByType({
+    reservations,
+    member,
+    services,
+    storage,
+    reservationType: "daycare",
+  });
+}
+
+function getMemberReservationDatesByType({
+  reservations,
+  member,
+  services,
+  storage,
+  reservationType,
+}) {
   const conflicts = new Set();
   if (!member || !(services instanceof Set) || services.size === 0) {
     return conflicts;
   }
+  const targetType = String(reservationType || "").trim().toLowerCase();
   const targetReservations = filterReservationsByMember(reservations || [], member);
   getReservationEntries(targetReservations).forEach((entry) => {
     const { reservation, date, className, baseStatusKey, statusText } = entry;
     if (!reservation || isCanceledStatus(baseStatusKey, statusText, storage)) {
+      return;
+    }
+    if (targetType && String(reservation.type || "school").trim().toLowerCase() !== targetType) {
       return;
     }
     if (!services.has(className)) {

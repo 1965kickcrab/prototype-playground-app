@@ -6,10 +6,18 @@
  */
 import { getDateKeyFromParts, getDatePartsFromKey, getZonedTodayParts, getWeekdayIndex } from "../utils/date.js";
 import { getTimeZone } from "../utils/timezone.js";
-import { formatTicketDisplayName, normalizePickdropType } from "./ticket-service.js";
+import {
+  formatTicketDisplayName,
+  getTicketQuantityValue,
+  getTicketReservableValue,
+  getTicketTotalValue,
+  getTicketUsedValue,
+  normalizePickdropType,
+} from "./ticket-service.js";
 import { WEEKDAY_KEYS } from "../utils/weekday.js";
 import { isDayoffDate } from "../utils/dayoff.js";
 import { resolvePickdropTicketCountType } from "./pickdrop-policy.js";
+import { getDefaultLinkedTicketSelection } from "./ticket-linking.js";
 
 export function getIssuedTicketOptions(tickets, memberTickets) {
   const ticketMap = new Map(
@@ -20,29 +28,22 @@ export function getIssuedTicketOptions(tickets, memberTickets) {
     .map((record) => {
       const ticketId = String(record?.ticketId || "");
       const ticket = ticketMap.get(ticketId);
+      const ticketType = String(ticket?.type || record?.type || "").trim();
       const issuedQuantity = Number(record?.quantity) || 0;
-      const perCount = Number(ticket?.quantity) || 0;
-      const usedCount = Number(record?.usedCount) || 0;
-      const totalCount = Number.isFinite(Number(record?.totalCount))
-        ? Number(record.totalCount)
-        : Number.isFinite(Number(record?.reservableCount))
-          ? Number(record.reservableCount) + usedCount
-          : issuedQuantity > 0 && perCount > 0
-            ? issuedQuantity * perCount
-            : 0;
-      const reservableCount = Number.isFinite(Number(record?.reservableCount))
-        ? Number(record.reservableCount)
-        : Number.isFinite(totalCount)
-          ? totalCount
-          : 0;
-      const remainingCount = Number.isFinite(Number(record?.reservableCount))
+      const perCount = getTicketQuantityValue(ticket);
+      const usedCount = getTicketUsedValue(record);
+      const totalCount = getTicketTotalValue(record) || (
+        issuedQuantity > 0 && perCount > 0 ? issuedQuantity * perCount : 0
+      );
+      const reservableCount = getTicketReservableValue(record);
+      const remainingCount = Number.isFinite(Number(reservableCount))
         ? Math.max(reservableCount, 0)
         : Math.max(totalCount - usedCount, 0);
       const weekdays = Array.isArray(ticket?.weekdays) ? ticket.weekdays : [];
       if (!ticketId) {
         return null;
       }
-      const pickdropType = ticket?.type === "pickdrop"
+      const pickdropType = ticketType === "pickdrop"
         ? normalizePickdropType(
             record?.pickdropType
               || ticket?.pickdropType
@@ -51,14 +52,14 @@ export function getIssuedTicketOptions(tickets, memberTickets) {
           )
         : "";
       const displayName = formatTicketDisplayName({
-        type: ticket?.type || "",
+        type: ticketType,
         name: record?.name || ticket?.name || "-",
         pickdropType,
       });
       return {
         id: String(record?.id || `${ticketId}-${record?.issueDate || ""}`),
         ticketId,
-        type: ticket?.type || "",
+        type: ticketType,
         name: displayName,
         pickdropType,
         count: perCount,
@@ -77,45 +78,15 @@ export function getDefaultTicketSelection(classes, selectedServices, options) {
   if (!Array.isArray(classes) || !selectedServices || options.length === 0) {
     return [];
   }
-  const optionMap = new Map();
-  options.forEach((option) => {
-    const ticketId = String(option?.ticketId ?? "");
-    const optionId = String(option?.id ?? "");
-    if (!ticketId || !optionId) {
-      return;
-    }
-    if (!optionMap.has(ticketId)) {
-      optionMap.set(ticketId, []);
-    }
-    optionMap.get(ticketId).push(optionId);
-  });
-  const seen = new Set();
-  const defaults = [];
-
-  classes.forEach((classItem) => {
+  const selectedClasses = classes.filter((classItem) => {
     const name = classItem?.name || "";
-    if (!selectedServices.has(name)) {
-      return;
-    }
-    const ticketIds = Array.isArray(classItem.ticketIds)
-      ? classItem.ticketIds
-      : [];
-    ticketIds.forEach((ticketId) => {
-      const optionIds = optionMap.get(String(ticketId));
-      if (!Array.isArray(optionIds) || optionIds.length === 0) {
-        return;
-      }
-      optionIds.forEach((id) => {
-        if (!id || seen.has(id)) {
-          return;
-        }
-        seen.add(id);
-        defaults.push(id);
-      });
-    });
+    return selectedServices.has(name);
   });
-
-  return defaults;
+  return getDefaultLinkedTicketSelection(
+    selectedClasses,
+    options,
+    (classItem) => classItem?.ticketIds
+  );
 }
 
 export function buildPickdropUsagePlan({

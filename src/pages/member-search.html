@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 회원 검색</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <main class="main">
+      <div class="main__content member-search-page">
+        <div class="member-search-page__search">
+          <label class="member-search-page__search-field">
+            <button class="icon-button icon-button--secondary member-search-page__back" type="button" data-member-search-page-back aria-label="뒤로가기">
+              <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
+            </button>
+            <input type="search" data-member-search-page-input placeholder="반려견 / 보호자 검색" aria-label="회원 검색">
+            <button class="member-search__clear" type="button" data-member-search-page-clear aria-label="검색어 지우기">×</button>
+          </label>
+          <div class="member-search__filters">
+            <button
+              class="member-search__tag-toggle"
+              type="button"
+              data-member-search-tag-toggle
+              aria-expanded="false"
+            >
+              <span>태그</span>
+              <span class="member-search__tag-badge" data-member-search-tag-badge hidden>0</span>
+              <span class="member-search__tag-caret" aria-hidden="true"></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="member-search-page__results" data-member-search-page-results></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="member-search-page__sheet-backdrop" data-member-search-sheet-backdrop hidden></div>
+  <div class="member-search__tag-menu" data-member-search-tag-menu hidden>
+    <div class="member-search__sheet-header">
+      <strong class="member-search__sheet-title">태그 필터</strong>
+      <button class="icon-button icon-button--secondary member-search__sheet-close" type="button" data-member-search-tag-close aria-label="닫기">
+        <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+      </button>
+    </div>
+    <div class="member-search__tag-list" data-member-search-tag-list></div>
+    <div class="member-search__tag-actions">
+      <button class="button-neutral button-neutral--small" type="button" data-member-search-tag-reset>초기화</button>
+      <button class="primary-button" type="button" data-member-search-tag-apply>적용</button>
+    </div>
+  </div>
+
+  <script type="module" src="./member-search-page.js"></script>
+</body>
+</html>

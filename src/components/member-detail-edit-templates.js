@@ -46,14 +46,14 @@ export function buildGuardianFieldsMarkup({ owner = "", phone = "" } = {}) {
       >
     </div>
     <div class="member-edit-modal__field member-tag-editor" data-member-tag-editor>
-      <label for="member-detail-edit-guardian-tags">태그</label>
+      <label for="member-detail-edit-guardian-tags">라벨</label>
       <div class="member-tag-editor__selected" data-member-tag-selected hidden></div>
       <div class="member-tag-editor__input-wrap">
         <input
           class="form-field__control"
           id="member-detail-edit-guardian-tags"
           type="text"
-          placeholder="태그 입력"
+          placeholder="라벨 입력"
           data-member-tag-input
         >
         <div class="member-tag-editor__suggestions" data-member-tag-suggestions hidden></div>
@@ -92,6 +92,20 @@ export function buildPetFieldsMarkup({
         <div class="pet-edit-modal__stack-field">
           <label class="pet-edit-modal__field-label" for="member-detail-edit-pet-memo">메모</label>
           <textarea class="form-field__control pet-edit-modal__textarea" id="member-detail-edit-pet-memo" placeholder="성격, 알러지 등 내용 입력 (최대 500자)">${memo}</textarea>
+        </div>
+        <div class="pet-edit-modal__stack-field member-tag-editor" data-member-tag-editor>
+          <label class="pet-edit-modal__field-label" for="member-detail-edit-pet-labels">라벨</label>
+          <div class="member-tag-editor__selected" data-member-tag-selected hidden></div>
+          <div class="member-tag-editor__input-wrap">
+            <input
+              class="form-field__control"
+              id="member-detail-edit-pet-labels"
+              type="text"
+              placeholder="라벨 입력"
+              data-member-tag-input
+            >
+            <div class="member-tag-editor__suggestions" data-member-tag-suggestions hidden></div>
+          </div>
         </div>
       </section>
       <div class="pet-edit-modal__divider" aria-hidden="true">

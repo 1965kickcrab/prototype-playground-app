@@ -29,7 +29,9 @@ export function formatMemberReservableStatusCount(value, type) {
 export function buildMemberStatusMarkup(countsByType = {}) {
   return MEMBER_STATUS_TYPES.map(({ key, label }) => {
     const count = Number(countsByType?.[key]) || 0;
-    const toneClass = count <= 2
+    const toneClass = count < 0
+      ? "member-detail__status-item--overbooked"
+      : count <= 2
       ? "member-detail__status-item--low"
       : "member-detail__status-item--normal";
     return `

@@ -82,6 +82,39 @@ These are the high-risk surfaces where agents must verify the real usage path be
 - Duplicate candidate: inline member search UIs also exist inside reservation and hoteling flows
 - Authority decision: dedicated member search page is authoritative for the mobile reservation-create selection flow
 
+### Member Ticket Usage Detail
+- Entrypoint: `src/pages/member-ticket-usage.html`
+- Page controller: `src/pages/member-ticket-usage-page.js`
+- Shared business logic: `src/services/member-ticket-usage-detail-service.js`
+- Source entry: member detail ticket cards route here with `memberId` and issued `ticketId`
+- Authority decision: member issued-ticket usage detail is a dedicated mobile page; the old member ticket detail modal path is not active
+
+### Ticket Create
+- Entrypoint: `src/pages/ticket-create.html`
+- Page controller: `src/pages/ticket-create-page.js`
+- Shared form logic: `src/components/ticket-form.js`
+- Storage: `src/storage/ticket-storage.js`
+- Source entry: `src/pages/tickets.html` routes the `이용권 등록` action here
+- Authority decision: ticket creation is a dedicated mobile page; the old create modal in `tickets.html` is not active
+
+### Ticket List
+- Entrypoint: `src/pages/tickets.html`
+- Page controller: `src/pages/ticket-page.js`
+- Shared row renderer: `src/components/ticket-view.js`
+- Storage: `src/storage/ticket-storage.js`
+- Source entry: ticket cards route to `src/pages/ticket-detail.html` with `ticketId`
+- Authority decision: ticket list is a dedicated mobile card list; the old table, pagination, tabs, ticket-list issue modal path, and ticket detail edit modal path are not active
+
+### Ticket Detail
+- Entrypoint: `src/pages/ticket-detail.html`
+- Page controller: `src/pages/ticket-detail-page.js`
+- Shared issue modal: `src/components/ticket-issue-modal.js`
+- Shared form logic: `src/components/ticket-form.js`
+- Shared issue logic: `src/services/ticket-issue-service.js`, `src/services/ticket-issue-entry-service.js`
+- Storage: `src/storage/ticket-storage.js`
+- Source entry: `src/pages/tickets.html` routes ticket row selection here with `ticketId`
+- Authority decision: ticket detail is a dedicated mobile page; the old edit modal and ticket-list issue modal in `tickets.html` are not active
+
 ## Worked Example: Reservation Create
 If the user requests a change to the school or dedicated pickdrop create flow:
 1. Check whether the request targets home modal behavior or dedicated create-page behavior.

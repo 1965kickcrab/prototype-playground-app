@@ -11,7 +11,7 @@ const allowedComponentStorageFiles = new Set([
   "src/components/hoteling-calendar.js",
   "src/components/list.js",
   "src/components/member-ticket-issue-modal.js",
-  "src/components/ticket-issue.js",
+  "src/components/ticket-issue-modal.js",
 ]);
 
 const contracts = {

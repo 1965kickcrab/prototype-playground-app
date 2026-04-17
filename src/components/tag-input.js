@@ -46,6 +46,7 @@ export function initTagInput(options = {}) {
   const state = {
     tags: sanitizeTagList(initialTags),
   };
+  let blurTimer = null;
 
   const emitChange = () => {
     if (typeof onChange === "function") {
@@ -53,7 +54,16 @@ export function initTagInput(options = {}) {
     }
   };
 
+  const clearBlurTimer = () => {
+    if (blurTimer === null) {
+      return;
+    }
+    window.clearTimeout(blurTimer);
+    blurTimer = null;
+  };
+
   const hideSuggestions = () => {
+    clearBlurTimer();
     suggestionsWrap.hidden = true;
     suggestionsWrap.innerHTML = "";
   };
@@ -71,6 +81,7 @@ export function initTagInput(options = {}) {
   };
 
   const renderSuggestions = () => {
+    clearBlurTimer();
     const query = normalizeTagText(input.value);
     const catalog = sanitizeTagList(getCatalog());
     const suggestions = buildTagSuggestions(catalog, query, state.tags);
@@ -89,6 +100,14 @@ export function initTagInput(options = {}) {
       suggestionsWrap.appendChild(createSuggestionButton(tag));
     });
     suggestionsWrap.hidden = false;
+  };
+
+  const scheduleHideSuggestions = () => {
+    clearBlurTimer();
+    blurTimer = window.setTimeout(() => {
+      blurTimer = null;
+      hideSuggestions();
+    }, 100);
   };
 
   const addTag = (value) => {
@@ -114,6 +133,15 @@ export function initTagInput(options = {}) {
     emitChange();
   };
 
+  container.addEventListener("pointerdown", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target?.closest?.("[data-tag-suggestion]")) {
+      return;
+    }
+    event.preventDefault();
+    clearBlurTimer();
+  });
+
   container.addEventListener("click", (event) => {
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!target) {
@@ -126,12 +154,14 @@ export function initTagInput(options = {}) {
     }
     const suggestionButton = target.closest("[data-tag-suggestion]");
     if (suggestionButton) {
+      clearBlurTimer();
       addTag(suggestionButton.dataset.tagSuggestion || "");
       input.focus();
     }
   });
 
   input.addEventListener("input", () => {
+    clearBlurTimer();
     renderSuggestions();
   });
 
@@ -148,13 +178,12 @@ export function initTagInput(options = {}) {
   });
 
   input.addEventListener("focus", () => {
+    clearBlurTimer();
     renderSuggestions();
   });
 
   input.addEventListener("blur", () => {
-    window.setTimeout(() => {
-      hideSuggestions();
-    }, 100);
+    scheduleHideSuggestions();
   });
 
   renderSelected();

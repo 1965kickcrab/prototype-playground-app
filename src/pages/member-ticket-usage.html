@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 이용권 사용 내역</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" hidden>
+      <div class="sidebar__brand">
+        <img class="sidebar__brand-icon" src="../../assets/logoImg.svg" alt="다이얼독 비즈">
+        <img class="sidebar__brand-text" src="../../assets/logoText.svg" alt="다이얼독 비즈 텍스트">
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="member-ticket-usage-page">
+        <header class="reservation-detail-page__nav member-ticket-usage-page__nav">
+          <button class="icon-button icon-button--secondary reservation-detail-page__back" type="button" data-member-ticket-usage-back aria-label="뒤로가기">
+            <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
+          </button>
+          <h1>이용권 사용 내역</h1>
+        </header>
+
+        <div class="member-ticket-usage-page__body">
+          <p class="member-ticket-usage-page__empty" data-member-ticket-usage-missing hidden>이용권 정보를 찾을 수 없습니다.</p>
+
+          <section class="member-ticket-usage-page__section" data-member-ticket-usage-content hidden>
+            <div class="member-ticket-usage-page__notice" data-member-ticket-usage-notice></div>
+
+            <article class="member-ticket-usage-page__ticket-card">
+              <h2 data-member-ticket-usage-name>-</h2>
+              <p data-member-ticket-usage-meta>-</p>
+            </article>
+
+            <div class="member-ticket-usage-page__tabs" role="tablist" aria-label="이용권 상세 내역">
+              <button class="member-ticket-usage-page__tab is-active" type="button" role="tab" aria-selected="true" data-member-ticket-usage-tab="status">이용권 상태</button>
+              <button class="member-ticket-usage-page__tab" type="button" role="tab" aria-selected="false" data-member-ticket-usage-tab="history">사용 내역</button>
+            </div>
+
+            <section class="member-ticket-usage-page__panel is-active" data-member-ticket-usage-panel="status">
+              <h2>이용권 상태</h2>
+              <dl class="member-ticket-usage-page__info-list">
+                <div>
+                  <dt>지급일</dt>
+                  <dd data-member-ticket-usage-issued>-</dd>
+                </div>
+                <div>
+                  <dt>개시일</dt>
+                  <dd data-member-ticket-usage-start>-</dd>
+                </div>
+                <div>
+                  <dt>만료일</dt>
+                  <dd data-member-ticket-usage-expiry>-</dd>
+                </div>
+                <div>
+                  <dt>예약 가능 날짜</dt>
+                  <dd data-member-ticket-usage-range>-</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="member-ticket-usage-page__panel" data-member-ticket-usage-panel="history" hidden>
+              <h2>사용 내역</h2>
+              <div class="member-ticket-usage-page__history" data-member-ticket-usage-history></div>
+              <p class="member-ticket-usage-page__empty" data-member-ticket-usage-empty hidden>사용 내역이 없습니다.</p>
+            </section>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./member-ticket-usage-page.js"></script>
+</body>
+</html>

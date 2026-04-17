@@ -90,10 +90,38 @@ function getCheckedValue(root, selector, fallback = "") {
   return checked ? checked.value : fallback;
 }
 
+function getTicketType(root) {
+  const checked = root.querySelector("[data-ticket-type]:checked");
+  if (checked) {
+    return checked.value;
+  }
+  return getField(root, "[data-ticket-type]")?.value || "";
+}
+
 function setCheckedValue(root, selector, value) {
   const inputs = root.querySelectorAll(selector);
   inputs.forEach((input) => {
     input.checked = input.value === value;
+  });
+}
+
+function setTicketType(root, value) {
+  const fields = root.querySelectorAll("[data-ticket-type]");
+  fields.forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    if (input.type === "radio") {
+      input.checked = input.value === value;
+    } else {
+      input.value = value;
+    }
+  });
+  root.querySelectorAll("[data-ticket-type-option]").forEach((button) => {
+    const isActive = button instanceof HTMLElement
+      && button.dataset.ticketTypeOption === value;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
   });
 }
 
@@ -130,7 +158,7 @@ function parseTicketPriceValue(value) {
 
 export function readTicketForm(root) {
   const name = getField(root, "[data-ticket-name]")?.value.trim() || "";
-  const type = getCheckedValue(root, "[data-ticket-type]");
+  const type = getTicketType(root);
   const pickdropType = type === "pickdrop"
     ? getCheckedValue(root, "[data-ticket-pickdrop-type]")
     : "";
@@ -195,6 +223,7 @@ export function readTicketForm(root) {
 function setUnlimitedState(root, isUnlimited) {
   const validity = getField(root, "[data-ticket-validity]");
   const unit = getField(root, "[data-ticket-unit]");
+  const validityGroup = validity?.closest(".ticket-create-page__validity");
   const reservationRules = root.querySelectorAll("[data-ticket-reservation-rule]");
   const reservationField = getReservationField(root);
 
@@ -203,6 +232,9 @@ function setUnlimitedState(root, isUnlimited) {
   }
   if (unit) {
     unit.disabled = isUnlimited;
+  }
+  if (validityGroup) {
+    validityGroup.classList.toggle("is-disabled", isUnlimited);
   }
   reservationRules.forEach((input) => {
     input.disabled = isUnlimited;
@@ -235,65 +267,6 @@ export function setupTicketUnlimitedToggle(root) {
   updateState();
 }
 
-export function resetTicketForm(root) {
-  const name = getField(root, "[data-ticket-name]");
-  const quantity = getField(root, "[data-ticket-quantity]");
-  const validity = getField(root, "[data-ticket-validity]");
-  const unit = getField(root, "[data-ticket-unit]");
-  const price = getField(root, "[data-ticket-price]");
-  const unlimited = getUnlimitedToggle(root);
-  const weekdays = getWeekdayInputs(root);
-  const weekdayRow = getWeekdayRow(root);
-  const pickdropRow = getPickdropRow(root);
-
-  if (name) {
-    name.value = "";
-  }
-  if (quantity) {
-    quantity.value = "";
-  }
-  if (validity) {
-    validity.value = "";
-  }
-  if (unit) {
-    unit.value = "개월";
-  }
-  if (price) {
-    price.value = "";
-  }
-  if (unlimited) {
-    unlimited.checked = false;
-  }
-  weekdays.forEach((input) => {
-    input.checked = false;
-    syncFilterChip(input);
-  });
-  if (weekdayRow) {
-    weekdayRow.hidden = false;
-  }
-  if (pickdropRow) {
-    pickdropRow.hidden = true;
-  }
-  setCheckedValue(root, "[data-ticket-type]", "");
-  setCheckedValue(root, "[data-ticket-pickdrop-type]", "편도");
-  getClassRows(root).forEach((row) => {
-    row.classList.remove("is-checked");
-  });
-  syncClassSelectionState(root);
-
-  setCheckedValue(root, "[data-ticket-start-policy]", "first-attendance");
-  setCheckedValue(root, "[data-ticket-reservation-rule]", "expiry");
-  setUnlimitedState(root, false);
-  const quantitySuffix = getQuantitySuffix(root);
-  const quantityLabel = getQuantityLabel(root);
-  if (quantitySuffix) {
-    quantitySuffix.textContent = "회";
-  }
-  if (quantityLabel) {
-    quantityLabel.textContent = "총 횟수";
-  }
-}
-
 export function fillTicketForm(root, ticket) {
   const name = getField(root, "[data-ticket-name]");
   const quantity = getField(root, "[data-ticket-quantity]");
@@ -306,7 +279,7 @@ export function fillTicketForm(root, ticket) {
   if (name) {
     name.value = ticket?.name || "";
   }
-  setCheckedValue(root, "[data-ticket-type]", ticket?.type || "");
+  setTicketType(root, ticket?.type || "");
   setCheckedValue(
     root,
     "[data-ticket-pickdrop-type]",
@@ -414,7 +387,7 @@ function clearTicketWeekdays(root) {
 }
 
 function updateTicketTypeState(root) {
-  const type = getCheckedValue(root, "[data-ticket-type]");
+  const type = getTicketType(root);
   const isPickdrop = type === "pickdrop";
   const hideWeekday = shouldHideWeekdayRow(type);
   const quantitySuffix = getQuantitySuffix(root);
@@ -461,7 +434,7 @@ function updateTicketTypeState(root) {
 }
 
 function updatePickdropTypeState(root) {
-  const type = getCheckedValue(root, "[data-ticket-type]");
+  const type = getTicketType(root);
   if (type !== "pickdrop") {
     return;
   }
@@ -480,6 +453,7 @@ function updatePickdropTypeState(root) {
 
 export function setupTicketTypeDefaults(root) {
   const inputs = root.querySelectorAll("[data-ticket-type]");
+  const buttons = root.querySelectorAll("[data-ticket-type-option]");
   if (!inputs.length) {
     return;
   }
@@ -492,6 +466,18 @@ export function setupTicketTypeDefaults(root) {
     updateTicketTypeState(root);
   });
 
+  root.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const button = target?.closest("[data-ticket-type-option]");
+    const type = button?.dataset.ticketTypeOption || "";
+    if (!type) {
+      return;
+    }
+    setTicketType(root, type);
+    updateTicketTypeState(root);
+    getField(root, "[data-ticket-type]")?.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
   root.addEventListener("change", (event) => {
     const input = event.target instanceof HTMLInputElement ? event.target : null;
     if (!input || !input.matches("[data-ticket-pickdrop-type]")) {
@@ -500,6 +486,9 @@ export function setupTicketTypeDefaults(root) {
     updatePickdropTypeState(root);
   });
 
+  if (buttons.length) {
+    setTicketType(root, getTicketType(root) || "school");
+  }
   updateTicketTypeState(root);
 }
 
@@ -529,7 +518,7 @@ export function renderTicketServiceOptions(root, options = {}) {
     return;
   }
 
-  const type = options.type || getCheckedValue(root, "[data-ticket-type]");
+  const type = options.type || getTicketType(root);
   const classes = Array.isArray(options.classes) ? options.classes : [];
   const rooms = Array.isArray(options.rooms) ? options.rooms : [];
   const source =

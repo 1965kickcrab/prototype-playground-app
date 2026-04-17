@@ -102,8 +102,8 @@
           <section class="reservation-detail-page__section member-detail-page__tickets-section">
             <div class="reservation-detail-page__section-head member-detail-page__tickets-head">
               <h2 class="reservation-detail-page__section-title">이용권</h2>
-              <span class="reservation-detail-page__section-summary" data-member-reservable-summary>(예약 가능 0회)</span>
             </div>
+            <div class="member-detail__status" data-member-status></div>
 
             <button class="primary-button member-detail-page__issue-button" type="button" data-member-detail-issue>이용권 지급</button>
 
@@ -127,28 +127,13 @@
         </button>
       </div>
       <div class="modal__body member-ticket-issue">
-        <div class="member-ticket-issue__summary">
-          <div class="member-ticket-issue__summary-row">
-            <span>회원</span>
-            <strong data-member-ticket-issue-member>-</strong>
+        <div class="member-ticket-issue__service-tabs" data-member-ticket-issue-service-tabs aria-label="서비스 유형"></div>
+        <div class="member-ticket-issue__list" aria-label="이용권 목록" data-member-ticket-issue-rows></div>
+        <div class="member-ticket-issue__footer">
+          <div class="member-ticket-issue__total" data-member-ticket-issue-status>
+            <span>예약 가능</span>
+            <strong>총 0회</strong>
           </div>
-          <div class="member-detail__status" data-member-ticket-issue-status></div>
-        </div>
-        <div class="member-ticket-issue__title">이용권 목록</div>
-        <div class="member-ticket-issue__table" role="table" aria-label="이용권 목록">
-          <div class="member-ticket-issue__header" role="row">
-            <span role="columnheader">
-              <input type="checkbox" data-member-ticket-issue-select-all aria-label="전체 선택">
-            </span>
-            <span role="columnheader">이용권</span>
-            <span role="columnheader">총수량</span>
-            <span role="columnheader">유효기간</span>
-            <span role="columnheader">가격</span>
-            <span role="columnheader">수량</span>
-          </div>
-          <div class="member-ticket-issue__body" data-member-ticket-issue-rows></div>
-        </div>
-        <div class="member-ticket-issue__actions">
           <button class="primary-button member-ticket-issue__submit" type="button" data-member-ticket-issue-submit disabled>지급</button>
         </div>
       </div>
@@ -170,61 +155,6 @@
       <div class="member-edit-modal__actions">
         <button class="button-secondary" type="button" data-member-detail-edit-cancel>취소</button>
         <button class="primary-button" type="button" data-member-detail-edit-save>저장</button>
-      </div>
-    </div>
-  </div>
-  <div class="modal" data-member-ticket-detail-modal aria-hidden="true">
-    <div class="modal__overlay" data-member-ticket-detail-overlay></div>
-    <div class="modal__dialog member-ticket-detail-modal" role="dialog" aria-modal="true" aria-labelledby="member-ticket-detail-title">
-      <div class="modal__header">
-        <h2 id="member-ticket-detail-title">이용권 상세</h2>
-        <button class="icon-button modal__close" type="button" data-member-ticket-detail-close aria-label="닫기">
-          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
-        </button>
-      </div>
-      <div class="modal__body member-ticket-detail">
-        <section class="member-ticket-detail__section">
-          <h3 class="member-ticket-detail__section-title">정보</h3>
-          <div class="member-ticket-detail__card">
-            <div class="member-ticket-detail__card-head">
-              <div class="member-ticket-detail__title-wrap">
-                <strong data-member-ticket-detail-name>-</strong>
-                <span data-member-ticket-detail-meta>-</span>
-              </div>
-              <span class="member-ticket-detail__status" data-member-ticket-detail-status>-</span>
-            </div>
-            <div class="member-ticket-detail__info-list">
-              <div>
-                <span>지급일</span>
-                <strong data-member-ticket-detail-issued>-</strong>
-              </div>
-              <div>
-                <span>개시일</span>
-                <strong data-member-ticket-detail-start>-</strong>
-              </div>
-              <div>
-                <span>만료일</span>
-                <strong data-member-ticket-detail-expiry>-</strong>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section class="member-ticket-detail__section">
-          <div class="member-ticket-detail__section-head">
-            <h3 class="member-ticket-detail__section-title">사용 내역</h3>
-            <div class="member-ticket-detail__summary" data-member-ticket-detail-summary></div>
-          </div>
-          <div class="member-ticket-detail__history-table">
-            <div class="member-ticket-detail__history-head">
-              <span>상태</span>
-              <span>서비스</span>
-              <span>방문일</span>
-              <span>예약 일시 (취소 일시)</span>
-            </div>
-            <div class="member-ticket-detail__history-body" data-member-ticket-detail-history></div>
-          </div>
-          <p class="member-ticket-detail__empty" data-member-ticket-detail-empty hidden>사용 내역이 없습니다.</p>
-        </section>
       </div>
     </div>
   </div>

@@ -499,6 +499,7 @@ function bootstrapSchoolDetailPage() {
         ? { ...nextReservation, payment: null }
         : nextReservation;
     });
+    window.alert("예약이 취소되었습니다.");
     viewState.isEditing = false;
     renderPage();
   };

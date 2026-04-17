@@ -31,18 +31,20 @@
 
       <div class="main__content members-page">
         <section class="members-page__search-section">
-          <label class="members-search-field">
-            <img src="../../assets/iconSearch.svg" alt="" aria-hidden="true">
-            <input type="search" placeholder="반려견 이름" data-member-search>
-          </label>
+          <div class="members-page__search-row">
+            <label class="members-search-field">
+              <img src="../../assets/iconSearch.svg" alt="" aria-hidden="true">
+              <input type="search" placeholder="반려견 이름" data-member-search>
+            </label>
+            <label class="member-label-field">
+              <input type="text" placeholder="태그" readonly data-member-label-input aria-label="태그" aria-haspopup="dialog" aria-expanded="false">
+            </label>
+          </div>
           <div class="members-page__summary" hidden>
             <div class="member-card__count" data-member-count>
               <span data-member-count-value>0</span>
               <span class="member-card__count-unit">마리</span>
             </div>
-          </div>
-          <div hidden aria-hidden="true">
-            <input type="checkbox" class="member-table__checkbox" data-member-select-all aria-label="현재 페이지 전체 선택">
           </div>
         </section>
 
@@ -50,65 +52,12 @@
           <div class="member-list" data-member-rows role="list" aria-label="회원 목록"></div>
           <div class="ticket-pagination" data-member-pagination aria-label="페이지네이션"></div>
         </section>
-
-        <section class="filter-panel-wrap" data-filter-panel hidden>
-          <section class="page-header ticket-header">
-            <div class="ticket-header__title">
-              <div class="page-filters" aria-label="필터">
-                <button class="filter-toggle" type="button" data-filter-toggle aria-expanded="false">
-                  <span>필터</span>
-                  <span class="filter-toggle__badge" data-filter-badge hidden>0</span>
-                  <span class="filter-toggle__caret" aria-hidden="true"></span>
-                </button>
-              </div>
-            </div>
-            <div class="page-actions">
-              <button class="primary-button" type="button">회원 등록</button>
-            </div>
-          </section>
-          <section class="filter-panel" data-filter-panel-body hidden>
-            <div class="filter-panel__row">
-              <div class="filter-dropdown">
-                <button class="filter-select" type="button" data-filter-button="tag" aria-expanded="false">태그</button>
-                <div class="filter-menu" data-filter-menu="tag" hidden></div>
-              </div>
-              <button class="button-secondary member-tag-manage-trigger" type="button" data-member-tag-manage-open>
-                태그 관리
-              </button>
-              <button class="filter-reset" type="button" data-filter-reset>
-                <img src="../../assets/iconInitial.svg" alt="" aria-hidden="true">
-                초기화
-              </button>
-            </div>
-          </section>
-        </section>
-
-        <div class="member-bulk-actions" data-member-bulk-actions hidden>
-          <div class="member-bulk-actions__popover" data-member-bulk-tag-popover hidden>
-            <div class="member-bulk-actions__panel">
-              <div class="member-bulk-actions__panel-title">공통 태그</div>
-              <div class="member-bulk-actions__common-tags" data-member-bulk-common-tags></div>
-              <div class="member-bulk-actions__panel-title">태그 추가</div>
-              <div class="member-tag-editor member-bulk-actions__editor" data-member-bulk-tag-editor>
-                <div class="member-tag-editor__selected" data-member-tag-selected hidden></div>
-                <div class="member-tag-editor__input-wrap">
-                  <input class="form-field__control" type="text" placeholder="옵션 선택 또는 생성" data-member-tag-input>
-                  <div class="member-tag-editor__suggestions" data-member-tag-suggestions hidden></div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="member-bulk-actions__bar" data-member-bulk-actions-bar>
-            <span class="member-bulk-actions__count" data-member-bulk-count>0명 선택됨</span>
-            <button class="member-bulk-actions__button" type="button" data-member-bulk-tag-toggle aria-expanded="false">태그</button>
-          </div>
-        </div>
       </div>
     </main>
 
     <nav class="mobile-tabbar" aria-label="하단 메뉴">
       <a class="mobile-tabbar__link" href="../../public/index.html">
-        <img src="../../assets/bottomNavi_schedule_on.svg" alt="" aria-hidden="true">
+        <img src="../../assets/bottomNavi_schedule.svg" alt="" aria-hidden="true">
         <span>일정</span>
       </a>
       <a class="mobile-tabbar__link" href="#">
@@ -124,6 +73,24 @@
         <span>더보기</span>
       </a>
     </nav>
+  </div>
+  <div class="member-search-page__sheet-backdrop" data-member-label-sheet-backdrop hidden></div>
+  <div class="member-search__tag-menu member-label-sheet" data-member-label-sheet hidden>
+    <div class="member-search__sheet-header">
+      <strong class="member-search__sheet-title">태그 선택</strong>
+      <button class="icon-button icon-button--secondary member-search__sheet-close" type="button" data-member-label-sheet-close aria-label="닫기">
+        <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+      </button>
+    </div>
+    <label class="members-search-field member-label-sheet__search">
+      <img src="../../assets/iconSearch.svg" alt="" aria-hidden="true">
+      <input type="search" placeholder="태그 검색" data-member-label-sheet-search>
+    </label>
+    <div class="member-search__tag-list" data-member-label-sheet-list></div>
+    <div class="member-search__tag-actions">
+      <button class="button-neutral button-neutral--small" type="button" data-member-label-reset>초기화</button>
+      <button class="primary-button" type="button" data-member-label-apply>적용</button>
+    </div>
   </div>
   <script type="module" src="./member-page.js"></script>
 </body>

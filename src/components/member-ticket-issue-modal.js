@@ -19,7 +19,8 @@ import {
 } from "../services/member-reservable-count.js";
 import {
   buildMemberReservableCountsByType,
-  buildMemberStatusMarkup,
+  formatMemberReservableStatusCount,
+  MEMBER_STATUS_TYPES,
 } from "../services/member-status.js";
 
 function openModal(modal) {
@@ -30,6 +31,15 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.remove("is-open");
   modal.setAttribute("aria-hidden", "true");
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getTicketReservableDelta(ticket) {
@@ -54,6 +64,18 @@ function getTicketStatusKey(ticket) {
   return "";
 }
 
+function clampIssueQuantity(value) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) {
+    return 1;
+  }
+  return Math.min(99, Math.max(1, parsed));
+}
+
+function getMemberStatusLabel(type) {
+  return MEMBER_STATUS_TYPES.find((item) => item.key === type)?.label || "유치원";
+}
+
 export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
   if (!modal) {
     return null;
@@ -61,11 +83,10 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
 
   const ticketStorage = initTicketStorage();
   const reservationStorage = initReservationStorage();
-  const memberNameEl = modal.querySelector("[data-member-ticket-issue-member]");
   const memberStatusEl = modal.querySelector("[data-member-ticket-issue-status]");
+  const serviceTabsEl = modal.querySelector("[data-member-ticket-issue-service-tabs]");
   const rowsEl = modal.querySelector("[data-member-ticket-issue-rows]");
   const submitEl = modal.querySelector("[data-member-ticket-issue-submit]");
-  const selectAllEl = modal.querySelector("[data-member-ticket-issue-select-all]");
   const overlayEl = modal.querySelector("[data-member-ticket-issue-overlay]");
   const closeEl = modal.querySelector("[data-member-ticket-issue-close]");
 
@@ -73,6 +94,7 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
     member: null,
     tickets: [],
     selections: new Map(),
+    selectedType: "school",
     activeReservationCountsByMemberType: new Map(),
   };
 
@@ -83,21 +105,22 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
     submitEl.disabled = state.selections.size === 0;
   };
 
-  const updateSelectAllState = () => {
-    if (!(selectAllEl instanceof HTMLInputElement)) {
+  const getVisibleTickets = () => state.tickets.filter((ticket) => getTicketStatusKey(ticket) === state.selectedType);
+
+  const renderServiceTabs = () => {
+    if (!serviceTabsEl) {
       return;
     }
-    const totalCount = Array.isArray(state.tickets) ? state.tickets.length : 0;
-    if (totalCount === 0) {
-      selectAllEl.checked = false;
-      selectAllEl.indeterminate = false;
-      selectAllEl.disabled = true;
-      return;
-    }
-    const selectedCount = state.selections.size;
-    selectAllEl.disabled = false;
-    selectAllEl.checked = selectedCount === totalCount;
-    selectAllEl.indeterminate = selectedCount > 0 && selectedCount < totalCount;
+    serviceTabsEl.innerHTML = "";
+    MEMBER_STATUS_TYPES.forEach(({ key, label }) => {
+      const button = document.createElement("button");
+      button.className = `member-ticket-issue__service-tab${state.selectedType === key ? " is-active" : ""}`;
+      button.type = "button";
+      button.dataset.memberTicketIssueServiceType = key;
+      button.setAttribute("aria-pressed", String(state.selectedType === key));
+      button.textContent = label;
+      serviceTabsEl.appendChild(button);
+    });
   };
 
   const renderRows = () => {
@@ -105,56 +128,57 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
       return;
     }
     rowsEl.innerHTML = "";
+    const visibleTickets = getVisibleTickets();
 
-    if (!Array.isArray(state.tickets) || state.tickets.length === 0) {
+    if (visibleTickets.length === 0) {
       const empty = document.createElement("div");
       empty.className = "member-ticket-issue__row member-ticket-issue__row--empty";
       empty.textContent = "지급 가능한 이용권이 없습니다.";
       rowsEl.appendChild(empty);
+      renderSummary();
       updateSubmitState();
       return;
     }
 
-    state.tickets.forEach((ticket) => {
+    visibleTickets.forEach((ticket) => {
       const ticketId = String(ticket.id || "");
       const isSelected = state.selections.has(ticketId);
       const quantity = state.selections.get(ticketId) || 1;
-      const isDecreaseDisabled = !isSelected || quantity <= 1;
+      const isDecreaseDisabled = quantity <= 1;
+      const isIncreaseDisabled = quantity >= 99;
+      const displayName = formatTicketDisplayName(ticket);
+      const ticketMeta = `${formatTicketCount(getTicketQuantityValue(ticket), ticket.type)} / ${formatTicketValidity(ticket.validity, ticket.unit, ticket.unlimitedValidity)} / ${formatTicketPrice(Number(ticket.price))}`;
 
       const row = document.createElement("div");
-      row.className = "member-ticket-issue__row";
+      row.className = `member-ticket-issue__row${isSelected ? " is-selected" : ""}`;
       row.dataset.ticketId = ticketId;
       row.innerHTML = `
-        <span>
-          <input type="checkbox" data-member-ticket-issue-select ${isSelected ? "checked" : ""} aria-label="이용권 선택">
-        </span>
-        <span>${formatTicketDisplayName(ticket)}</span>
-        <span>${formatTicketCount(getTicketQuantityValue(ticket), ticket.type)}</span>
-        <span>${formatTicketValidity(ticket.validity, ticket.unit, ticket.unlimitedValidity)}</span>
-        <span>${formatTicketPrice(Number(ticket.price))}</span>
-        <span>
-          <div class="member-ticket-issue__quantity ${isSelected ? "" : "is-disabled"}">
-            <button type="button" data-member-ticket-issue-quantity="decrease" ${isDecreaseDisabled ? "disabled" : ""}>-</button>
-            <span>${quantity}</span>
-            <button type="button" data-member-ticket-issue-quantity="increase" ${isSelected ? "" : "disabled"}>+</button>
+        <button class="member-ticket-issue__select" type="button" data-member-ticket-issue-select aria-pressed="${isSelected}" aria-label="${escapeHtml(displayName)} 선택">
+          <span class="member-ticket-issue__radio" aria-hidden="true"></span>
+        </button>
+        <div class="member-ticket-issue__content">
+          <div class="member-ticket-issue__copy">
+            <strong>${escapeHtml(displayName)}</strong>
+            <span>${escapeHtml(ticketMeta)}</span>
           </div>
-        </span>
+          <div class="member-ticket-issue__quantity" ${isSelected ? "" : "hidden"}>
+            <span>수량</span>
+            <div class="member-ticket-issue__quantity-controls">
+              <button type="button" data-member-ticket-issue-quantity="decrease" ${isDecreaseDisabled ? "disabled" : ""} aria-label="수량 감소">-</button>
+              <input type="number" min="1" max="99" step="1" inputmode="numeric" value="${quantity}" data-member-ticket-issue-quantity-input aria-label="지급 수량">
+              <button type="button" data-member-ticket-issue-quantity="increase" ${isIncreaseDisabled ? "disabled" : ""} aria-label="수량 증가">+</button>
+            </div>
+          </div>
+        </div>
       `;
       rowsEl.appendChild(row);
     });
 
     renderSummary();
-    updateSelectAllState();
     updateSubmitState();
   };
 
   const renderSummary = () => {
-    if (memberNameEl) {
-      const dog = state.member?.dogName || "-";
-      const breed = state.member?.breed || "-";
-      const owner = state.member?.owner || "-";
-      memberNameEl.textContent = `${dog}(${breed}) / ${owner}`;
-    }
     if (memberStatusEl) {
       const countsByType = buildMemberReservableCountsByType(
         state.member,
@@ -172,7 +196,12 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
         countsByType[statusKey] = (Number(countsByType[statusKey]) || 0)
           + (getTicketReservableDelta(ticket) * (Number(issueQty) || 0));
       });
-      memberStatusEl.innerHTML = buildMemberStatusMarkup(countsByType);
+      const selectedCount = Number(countsByType[state.selectedType]) || 0;
+      memberStatusEl.classList.toggle("member-ticket-issue__total--overbooked", selectedCount < 0);
+      memberStatusEl.innerHTML = `
+        <span>${escapeHtml(getMemberStatusLabel(state.selectedType))}</span>
+        <strong>${escapeHtml(formatMemberReservableStatusCount(selectedCount, state.selectedType))}</strong>
+      `;
     }
   };
 
@@ -180,9 +209,13 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
     state.member = member || null;
     state.tickets = ticketStorage.ensureDefaults();
     state.selections.clear();
+    state.selectedType = MEMBER_STATUS_TYPES.find(({ key }) => (
+      state.tickets.some((ticket) => getTicketStatusKey(ticket) === key)
+    ))?.key || "school";
     state.activeReservationCountsByMemberType = buildActiveReservationCountByMemberType(
       reservationStorage.loadReservations()
     );
+    renderServiceTabs();
     renderSummary();
     renderRows();
     openModal(modal);
@@ -191,22 +224,33 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
   overlayEl?.addEventListener("click", () => closeModal(modal));
   closeEl?.addEventListener("click", () => closeModal(modal));
 
-  rowsEl?.addEventListener("change", (event) => {
-    const target = event.target;
-    if (!(target instanceof HTMLInputElement) || !target.matches("[data-member-ticket-issue-select]")) {
+  serviceTabsEl?.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const button = target?.closest("[data-member-ticket-issue-service-type]");
+    const type = button?.dataset.memberTicketIssueServiceType || "";
+    if (!type || type === state.selectedType) {
       return;
     }
-    const row = target.closest("[data-ticket-id]");
+    state.selectedType = type;
+    state.selections.clear();
+    renderServiceTabs();
+    renderRows();
+  });
+
+  rowsEl?.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest(".member-ticket-issue__quantity")) {
+      return;
+    }
+    const row = target?.closest("[data-ticket-id]");
     const ticketId = row?.dataset.ticketId || "";
     if (!ticketId) {
       return;
     }
-    if (target.checked) {
-      if (!state.selections.has(ticketId)) {
-        state.selections.set(ticketId, 1);
-      }
-    } else {
+    if (state.selections.has(ticketId)) {
       state.selections.delete(ticketId);
+    } else {
+      state.selections.set(ticketId, 1);
     }
     renderRows();
   });
@@ -224,26 +268,39 @@ export function initMemberTicketIssueModal({ modal, onIssued } = {}) {
     }
     const current = state.selections.get(ticketId) || 1;
     const action = button.dataset.memberTicketIssueQuantity;
-    const next = action === "increase" ? current + 1 : Math.max(1, current - 1);
+    const next = action === "increase" ? Math.min(99, current + 1) : Math.max(1, current - 1);
     state.selections.set(ticketId, next);
     renderRows();
   });
 
-  selectAllEl?.addEventListener("change", (event) => {
+  rowsEl?.addEventListener("input", (event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement)) {
+    if (!(target instanceof HTMLInputElement) || !target.matches("[data-member-ticket-issue-quantity-input]")) {
       return;
     }
-    if (target.checked) {
-      state.tickets.forEach((ticket) => {
-        const ticketId = String(ticket?.id || "");
-        if (ticketId) {
-          state.selections.set(ticketId, state.selections.get(ticketId) || 1);
-        }
-      });
-    } else {
-      state.selections.clear();
+    const row = target.closest("[data-ticket-id]");
+    const ticketId = row?.dataset.ticketId || "";
+    if (!ticketId || !state.selections.has(ticketId)) {
+      return;
     }
+    state.selections.set(ticketId, clampIssueQuantity(target.value));
+    renderSummary();
+    updateSubmitState();
+  });
+
+  rowsEl?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement) || !target.matches("[data-member-ticket-issue-quantity-input]")) {
+      return;
+    }
+    const next = clampIssueQuantity(target.value);
+    target.value = String(next);
+    const row = target.closest("[data-ticket-id]");
+    const ticketId = row?.dataset.ticketId || "";
+    if (!ticketId || !state.selections.has(ticketId)) {
+      return;
+    }
+    state.selections.set(ticketId, next);
     renderRows();
   });
 

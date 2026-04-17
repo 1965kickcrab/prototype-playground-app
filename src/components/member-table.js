@@ -2,6 +2,7 @@ import {
   getMemberReservableCountFromReservations,
   isReservableOver,
 } from "../services/member-page-service.js";
+import { renderMemberTagChips } from "./member-tags.js";
 
 function createOverBadge() {
   const badge = document.createElement("span");
@@ -38,20 +39,40 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
   const textWrap = document.createElement("span");
   textWrap.className = "member-list__text";
 
+  const headline = document.createElement("span");
+  headline.className = "member-list__headline";
+
   if (isReservableOver(count)) {
-    textWrap.appendChild(createOverBadge());
+    headline.appendChild(createOverBadge());
   }
 
   const name = document.createElement("strong");
   name.className = "member-list__name member-table__dog-name";
   name.textContent = member?.dogName || "-";
-  textWrap.appendChild(name);
+  headline.appendChild(name);
 
   const breed = document.createElement("span");
   breed.className = "member-list__breed";
   breed.textContent = member?.breed || "-";
-  textWrap.appendChild(breed);
+  headline.appendChild(breed);
 
+  const labels = document.createElement("span");
+  labels.className = "member-list__labels";
+  renderMemberTagChips(
+    labels,
+    [
+      ...(Array.isArray(member?.petTags) ? member.petTags : []),
+      ...(Array.isArray(member?.ownerTags) ? member.ownerTags : []),
+    ],
+    {
+      limit: 3,
+      hiddenWhenEmpty: true,
+      chipClassName: "member-tag member-list__label",
+    }
+  );
+
+  textWrap.appendChild(headline);
+  textWrap.appendChild(labels);
   row.appendChild(textWrap);
   row.appendChild(createChevron());
   return row;

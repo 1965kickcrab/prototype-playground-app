@@ -30,13 +30,13 @@ export function getDefaultIssueQuantity(
 }
 
 export function matchesIssueSearch(member, query) {
-  const term = query.trim().toLowerCase();
+  const term = String(query || "").trim().toLowerCase();
   if (!term) {
     return true;
   }
 
-  return [member.dogName, member.breed, member.owner].some((value) =>
-    (value || "").toLowerCase().includes(term)
+  return [member?.dogName, member?.breed, member?.owner].some((value) =>
+    String(value || "").toLowerCase().includes(term)
   );
 }
 

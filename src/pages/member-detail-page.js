@@ -35,14 +35,13 @@ import { hasTagValue, sanitizeTagList } from "../utils/tags.js";
 import { initTicketStorage } from "../storage/ticket-storage.js";
 import { showToast } from "../components/toast.js";
 import {
-  formatTicketCount,
-  formatTicketDisplayName,
-  formatTicketPrice,
-  getTicketReservedValue,
   getTicketReservableValue,
   getTicketUnitLabel,
-  getTicketUsedValue,
 } from "../services/ticket-service.js";
+import {
+  buildTicketCardValidityLabel,
+  buildTicketHistoryRows,
+} from "../services/member-ticket-usage-detail-service.js";
 
 const MEMBER_MEMO_EMPTY_TEXT = "작성한 메모가 없습니다.";
 const MEMBER_DETAIL_TICKET_BATCH_SIZE = 4;
@@ -71,244 +70,6 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll("\"", "&quot;");
-}
-
-function formatDateLabel(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return "-";
-  }
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return text;
-  }
-  return `${Number(match[1])}년 ${Number(match[2])}월 ${Number(match[3])}일`;
-}
-
-function formatDateTimeLabel(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return "-";
-  }
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) {
-    return formatDateLabel(text);
-  }
-  const hours = String(parsed.getHours()).padStart(2, "0");
-  const minutes = String(parsed.getMinutes()).padStart(2, "0");
-  const seconds = String(parsed.getSeconds()).padStart(2, "0");
-  return `${parsed.getFullYear()}년 ${parsed.getMonth() + 1}월 ${parsed.getDate()}일 ${hours}:${minutes}:${seconds}`;
-}
-
-function getTodayDateKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getDateKeyLabelDiff(targetDateKey, baseDateKey = getTodayDateKey()) {
-  const targetMatch = String(targetDateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  const baseMatch = String(baseDateKey || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!targetMatch || !baseMatch) {
-    return "";
-  }
-  const target = new Date(Number(targetMatch[1]), Number(targetMatch[2]) - 1, Number(targetMatch[3]));
-  const base = new Date(Number(baseMatch[1]), Number(baseMatch[2]) - 1, Number(baseMatch[3]));
-  const diff = Math.ceil((target.getTime() - base.getTime()) / 86400000);
-  if (diff < 0) {
-    return "";
-  }
-  return `${diff}일 남음`;
-}
-
-function getTicketHistoryStatus(ticket, todayKey = getTodayDateKey()) {
-  const reservable = getTicketReservableValue(ticket);
-  const used = getTicketUsedValue(ticket);
-  const expiryDate = String(ticket?.expiryDate || "").trim();
-  const isExpired = Boolean(expiryDate && expiryDate < todayKey);
-
-  if (isExpired) {
-    return { label: "만료", tone: "member-detail__ticket-status--danger", rank: 2 };
-  }
-  if (reservable <= 0) {
-    return { label: "횟수 소진", tone: "member-detail__ticket-status--danger", rank: 3 };
-  }
-  if (used > 0 || getTicketReservedValue(ticket) > 0) {
-    return { label: "사용 중", tone: "member-detail__ticket-status--primary", rank: 0 };
-  }
-  return { label: "사용 전", tone: "member-detail__ticket-status--success", rank: 1 };
-}
-
-function compareTicketHistoryRows(a, b) {
-  const rankDiff = (a.status.rank || 0) - (b.status.rank || 0);
-  if (rankDiff !== 0) {
-    return rankDiff;
-  }
-
-  const aExpiry = String(a.ticket?.expiryDate || "");
-  const bExpiry = String(b.ticket?.expiryDate || "");
-  if (aExpiry && bExpiry && aExpiry !== bExpiry) {
-    return aExpiry.localeCompare(bExpiry);
-  }
-  if (aExpiry || bExpiry) {
-    return aExpiry ? -1 : 1;
-  }
-
-  const aIssue = String(a.ticket?.issueDate || "");
-  const bIssue = String(b.ticket?.issueDate || "");
-  return bIssue.localeCompare(aIssue);
-}
-
-function buildTicketHistoryRows(member, ticketCatalogMap) {
-  const tickets = Array.isArray(member?.tickets) ? member.tickets : [];
-  const todayKey = getTodayDateKey();
-  return tickets
-    .map((ticket, index) => {
-      const catalog = ticketCatalogMap.get(String(ticket?.ticketId || "")) || {};
-      const type = String(ticket?.type || catalog?.type || "").trim();
-      const unitLabel = getTicketUnitLabel(type);
-      const reservable = getTicketReservableValue(ticket);
-      const expiryDate = String(ticket?.expiryDate || "").trim();
-      const validity = Number(ticket?.validity || catalog?.validity);
-      const validityUnit = String(ticket?.unit || catalog?.unit || "").trim();
-      const unlimitedValidity = Boolean(catalog?.unlimitedValidity);
-      const status = getTicketHistoryStatus(ticket, todayKey);
-      return {
-        id: String(ticket?.id || `${ticket?.ticketId || "ticket"}-${ticket?.issueDate || index}`),
-        index,
-        type,
-        displayName: formatTicketDisplayName({
-          ...catalog,
-          ...ticket,
-          name: ticket?.name || catalog?.name || "",
-        }),
-        price: Number(catalog?.price),
-        reservableLabel: Number.isFinite(reservable) ? `${reservable}${unitLabel}` : "-",
-        validityLabel: expiryDate
-          ? formatDateLabel(expiryDate)
-          : (unlimitedValidity
-            ? "무제한"
-            : (Number.isFinite(validity) && validity > 0 && validityUnit ? `${validity}${validityUnit}` : "-")),
-        priceLabel: formatTicketPrice(Number(catalog?.price)),
-        status,
-        ticket,
-      };
-    })
-    .sort(compareTicketHistoryRows);
-}
-
-function getReservationServiceLabel(reservation) {
-  const type = String(reservation?.type || "").trim();
-  if (type === "hoteling") {
-    return "호텔링";
-  }
-  if (type === "daycare") {
-    return "데이케어";
-  }
-  return "유치원";
-}
-
-function getHotelingUsageStatus(entry = {}) {
-  const statusKey = String(entry?.baseStatusKey || "").trim();
-  if (statusKey === "CANCELED") {
-    return { key: statusKey, label: "예약 취소", tone: "member-ticket-detail__history-status--danger" };
-  }
-  const kind = String(entry?.kind || "").trim();
-  if (kind === "checkin") {
-    return { key: kind, label: "입실", tone: "member-ticket-detail__history-status--success" };
-  }
-  if (kind === "stay") {
-    return { key: kind, label: "숙박", tone: "member-ticket-detail__history-status--success" };
-  }
-  if (kind === "checkout") {
-    return { key: kind, label: "퇴실", tone: "member-ticket-detail__history-status--success" };
-  }
-  return normalizeTicketUsageStatus(statusKey || "PLANNED");
-}
-
-function normalizeTicketUsageStatus(statusKey) {
-  const key = String(statusKey || "").trim();
-  if (key === "ABSENT") {
-    return { key, label: "결석", tone: "member-ticket-detail__history-status--danger" };
-  }
-  if (key === "CANCELED") {
-    return { key, label: "예약 취소", tone: "member-ticket-detail__history-status--danger" };
-  }
-  if (key === "PLANNED") {
-    return { key, label: "예약", tone: "member-ticket-detail__history-status--primary" };
-  }
-  if (key === "CHECKIN") {
-    return { key, label: "등원", tone: "member-ticket-detail__history-status--success" };
-  }
-  if (key === "CHECKOUT") {
-    return { key, label: "하원", tone: "member-ticket-detail__history-status--success" };
-  }
-  return { key, label: "등원", tone: "member-ticket-detail__history-status--success" };
-}
-
-function buildMemberTicketUsageHistory(ticket, reservations = []) {
-  const issuedTicketId = String(ticket?.id || "").trim();
-  if (!issuedTicketId) {
-    return [];
-  }
-  const rows = [];
-  (Array.isArray(reservations) ? reservations : []).forEach((reservation) => {
-    const entries = Array.isArray(reservation?.dates) ? reservation.dates : [];
-    entries.forEach((entry) => {
-      const usages = Array.isArray(entry?.ticketUsages) ? entry.ticketUsages : [];
-      const hasIssuedTicket = usages.some((usage) => String(usage?.ticketId || "").trim() === issuedTicketId);
-      if (!hasIssuedTicket) {
-        return;
-      }
-      const status = reservation?.type === "hoteling"
-        ? getHotelingUsageStatus(entry)
-        : normalizeTicketUsageStatus(entry?.baseStatusKey || "PLANNED");
-      const timestamp = String(entry?.baseStatusKey || "").trim() === "CANCELED"
-        ? String(entry?.canceledAt || reservation?.updatedAt || reservation?.createdAt || "").trim()
-        : String(reservation?.createdAt || "").trim();
-      rows.push({
-        status,
-        serviceLabel: getReservationServiceLabel(reservation),
-        visitDateLabel: formatDateLabel(entry?.date),
-        reservationDateLabel: formatDateTimeLabel(timestamp),
-        sortDate: timestamp,
-        visitSortDate: String(entry?.date || "").trim(),
-      });
-    });
-  });
-  return rows.sort((a, b) => {
-    const timeDiff = String(b.sortDate || "").localeCompare(String(a.sortDate || ""));
-    if (timeDiff !== 0) {
-      return timeDiff;
-    }
-    return String(b.visitSortDate || "").localeCompare(String(a.visitSortDate || ""));
-  });
-}
-
-function buildTicketUsageSummary(historyRows = [], ticket = {}) {
-  const summary = {
-    planned: 0,
-    completed: 0,
-    canceled: 0,
-  };
-  historyRows.forEach((row) => {
-    const statusKey = String(row?.status?.key || "").trim();
-    if (statusKey === "PLANNED") {
-      summary.planned += 1;
-    } else if (statusKey === "CANCELED" || statusKey === "ABSENT") {
-      summary.canceled += 1;
-    } else {
-      summary.completed += 1;
-    }
-  });
-  return [
-    { label: "예약 가능", value: `${getTicketReservableValue(ticket)}${getTicketUnitLabel(ticket?.type || "")}`, tone: "is-accent" },
-    { label: "예약", value: `${summary.planned}${getTicketUnitLabel(ticket?.type || "")}` },
-    { label: "이용 완료", value: `${summary.completed}${getTicketUnitLabel(ticket?.type || "")}` },
-    { label: "취소", value: `${summary.canceled}${getTicketUnitLabel(ticket?.type || "")}` },
-  ];
 }
 
 function areSameTags(beforeTags, nextTags) {
@@ -780,22 +541,9 @@ function getMemberDetailElements() {
     gender: getRequiredElement("[data-member-gender]"),
     ownerTags: getRequiredElement("[data-member-owner-tags]"),
     petTags: getRequiredElement("[data-member-pet-tags]"),
-    reservableSummary: getRequiredElement("[data-member-reservable-summary]"),
     ticketTable: getRequiredElement("[data-member-ticket-table]"),
     ticketRows: getRequiredElement("[data-member-ticket-rows]"),
     ticketEmpty: getRequiredElement("[data-member-ticket-empty]"),
-    ticketDetailModal: getRequiredElement("[data-member-ticket-detail-modal]"),
-    ticketDetailOverlay: getRequiredElement("[data-member-ticket-detail-overlay]"),
-    ticketDetailClose: getRequiredElement("[data-member-ticket-detail-close]"),
-    ticketDetailName: getRequiredElement("[data-member-ticket-detail-name]"),
-    ticketDetailMeta: getRequiredElement("[data-member-ticket-detail-meta]"),
-    ticketDetailStatus: getRequiredElement("[data-member-ticket-detail-status]"),
-    ticketDetailIssued: getRequiredElement("[data-member-ticket-detail-issued]"),
-    ticketDetailStart: getRequiredElement("[data-member-ticket-detail-start]"),
-    ticketDetailExpiry: getRequiredElement("[data-member-ticket-detail-expiry]"),
-    ticketDetailSummary: getRequiredElement("[data-member-ticket-detail-summary]"),
-    ticketDetailHistory: getRequiredElement("[data-member-ticket-detail-history]"),
-    ticketDetailEmpty: getRequiredElement("[data-member-ticket-detail-empty]"),
   };
 }
 
@@ -850,14 +598,6 @@ function renderMemberDetail(viewModel) {
   setTextContent(elements.coatColor, viewModel.coatColor);
   setTextContent(elements.weight, formatMemberWeight(viewModel.weight));
   setTextContent(elements.gender, formatMemberGender(viewModel.gender, viewModel.neuteredStatus));
-  if (elements.reservableSummary) {
-    const reservableCount = Number(viewModel.reservableCount);
-    const isOverbooked = Number.isFinite(reservableCount) && reservableCount < 0;
-    elements.reservableSummary.textContent = isOverbooked
-      ? `(초과 예약 ${Math.abs(reservableCount)}회)`
-      : `(예약 가능 ${viewModel.reservableCount}회)`;
-    elements.reservableSummary.classList.toggle("member-detail-page__tickets-summary--overbooked", isOverbooked);
-  }
   renderMemberTagChips(elements.ownerTags, viewModel.ownerTags, { hiddenWhenEmpty: true });
   renderMemberTagChips(elements.petTags, viewModel.petTags, { hiddenWhenEmpty: true });
 }
@@ -865,7 +605,6 @@ function renderMemberDetail(viewModel) {
 function initMemberTicketHistory(options = {}) {
   const elements = getMemberDetailElements();
   const ticketStorage = initTicketStorage();
-  const reservationStorage = initReservationStorage();
   const onQuantityChanged = typeof options?.onQuantityChanged === "function"
     ? options.onQuantityChanged
     : null;
@@ -917,10 +656,10 @@ function initMemberTicketHistory(options = {}) {
           </div>
           <div class="member-detail__ticket-card-action">
             <button
-              class="icon-button icon-button--secondary member-detail__ticket-detail-trigger"
+              class="icon-button icon-button--secondary member-detail__ticket-usage-trigger"
               type="button"
-              data-member-ticket-detail-open="${escapeHtml(row.id)}"
-              aria-label="이용권 상세 열기"
+              data-member-ticket-usage-open="${escapeHtml(row.id)}"
+              aria-label="이용권 사용 내역 열기"
             >
               <img class="member-detail__ticket-chevron" src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
             </button>
@@ -980,62 +719,17 @@ function initMemberTicketHistory(options = {}) {
       showToast("변경되었습니다.");
       return;
     }
-    const detailButton = target.closest("[data-member-ticket-detail-open]");
+    const detailButton = target.closest("[data-member-ticket-usage-open]");
     if (!(detailButton instanceof HTMLButtonElement)) {
       return;
     }
-    const ticketId = detailButton.dataset.memberTicketDetailOpen || "";
+    const ticketId = detailButton.dataset.memberTicketUsageOpen || "";
     if (!ticketId) {
       return;
     }
     const memberId = new URLSearchParams(window.location.search).get("memberId") || "";
-    const latestMember = findMemberById(loadIssueMembers(), memberId);
-    const issuedTicket = (Array.isArray(latestMember?.tickets) ? latestMember.tickets : [])
-      .find((ticket) => String(ticket?.id || "").trim() === ticketId);
-    if (!issuedTicket) {
-      return;
-    }
-    const catalogTicket = (Array.isArray(ticketStorage.loadTickets()) ? ticketStorage.loadTickets() : [])
-      .find((ticket) => String(ticket?.id || "").trim() === String(issuedTicket?.ticketId || "").trim()) || {};
-    const historyRows = buildMemberTicketUsageHistory(issuedTicket, reservationStorage.loadReservations());
-    const summaryItems = buildTicketUsageSummary(historyRows, issuedTicket);
-    setTextContent(elements.ticketDetailName, formatTicketDisplayName({
-      ...catalogTicket,
-      ...issuedTicket,
-      name: issuedTicket?.name || catalogTicket?.name || "",
-    }));
-    setTextContent(elements.ticketDetailMeta, buildTicketMetaText(issuedTicket, catalogTicket));
-    if (elements.ticketDetailStatus) {
-      elements.ticketDetailStatus.textContent = getTicketHistoryStatus(issuedTicket).label;
-      elements.ticketDetailStatus.className = `member-ticket-detail__status ${getTicketHistoryStatus(issuedTicket).tone}`;
-    }
-    setTextContent(elements.ticketDetailIssued, formatDateLabel(issuedTicket?.issueDate));
-    setTextContent(elements.ticketDetailStart, formatDateLabel(issuedTicket?.startDate));
-    setTextContent(elements.ticketDetailExpiry, buildTicketExpiryText(issuedTicket, catalogTicket));
-    if (elements.ticketDetailSummary) {
-      elements.ticketDetailSummary.innerHTML = summaryItems
-        .map((item) => `<span class="member-ticket-detail__summary-item ${item.tone || ""}"><strong>${escapeHtml(item.label)}</strong> ${escapeHtml(item.value)}</span>`)
-        .join('<span class="member-ticket-detail__summary-dot" aria-hidden="true"></span>');
-    }
-    if (elements.ticketDetailHistory) {
-      elements.ticketDetailHistory.innerHTML = "";
-      historyRows.forEach((row) => {
-        const item = document.createElement("div");
-        item.className = "member-ticket-detail__history-row";
-        item.innerHTML = `
-          <span class="member-ticket-detail__history-status ${row.status.tone}">${escapeHtml(row.status.label)}</span>
-          <span>${escapeHtml(row.serviceLabel)}</span>
-          <span>${escapeHtml(row.visitDateLabel)}</span>
-          <span>${escapeHtml(row.reservationDateLabel)}</span>
-        `;
-        elements.ticketDetailHistory.appendChild(item);
-      });
-    }
-    if (elements.ticketDetailEmpty) {
-      elements.ticketDetailEmpty.hidden = historyRows.length > 0;
-    }
-    elements.ticketDetailModal?.classList.add("is-open");
-    elements.ticketDetailModal?.setAttribute("aria-hidden", "false");
+    const params = new URLSearchParams({ memberId, ticketId });
+    window.location.href = `./member-ticket-usage.html?${params.toString()}`;
   });
 
   return {
@@ -1044,43 +738,6 @@ function initMemberTicketHistory(options = {}) {
       state.visibleCount = MEMBER_DETAIL_TICKET_BATCH_SIZE;
     },
   };
-}
-
-function buildTicketMetaText(ticket, catalogTicket) {
-  const totalLabel = formatTicketCount(
-    String(ticket?.type || catalogTicket?.type || "").trim() === "daycare"
-      ? Number(ticket?.totalHours)
-      : Number(ticket?.totalCount),
-    ticket?.type || catalogTicket?.type || ""
-  );
-  const validityText = buildTicketValidityText(ticket, catalogTicket);
-  return `(${totalLabel} / ${validityText} / ${formatTicketPrice(Number(catalogTicket?.price))})`;
-}
-
-function buildTicketCardValidityLabel(ticket, fallbackText) {
-  const expiryDate = String(ticket?.expiryDate || "").trim();
-  const remainText = expiryDate ? getDateKeyLabelDiff(expiryDate) : "";
-  return remainText || String(fallbackText || "-");
-}
-
-function buildTicketValidityText(ticket, catalogTicket) {
-  if (catalogTicket?.unlimitedValidity) {
-    return "무제한";
-  }
-  const validity = Number(ticket?.validity || catalogTicket?.validity);
-  const unit = String(ticket?.unit || catalogTicket?.unit || "").trim();
-  return Number.isFinite(validity) && validity > 0 && unit ? `${validity}${unit}` : "-";
-}
-
-function buildTicketExpiryText(ticket, catalogTicket) {
-  const expiryDate = String(ticket?.expiryDate || "").trim();
-  if (!expiryDate) {
-    return buildTicketValidityText(ticket, catalogTicket);
-  }
-  const remainText = getDateKeyLabelDiff(expiryDate);
-  return remainText
-    ? `${formatDateLabel(expiryDate)} (${remainText})`
-    : formatDateLabel(expiryDate);
 }
 
 function setupMemberDetailAccordions() {
@@ -1113,6 +770,63 @@ function setupMemberDetailAccordions() {
   });
 }
 
+function setupMemberStatusMouseSwipe() {
+  const scroller = document.querySelector("[data-member-status]");
+  if (!(scroller instanceof HTMLElement)) {
+    return;
+  }
+
+  let isDragging = false;
+  let startX = 0;
+  let startScrollLeft = 0;
+  let suppressClick = false;
+
+  const stopDragging = () => {
+    if (!isDragging) {
+      return;
+    }
+    isDragging = false;
+    scroller.classList.remove("is-dragging");
+    window.setTimeout(() => {
+      suppressClick = false;
+    }, 0);
+  };
+
+  scroller.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    isDragging = true;
+    suppressClick = false;
+    startX = event.clientX;
+    startScrollLeft = scroller.scrollLeft;
+    scroller.classList.add("is-dragging");
+    event.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (event) => {
+    if (!isDragging) {
+      return;
+    }
+    const deltaX = event.clientX - startX;
+    if (Math.abs(deltaX) > 4) {
+      suppressClick = true;
+    }
+    scroller.scrollLeft = startScrollLeft - deltaX;
+    event.preventDefault();
+  });
+
+  window.addEventListener("mouseup", stopDragging);
+  window.addEventListener("blur", stopDragging);
+  scroller.addEventListener("click", (event) => {
+    if (!suppressClick) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+}
+
 function bindActions(memberId) {
   const backButton = getRequiredElement("[data-member-detail-back]");
   const issueButton = getRequiredElement("[data-member-detail-issue]");
@@ -1120,9 +834,6 @@ function bindActions(memberId) {
   const editButtons = document.querySelectorAll("[data-member-detail-edit]");
   const issueModal = document.querySelector("[data-member-ticket-issue-modal]");
   const editModal = document.querySelector("[data-member-detail-edit-modal]");
-  const ticketDetailModal = document.querySelector("[data-member-ticket-detail-modal]");
-  const ticketDetailOverlay = document.querySelector("[data-member-ticket-detail-overlay]");
-  const ticketDetailClose = document.querySelector("[data-member-ticket-detail-close]");
   const createLatestViewModel = () => {
     const latestMember = findMemberById(loadIssueMembers(), memberId);
     const reservationStorage = initReservationStorage();
@@ -1199,20 +910,6 @@ function bindActions(memberId) {
       });
     });
   });
-  const closeTicketDetailModal = () => {
-    ticketDetailModal?.classList.remove("is-open");
-    ticketDetailModal?.setAttribute("aria-hidden", "true");
-  };
-  const handleTicketDetailKeydown = (event) => {
-    if (event.key !== "Escape" || !ticketDetailModal?.classList.contains("is-open")) {
-      return;
-    }
-    closeTicketDetailModal();
-  };
-  ticketDetailOverlay?.addEventListener("click", closeTicketDetailModal);
-  ticketDetailClose?.addEventListener("click", closeTicketDetailModal);
-  document.addEventListener("keydown", handleTicketDetailKeydown);
-
   const { latestMember } = createLatestViewModel();
   ticketHistory.render(latestMember);
 }
@@ -1253,6 +950,7 @@ function bootstrapMemberDetailPage() {
   setupSidebarReservationBadges({ storage, timeZone });
   setupMemberDetailAccordions();
   initMemberDetailView();
+  setupMemberStatusMouseSwipe();
 }
 
 if (document.readyState === "loading") {

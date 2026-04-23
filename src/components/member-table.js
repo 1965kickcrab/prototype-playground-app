@@ -1,14 +1,20 @@
 import {
-  getMemberReservableCountFromReservations,
-  isReservableOver,
+  formatReservableCountText,
+  getMemberReservableCountByTypeFromReservations,
 } from "../services/member-page-service.js";
 import { renderMemberTagChips } from "./member-tags.js";
 
-function createOverBadge() {
-  const badge = document.createElement("span");
-  badge.className = "member-list__badge";
-  badge.textContent = "초과";
-  return badge;
+function createReservableText(count) {
+  const text = document.createElement("span");
+  text.className = "member-list__reservable";
+  if (count < 0) {
+    text.classList.add("is-over");
+    text.textContent = formatReservableCountText(count);
+    return text;
+  }
+  text.classList.add("is-available");
+  text.textContent = `예약 가능 ${formatReservableCountText(count)}`;
+  return text;
 }
 
 function createChevron() {
@@ -31,8 +37,9 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
     row.classList.add("is-selected");
   }
 
-  const count = getMemberReservableCountFromReservations(
+  const count = getMemberReservableCountByTypeFromReservations(
     member,
+    "school",
     activeReservationCountsByMemberType
   );
 
@@ -41,10 +48,6 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
 
   const headline = document.createElement("span");
   headline.className = "member-list__headline";
-
-  if (isReservableOver(count)) {
-    headline.appendChild(createOverBadge());
-  }
 
   const name = document.createElement("strong");
   name.className = "member-list__name member-table__dog-name";
@@ -55,6 +58,7 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
   breed.className = "member-list__breed";
   breed.textContent = member?.breed || "-";
   headline.appendChild(breed);
+  headline.appendChild(createReservableText(count));
 
   const labels = document.createElement("span");
   labels.className = "member-list__labels";

@@ -89,6 +89,15 @@ These are the high-risk surfaces where agents must verify the real usage path be
 - Source entry: member detail ticket cards route here with `memberId` and issued `ticketId`
 - Authority decision: member issued-ticket usage detail is a dedicated mobile page; the old member ticket detail modal path is not active
 
+### Center Settings
+- Entrypoint: `src/pages/settings/center.html`
+- Page controller: `src/pages/settings/center-settings-page.js`
+- Form/detail controller: `src/pages/settings/center-settings-form-page.js`
+- Storage: `src/storage/class-storage.js`, `src/storage/hotel-room-storage.js`, `src/storage/pricing-storage.js`
+- Source entry: `src/pages/more.html` routes the `센터 설정` shortcut here
+- Duplicate candidate: `src/pages/settings/school/class.html` and `src/pages/settings/hotel/room.html` still contain the legacy sidebar/table/modal settings path
+- Authority decision: class and room settings now use the mobile center settings list, dedicated create page, and an always-editable existing-item page at `center-settings-detail.html`; legacy school class and hotel room pages remain directly reachable only for old links
+
 ### Ticket Create
 - Entrypoint: `src/pages/ticket-create.html`
 - Page controller: `src/pages/ticket-create-page.js`

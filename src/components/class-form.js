@@ -1,5 +1,21 @@
+function getActiveFieldRoot(root) {
+  const classType = root?.dataset?.classType || "school";
+  const scopedRoot = classType === "hoteling"
+    ? root?.querySelector("[data-hoteling-fields]:not([hidden])")
+    : root?.querySelector("[data-school-fields]:not([hidden])");
+  return scopedRoot || root;
+}
+
+function queryActive(root, selector) {
+  return getActiveFieldRoot(root)?.querySelector(selector) || null;
+}
+
+function queryActiveAll(root, selector) {
+  return Array.from(getActiveFieldRoot(root)?.querySelectorAll(selector) || []);
+}
+
 export function renderMemberOptions(root, members) {
-  const container = root.querySelector("[data-class-members]");
+  const container = queryActive(root, "[data-class-members]");
   if (!container) {
     return;
   }
@@ -49,7 +65,7 @@ export function renderTicketOptions(
   formatTicketValidity,
   classType
 ) {
-  const container = root.querySelector("[data-class-tickets]");
+  const container = queryActive(root, "[data-class-tickets]");
   if (!container) {
     return;
   }
@@ -97,14 +113,14 @@ export function renderTicketOptions(
 }
 
 export function collectMemberIds(root) {
-  return Array.from(root.querySelectorAll("[data-class-member]"))
+  return queryActiveAll(root, "[data-class-member]")
     .filter((element) => element.classList.contains("is-checked"))
     .map((element) => element.dataset.memberId || "")
     .filter((value) => value);
 }
 
 export function collectTicketIds(root) {
-  return Array.from(root.querySelectorAll("[data-class-ticket]"))
+  return queryActiveAll(root, "[data-class-ticket]")
     .filter((element) => element.classList.contains("is-checked"))
     .map((element) => element.dataset.ticketId || "")
     .filter((value) => value);
@@ -126,13 +142,14 @@ function collectRoomPricingExtraFees(root) {
 }
 
 export function syncRoomPricingExtraModeVisibility(root) {
-  const enabledToggle = root.querySelector("[data-room-pricing-extra-enabled]");
-  const modeToggleRow = root.querySelector("[data-room-pricing-extra-mode-toggle]");
-  const customModeButton = root.querySelector(
+  const activeRoot = getActiveFieldRoot(root);
+  const enabledToggle = activeRoot.querySelector("[data-room-pricing-extra-enabled]");
+  const modeToggleRow = activeRoot.querySelector("[data-room-pricing-extra-mode-toggle]");
+  const customModeButton = activeRoot.querySelector(
     "[data-room-pricing-extra-mode='daily'].is-selected"
   );
-  const groupedSection = root.querySelector("[data-room-pricing-extra-grouped]");
-  const dailySection = root.querySelector("[data-room-pricing-extra-daily]");
+  const groupedSection = activeRoot.querySelector("[data-room-pricing-extra-grouped]");
+  const dailySection = activeRoot.querySelector("[data-room-pricing-extra-daily]");
   const isEnabled = enabledToggle instanceof HTMLInputElement
     ? enabledToggle.checked
     : false;
@@ -151,29 +168,29 @@ export function syncRoomPricingExtraModeVisibility(root) {
 }
 
 export function updateMemberSelectAllState(root) {
-  const button = root.querySelector("[data-class-member-select-all]");
+  const button = queryActive(root, "[data-class-member-select-all]");
   if (!button) {
     return;
   }
-  const rows = Array.from(root.querySelectorAll("[data-class-member]"));
+  const rows = queryActiveAll(root, "[data-class-member]");
   const allSelected = rows.length > 0
     && rows.every((row) => row.classList.contains("is-checked"));
   button.classList.toggle("is-active", allSelected);
 }
 
 export function updateTicketSelectAllState(root) {
-  const button = root.querySelector("[data-class-ticket-select-all]");
+  const button = queryActive(root, "[data-class-ticket-select-all]");
   if (!button) {
     return;
   }
-  const rows = Array.from(root.querySelectorAll("[data-class-ticket]"));
+  const rows = queryActiveAll(root, "[data-class-ticket]");
   const allSelected = rows.length > 0
     && rows.every((row) => row.classList.contains("is-checked"));
   button.classList.toggle("is-active", allSelected);
 }
 
 export function toggleMemberSelection(root) {
-  const rows = Array.from(root.querySelectorAll("[data-class-member]"));
+  const rows = queryActiveAll(root, "[data-class-member]");
   if (rows.length === 0) {
     return;
   }
@@ -186,7 +203,7 @@ export function toggleMemberSelection(root) {
 }
 
 export function toggleTicketSelection(root) {
-  const rows = Array.from(root.querySelectorAll("[data-class-ticket]"));
+  const rows = queryActiveAll(root, "[data-class-ticket]");
   if (rows.length === 0) {
     return;
   }
@@ -199,7 +216,7 @@ export function toggleTicketSelection(root) {
 }
 
 export function updateTicketCount(root) {
-  const target = root.querySelector("[data-class-ticket-count]");
+  const target = queryActive(root, "[data-class-ticket-count]");
   if (!target) {
     return;
   }
@@ -208,7 +225,7 @@ export function updateTicketCount(root) {
 }
 
 export function updateMemberCount(root) {
-  const target = root.querySelector("[data-class-member-count]");
+  const target = queryActive(root, "[data-class-member-count]");
   if (!target) {
     return;
   }
@@ -218,7 +235,7 @@ export function updateMemberCount(root) {
 
 export function applyMemberSelection(root, memberIds) {
   const selected = new Set(Array.isArray(memberIds) ? memberIds : []);
-  const rows = root.querySelectorAll("[data-class-member]");
+  const rows = queryActiveAll(root, "[data-class-member]");
   rows.forEach((row) => {
     const memberId = row.dataset.memberId || "";
     row.classList.toggle("is-checked", selected.has(memberId));
@@ -229,7 +246,7 @@ export function applyMemberSelection(root, memberIds) {
 
 export function applyTicketSelection(root, ticketIds) {
   const selected = new Set(Array.isArray(ticketIds) ? ticketIds : []);
-  const rows = root.querySelectorAll("[data-class-ticket]");
+  const rows = queryActiveAll(root, "[data-class-ticket]");
   rows.forEach((row) => {
     const ticketId = row.dataset.ticketId || "";
     row.classList.toggle("is-checked", selected.has(ticketId));
@@ -239,32 +256,33 @@ export function applyTicketSelection(root, ticketIds) {
 }
 
 export function collectClassFormData(root, config) {
-  const name = root.querySelector("[data-class-name]")?.value.trim() || "";
+  const activeRoot = getActiveFieldRoot(root);
+  const name = activeRoot.querySelector("[data-class-name]")?.value.trim() || "";
   const capacityValue =
-    root.querySelector("[data-class-capacity]")?.value.trim() || "";
+    activeRoot.querySelector("[data-class-capacity]")?.value.trim() || "";
   const description =
-    root.querySelector("[data-class-description]")?.value.trim() || "";
+    activeRoot.querySelector("[data-class-description]")?.value.trim() || "";
   const ticketIds = collectTicketIds(root);
   const classType = root.dataset.classType || config.defaultClassType;
 
   const capacity = Number.parseInt(capacityValue, 10);
   if (config.isHotelScope) {
     const weightMinValue =
-      root.querySelector("[data-room-pricing-weight-min]")?.value.trim() || "";
+      activeRoot.querySelector("[data-room-pricing-weight-min]")?.value.trim() || "";
     const weightMaxValue =
-      root.querySelector("[data-room-pricing-weight-max]")?.value.trim() || "";
+      activeRoot.querySelector("[data-room-pricing-weight-max]")?.value.trim() || "";
     const pricingPrice =
-      root.querySelector("[data-room-pricing-price]")?.value.trim() || "";
+      activeRoot.querySelector("[data-room-pricing-price]")?.value.trim() || "";
     const pricingVatSeparate =
-      root.querySelector("[data-room-pricing-vat]")?.checked || false;
-    const pricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]")?.checked
+      activeRoot.querySelector("[data-room-pricing-vat]")?.checked || false;
+    const pricingExtraEnabled = activeRoot.querySelector("[data-room-pricing-extra-enabled]")?.checked
       || false;
-    const pricingExtraMode = root.querySelector(
+    const pricingExtraMode = activeRoot.querySelector(
       "[data-room-pricing-extra-mode='daily'].is-selected"
     )
       ? "daily"
       : "grouped";
-    const pricingExtraFees = collectRoomPricingExtraFees(root);
+    const pricingExtraFees = collectRoomPricingExtraFees(activeRoot);
     const weightMin = Number.parseFloat(weightMinValue);
     const weightMax = Number.parseFloat(weightMaxValue);
     return {
@@ -287,14 +305,14 @@ export function collectClassFormData(root, config) {
   }
 
   const teacher =
-    root.querySelector("[data-class-teacher]")?.value.trim() || "";
-  const startTime = root.querySelector("[data-class-start]")?.value || "";
-  const endTime = root.querySelector("[data-class-end]")?.value || "";
+    activeRoot.querySelector("[data-class-teacher]")?.value.trim() || "";
+  const startTime = activeRoot.querySelector("[data-class-start]")?.value || "";
+  const endTime = activeRoot.querySelector("[data-class-end]")?.value || "";
   const publicHolidayOff =
-    root.querySelector("[data-class-public-holiday]")?.checked || false;
+    activeRoot.querySelector("[data-class-public-holiday]")?.checked || false;
   const memberIds = collectMemberIds(root);
   const dayButtons = Array.from(
-    root.querySelectorAll("[data-class-day]")
+    activeRoot.querySelectorAll("[data-class-day]")
   );
   const days = dayButtons
     .filter((button) => button.classList.contains("is-selected"))
@@ -341,8 +359,9 @@ export function setActiveClassTab(modal, tabId) {
 }
 
 export function updateClassTypeVisibility(root, classType) {
-  const memberSection = root.querySelector("[data-class-members-section]");
-  const ticketSection = root.querySelector("[data-class-tickets-section]");
+  const activeRoot = getActiveFieldRoot(root);
+  const memberSection = activeRoot.querySelector("[data-class-members-section]");
+  const ticketSection = activeRoot.querySelector("[data-class-tickets-section]");
   const isDaycare = classType === "daycare";
   if (memberSection) {
     memberSection.hidden = isDaycare;
@@ -353,19 +372,20 @@ export function updateClassTypeVisibility(root, classType) {
 }
 
 export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClassType) {
-  const name = root.querySelector("[data-class-name]");
-  const teacher = root.querySelector("[data-class-teacher]");
-  const capacity = root.querySelector("[data-class-capacity]");
-  const description = root.querySelector("[data-class-description]");
-  const roomPricingWeightMin = root.querySelector("[data-room-pricing-weight-min]");
-  const roomPricingWeightMax = root.querySelector("[data-room-pricing-weight-max]");
-  const roomPricingPrice = root.querySelector("[data-room-pricing-price]");
-  const roomPricingVat = root.querySelector("[data-room-pricing-vat]");
-  const startTime = root.querySelector("[data-class-start]");
-  const endTime = root.querySelector("[data-class-end]");
-  const holidayInput = root.querySelector("[data-class-public-holiday]");
+  const activeRoot = getActiveFieldRoot(root);
+  const name = activeRoot.querySelector("[data-class-name]");
+  const teacher = activeRoot.querySelector("[data-class-teacher]");
+  const capacity = activeRoot.querySelector("[data-class-capacity]");
+  const description = activeRoot.querySelector("[data-class-description]");
+  const roomPricingWeightMin = activeRoot.querySelector("[data-room-pricing-weight-min]");
+  const roomPricingWeightMax = activeRoot.querySelector("[data-room-pricing-weight-max]");
+  const roomPricingPrice = activeRoot.querySelector("[data-room-pricing-price]");
+  const roomPricingVat = activeRoot.querySelector("[data-room-pricing-vat]");
+  const startTime = activeRoot.querySelector("[data-class-start]");
+  const endTime = activeRoot.querySelector("[data-class-end]");
+  const holidayInput = activeRoot.querySelector("[data-class-public-holiday]");
   const dayButtons = Array.from(
-    root.querySelectorAll("[data-class-day]")
+    activeRoot.querySelectorAll("[data-class-day]")
   );
   root.dataset.classType = defaultClassType;
 
@@ -393,11 +413,11 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
   if (roomPricingVat) {
     roomPricingVat.checked = false;
   }
-  const roomPricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]");
+  const roomPricingExtraEnabled = activeRoot.querySelector("[data-room-pricing-extra-enabled]");
   if (roomPricingExtraEnabled instanceof HTMLInputElement) {
     roomPricingExtraEnabled.checked = false;
   }
-  root.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
+  activeRoot.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) {
       return;
     }
@@ -405,7 +425,7 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
     button.classList.toggle("is-selected", isSelected);
     button.setAttribute("aria-selected", String(isSelected));
   });
-  root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
+  activeRoot.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
     if (input instanceof HTMLInputElement) {
       input.value = "";
     }
@@ -433,19 +453,20 @@ export function resetClassForm(root, weeklyDefaults, holidayDefault, defaultClas
 }
 
 export function fillClassForm(root, classItem, holidayDefault, defaultClassType, pricingItem = null) {
-  const name = root.querySelector("[data-class-name]");
-  const teacher = root.querySelector("[data-class-teacher]");
-  const capacity = root.querySelector("[data-class-capacity]");
-  const description = root.querySelector("[data-class-description]");
-  const roomPricingWeightMin = root.querySelector("[data-room-pricing-weight-min]");
-  const roomPricingWeightMax = root.querySelector("[data-room-pricing-weight-max]");
-  const roomPricingPrice = root.querySelector("[data-room-pricing-price]");
-  const roomPricingVat = root.querySelector("[data-room-pricing-vat]");
-  const startTime = root.querySelector("[data-class-start]");
-  const endTime = root.querySelector("[data-class-end]");
-  const holidayInput = root.querySelector("[data-class-public-holiday]");
+  const activeRoot = getActiveFieldRoot(root);
+  const name = activeRoot.querySelector("[data-class-name]");
+  const teacher = activeRoot.querySelector("[data-class-teacher]");
+  const capacity = activeRoot.querySelector("[data-class-capacity]");
+  const description = activeRoot.querySelector("[data-class-description]");
+  const roomPricingWeightMin = activeRoot.querySelector("[data-room-pricing-weight-min]");
+  const roomPricingWeightMax = activeRoot.querySelector("[data-room-pricing-weight-max]");
+  const roomPricingPrice = activeRoot.querySelector("[data-room-pricing-price]");
+  const roomPricingVat = activeRoot.querySelector("[data-room-pricing-vat]");
+  const startTime = activeRoot.querySelector("[data-class-start]");
+  const endTime = activeRoot.querySelector("[data-class-end]");
+  const holidayInput = activeRoot.querySelector("[data-class-public-holiday]");
   const dayButtons = Array.from(
-    root.querySelectorAll("[data-class-day]")
+    activeRoot.querySelectorAll("[data-class-day]")
   );
 
   if (name) {
@@ -476,9 +497,9 @@ export function fillClassForm(root, classItem, holidayDefault, defaultClassType,
   if (roomPricingVat) {
     roomPricingVat.checked = Boolean(pricingItem?.vatSeparate);
   }
-  const roomPricingExtraEnabled = root.querySelector("[data-room-pricing-extra-enabled]");
+  const roomPricingExtraEnabled = activeRoot.querySelector("[data-room-pricing-extra-enabled]");
   const extraMode = pricingItem?.extraFeeMode === "daily" ? "daily" : "grouped";
-  root.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
+  activeRoot.querySelectorAll("[data-room-pricing-extra-mode]").forEach((button) => {
     if (!(button instanceof HTMLButtonElement)) {
       return;
     }
@@ -492,7 +513,7 @@ export function fillClassForm(root, classItem, holidayDefault, defaultClassType,
   if (roomPricingExtraEnabled instanceof HTMLInputElement) {
     roomPricingExtraEnabled.checked = Boolean(pricingItem?.extraFeeEnabled);
   }
-  root.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
+  activeRoot.querySelectorAll("[data-room-pricing-extra-fee]").forEach((input) => {
     if (!(input instanceof HTMLInputElement)) {
       return;
     }

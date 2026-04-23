@@ -2,6 +2,10 @@
 import { setupHotelingCalendar } from "../components/hoteling-calendar.js";
 import { setupServiceSwitcher } from "../utils/service-switcher.js";
 import { renderHotelingList } from "../components/hoteling-list.js";
+import {
+  bindListCountFilterBar,
+  renderListCountFilterBar,
+} from "../components/list-count-filter-bar.js";
 import { showToast } from "../components/toast.js";
 import { syncFilterChip } from "../utils/dom.js";
 import { initHotelRoomStorage } from "../storage/hotel-room-storage.js";
@@ -39,6 +43,7 @@ import {
 import { hasTagValue, sanitizeTagList } from "../utils/tags.js";
 
 document.addEventListener("DOMContentLoaded", () => {
+  const HOTELING_ROOM_FILTER_ALL = "all";
   const timeZone = getTimeZone();
   const reservationStorage = initReservationStorage();
   const roomStorage = initHotelRoomStorage();
@@ -130,6 +135,9 @@ document.addEventListener("DOMContentLoaded", () => {
     options: [],
     selected: new Set(),
   };
+  const scheduleRoomFilterState = {
+    selected: new Set(),
+  };
   const paymentFilterState = {
     options: [
       { value: "paid", label: "완료" },
@@ -153,6 +161,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return `${sorted[0]} 외 ${labels.length - 1}`;
     }
     return allLabel;
+  };
+
+  const normalizeRoomId = (value) => {
+    const raw = String(value || "");
+    if (!raw) {
+      return "";
+    }
+    if (raw.includes(":")) {
+      const [, id] = raw.split(":");
+      return id || "";
+    }
+    return raw;
   };
 
   const setupHotelingFilterPanel = (roomsList, onChange) => {
@@ -445,11 +465,11 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
   const getRoomNameFromReservation = (reservation) => {
-    const roomId = String(reservation?.room || "");
+    const roomId = normalizeRoomId(reservation?.room);
     if (!roomId) {
       return "";
     }
-    const room = rooms.find((item) => String(item.id) === roomId);
+    const room = rooms.find((item) => normalizeRoomId(item.id) === roomId);
     return room?.name || roomId;
   };
 
@@ -535,6 +555,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const listEmptyEl = document.querySelector("[data-hoteling-list-empty]");
   const hotelingFeed = document.querySelector("[data-hoteling-feed]");
   const headerCapacity = document.querySelector("[data-hoteling-capacity]");
+  const roomCountFilterBar = document.querySelector("[data-hoteling-room-count-filters]");
 
   if (headerCapacity) {
     headerCapacity.textContent = String(getTotalRoomCapacity(rooms));
@@ -654,6 +675,101 @@ document.addEventListener("DOMContentLoaded", () => {
   };
 
 
+  const getRoomIdFromReservation = (reservation) => normalizeRoomId(reservation?.room);
+
+  const getAllGroupEntries = (groups) => [
+    ...(Array.isArray(groups?.checkin) ? groups.checkin : []),
+    ...(Array.isArray(groups?.checkout) ? groups.checkout : []),
+    ...(Array.isArray(groups?.stay) ? groups.stay : []),
+  ];
+
+  const getScheduleRoomFilterSet = (roomIds) => {
+    if (!(scheduleRoomFilterState.selected instanceof Set)) {
+      scheduleRoomFilterState.selected = new Set(
+        Array.isArray(scheduleRoomFilterState.selected)
+          ? scheduleRoomFilterState.selected
+          : [scheduleRoomFilterState.selected]
+      );
+    }
+    const validIds = new Set(roomIds);
+    scheduleRoomFilterState.selected = new Set(
+      Array.from(scheduleRoomFilterState.selected).filter((id) => validIds.has(id))
+    );
+    if (scheduleRoomFilterState.selected.size === 0 && roomIds.length > 0) {
+      scheduleRoomFilterState.selected = new Set(roomIds);
+    }
+    return scheduleRoomFilterState.selected;
+  };
+
+  const renderRoomCountFilters = (groups) => {
+    const roomOptions = roomStorage.ensureDefaults();
+    const roomIds = roomOptions.map((room) => normalizeRoomId(room?.id)).filter((id) => id);
+    const selected = getScheduleRoomFilterSet(roomIds);
+    const allSelected = roomIds.length === 0 || selected.size === roomIds.length;
+    const countByRoom = new Map(roomIds.map((id) => [id, 0]));
+    getAllGroupEntries(groups).forEach(({ reservation }) => {
+      const roomId = getRoomIdFromReservation(reservation);
+      if (!roomId) {
+        return;
+      }
+      if (!countByRoom.has(roomId)) {
+        countByRoom.set(roomId, 0);
+      }
+      countByRoom.set(roomId, (countByRoom.get(roomId) || 0) + 1);
+    });
+    renderListCountFilterBar(roomCountFilterBar, {
+      allValue: HOTELING_ROOM_FILTER_ALL,
+      allLabel: "전체",
+      totalCount: getAllGroupEntries(groups).length,
+      allSelected,
+      items: roomOptions.map((room) => {
+        const roomId = normalizeRoomId(room?.id);
+        return {
+          value: roomId,
+          label: String(room?.name || roomId || "-"),
+          count: countByRoom.get(roomId) || 0,
+          selected: allSelected || selected.has(roomId),
+        };
+      }),
+    });
+  };
+
+  const filterGroupsBySelectedRoom = (groups) => {
+    const roomIds = roomStorage.ensureDefaults()
+      .map((room) => normalizeRoomId(room?.id))
+      .filter((id) => id);
+    const selectedRoomIds = getScheduleRoomFilterSet(roomIds);
+    if (roomIds.length === 0 || selectedRoomIds.size === roomIds.length) {
+      return groups;
+    }
+    const filterEntries = (items) => (Array.isArray(items) ? items : [])
+      .filter(({ reservation }) => selectedRoomIds.has(getRoomIdFromReservation(reservation)));
+    return {
+      checkin: filterEntries(groups?.checkin),
+      checkout: filterEntries(groups?.checkout),
+      stay: filterEntries(groups?.stay),
+    };
+  };
+
+  bindListCountFilterBar(roomCountFilterBar, (value) => {
+    const roomIds = roomStorage.ensureDefaults()
+      .map((room) => normalizeRoomId(room?.id))
+      .filter((id) => id);
+    const selected = getScheduleRoomFilterSet(roomIds);
+    if (value === HOTELING_ROOM_FILTER_ALL) {
+      scheduleRoomFilterState.selected = new Set(roomIds);
+    } else if (selected.has(value)) {
+      selected.delete(value);
+      scheduleRoomFilterState.selected = selected.size > 0 ? selected : new Set([value]);
+    } else {
+      selected.add(value);
+      scheduleRoomFilterState.selected = selected;
+    }
+    if (reservationState.selectedDateKey) {
+      renderListForKey(reservationState.selectedDateKey);
+    }
+  });
+
   const renderListForKey = (dateKey) => {
     reservationState.selectedDateKey = dateKey || "";
     const groups = buildHotelingEntriesForDate(
@@ -661,6 +777,8 @@ document.addEventListener("DOMContentLoaded", () => {
       reservationState.selectedDateKey,
       { includeCanceled: false }
     );
+    renderRoomCountFilters(groups);
+    const filteredGroups = filterGroupsBySelectedRoom(groups);
     const members = loadIssueMembers();
     const memberById = new Map(
       members.map((member) => [String(member?.id || ""), member])
@@ -680,7 +798,7 @@ document.addEventListener("DOMContentLoaded", () => {
         stayCountEl,
         listEmptyEl,
       },
-      groups,
+      filteredGroups,
       { roomNameById, memberById }
     );
     sidebarReservationBadges.refresh();

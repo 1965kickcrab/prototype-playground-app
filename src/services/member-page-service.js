@@ -55,10 +55,6 @@ export function formatReservableCountText(count) {
   return `${count}회`;
 }
 
-export function isReservableOver(count) {
-  return count < 0;
-}
-
 export function filterMembers(members, query) {
   const list = Array.isArray(members) ? members : [];
   const keyword = String(query || "").trim().toLowerCase();

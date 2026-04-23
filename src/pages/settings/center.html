@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 센터 설정</title>
+  <link rel="stylesheet" href="../../../styles/base.css">
+  <link rel="stylesheet" href="../../../styles/layout.css">
+  <link rel="stylesheet" href="../../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <main class="main center-settings-page">
+      <header class="reservation-detail-page__nav center-settings-page__nav">
+        <a class="icon-button reservation-detail-page__back" aria-label="뒤로 가기" href="../more.html">
+          <img src="../../../assets/iconBack.svg" alt="" aria-hidden="true">
+        </a>
+        <h1>센터 설정</h1>
+      </header>
+
+      <div class="main__content center-settings-page__content">
+        <div class="ticket-service-tabs center-settings-page__tabs" role="tablist" aria-label="서비스 타입">
+          <button class="ticket-service-tabs__item is-active" type="button" role="tab" aria-selected="true" data-center-settings-type="school">유치원</button>
+          <button class="ticket-service-tabs__item" type="button" role="tab" aria-selected="false" data-center-settings-type="hoteling">호텔링</button>
+        </div>
+
+        <section class="center-settings-read-section" aria-labelledby="center-operations-title">
+          <h2 id="center-operations-title">휴무 &amp; 영업</h2>
+          <div class="center-settings-read-list" data-center-settings-operations></div>
+        </section>
+
+        <section class="center-settings-read-section" aria-labelledby="center-policy-title">
+          <h2 id="center-policy-title">예약 정책</h2>
+          <div class="center-settings-read-list" data-center-settings-policy></div>
+        </section>
+
+        <section class="center-settings-list-section" aria-labelledby="center-list-title">
+          <div class="center-settings-list-section__head">
+            <h2 id="center-list-title" data-center-settings-list-title>클래스 목록</h2>
+            <button class="button-secondary button-secondary--small" type="button" data-center-settings-create>등록</button>
+          </div>
+          <div class="center-settings-list" data-center-settings-list aria-live="polite"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="./center-settings-page.js"></script>
+</body>
+</html>

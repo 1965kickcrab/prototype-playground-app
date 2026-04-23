@@ -109,24 +109,29 @@
             <section class="list-card list-card--home-mobile hoteling-list-card">
               <div class="list-card__header">
                 <div class="list-card__meta">
-                  <div class="list-card-date" data-hoteling-list-date>7월 3일</div>
-                  <div class="list-card__title-row">
-                    <div class="list-card__title">숙박 <span class="text-primary" data-hoteling-total-count>0</span></div>
+                  <div class="hoteling-list-overview">
+                    <div class="hoteling-list-overview__copy">
+                      <div class="list-card-date" data-hoteling-list-date>7월 3일</div>
+                      <div class="list-card__title-row">
+                        <div class="list-card__title">숙박 <span class="text-primary" data-hoteling-total-count>0</span></div>
+                      </div>
+                    </div>
+                    <div class="hoteling-list-summary">
+                      <div class="hoteling-list-summary__card hoteling-list-summary__card--checkin">
+                        <span class="hoteling-list-summary__label">입실</span>
+                        <strong data-hoteling-checkin-count>0</strong>
+                      </div>
+                      <div class="hoteling-list-summary__card hoteling-list-summary__card--stay">
+                        <span class="hoteling-list-summary__label">숙박</span>
+                        <strong data-hoteling-stay-count>0</strong>
+                      </div>
+                      <div class="hoteling-list-summary__card hoteling-list-summary__card--checkout">
+                        <span class="hoteling-list-summary__label">퇴실</span>
+                        <strong data-hoteling-checkout-count>0</strong>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div class="hoteling-list-summary">
-                  <div class="hoteling-list-summary__card hoteling-list-summary__card--checkin">
-                    <span class="hoteling-list-summary__label">입실</span>
-                    <strong data-hoteling-checkin-count>0</strong>
-                  </div>
-                  <div class="hoteling-list-summary__card hoteling-list-summary__card--checkout">
-                    <span class="hoteling-list-summary__label">퇴실</span>
-                    <strong data-hoteling-checkout-count>0</strong>
-                  </div>
-                  <div class="hoteling-list-summary__card hoteling-list-summary__card--stay">
-                    <span class="hoteling-list-summary__label">숙박</span>
-                    <strong data-hoteling-stay-count>0</strong>
-                  </div>
+                  <div class="list-card__count-filters list-card__count-filters--scroll" data-hoteling-room-count-filters></div>
                 </div>
               </div>
 

@@ -39,6 +39,10 @@ import {
 import {
   buildReservationWithBilling,
 } from "../services/reservation-billing.js";
+import {
+  bindListCountFilterBar,
+  renderListCountFilterBar,
+} from "./list-count-filter-bar.js";
 
 const STATUS_CLASSES = [
   "list-table__status--primary",
@@ -58,6 +62,7 @@ const STATUS_MENU_ORDER = ["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT", "CANCELED
 const STATUSES_WITHOUT_TIMES = new Set(["PLANNED", "ABSENT"]);
 
 const SERVICE_RESERVATION_TYPES = new Set(["school", "daycare", "pickdrop"]);
+const SCHEDULE_CLASS_FILTER_ALL = "all";
 
 const filterSchoolReservations = (reservations) =>
   (Array.isArray(reservations) ? reservations : []).filter(
@@ -517,6 +522,78 @@ function getVisibleReservationEntries(entries, state, storage, members, options 
   });
 }
 
+function getScheduleClassFilterSet(state, classNames) {
+  if (!state.selectedScheduleClassFilters) {
+    state.selectedScheduleClassFilters = new Set(classNames);
+  }
+  if (!(state.selectedScheduleClassFilters instanceof Set)) {
+    state.selectedScheduleClassFilters = new Set(
+      Array.isArray(state.selectedScheduleClassFilters)
+        ? state.selectedScheduleClassFilters
+        : [state.selectedScheduleClassFilters]
+    );
+  }
+  const validNames = new Set(classNames);
+  state.selectedScheduleClassFilters = new Set(
+    Array.from(state.selectedScheduleClassFilters).filter((name) => validNames.has(name))
+  );
+  if (state.selectedScheduleClassFilters.size === 0 && classNames.length > 0) {
+    state.selectedScheduleClassFilters = new Set(classNames);
+  }
+  return state.selectedScheduleClassFilters;
+}
+
+function getScheduleClassNames(classes, state) {
+  const names = (Array.isArray(classes) ? classes : [])
+    .map((item) => String(item?.name || "").trim())
+    .filter((name) => name.length > 0);
+  if (names.length > 0) {
+    return names;
+  }
+  return (Array.isArray(state?.serviceOptions) ? state.serviceOptions : [])
+    .map((name) => String(name || "").trim())
+    .filter((name) => name.length > 0);
+}
+
+function renderScheduleClassCountFilters(container, entries, classes, state) {
+  if (!(container instanceof HTMLElement)) {
+    return;
+  }
+  const classNames = getScheduleClassNames(classes, state);
+  const selected = getScheduleClassFilterSet(state, classNames);
+  const allSelected = classNames.length === 0 || selected.size === classNames.length;
+  const countByClass = new Map(classNames.map((name) => [name, 0]));
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    const className = normalizeService(entry?.className, state);
+    if (!countByClass.has(className)) {
+      countByClass.set(className, 0);
+    }
+    countByClass.set(className, (countByClass.get(className) || 0) + 1);
+  });
+  renderListCountFilterBar(container, {
+    allValue: SCHEDULE_CLASS_FILTER_ALL,
+    allLabel: "전체",
+    totalCount: Array.isArray(entries) ? entries.length : 0,
+    allSelected,
+    items: classNames.map((name) => ({
+      value: name,
+      label: name,
+      count: countByClass.get(name) || 0,
+      selected: allSelected || selected.has(name),
+    })),
+  });
+}
+
+function applyScheduleClassFilter(entries, state, classNames) {
+  const selected = getScheduleClassFilterSet(state, classNames);
+  if (classNames.length === 0 || selected.size === classNames.length) {
+    return entries;
+  }
+  return (Array.isArray(entries) ? entries : []).filter(
+    (entry) => selected.has(normalizeService(entry?.className, state))
+  );
+}
+
 function renderReservations(list, storage, state, dayoffSettings, timeZone) {
   const body = list.querySelector("[data-reservation-rows]");
   if (!body) {
@@ -531,12 +608,20 @@ function renderReservations(list, storage, state, dayoffSettings, timeZone) {
     classes.map((item) => [String(item?.name || ""), item])
   );
   const members = loadIssueMembers();
-  const reservations = getVisibleReservationEntries(
+  const visibleReservations = getVisibleReservationEntries(
     getReservationEntries(state.reservations),
     state,
     storage,
     members
   );
+  const scheduleClassNames = getScheduleClassNames(classes, state);
+  renderScheduleClassCountFilters(
+    document.querySelector("[data-school-class-count-filters]"),
+    visibleReservations,
+    classes,
+    state
+  );
+  const reservations = applyScheduleClassFilter(visibleReservations, state, scheduleClassNames);
   const useMobileFeedLayout = list.dataset.reservationLayout === "mobile-feed";
 
   reservations.forEach((entry) => {
@@ -1315,6 +1400,7 @@ export function setupList(state, storage) {
   const tagFilters = document.querySelectorAll("[data-tag-filter]");
   const getRows = () => list.querySelectorAll("[data-reservation-row]");
   const selectAll = list.querySelector("[data-reservation-select-all]");
+  const scheduleClassFilterBar = document.querySelector("[data-school-class-count-filters]");
 
   const updateSelectAllState = () => {
     if (!(selectAll instanceof HTMLInputElement)) {
@@ -1440,6 +1526,20 @@ export function setupList(state, storage) {
   });
   tagFilters.forEach((filter) => {
     filter.addEventListener("change", handleTagFilterChange);
+  });
+  bindListCountFilterBar(scheduleClassFilterBar, (value) => {
+    const classNames = getScheduleClassNames(initClassStorage().ensureDefaults(), state);
+    const selected = getScheduleClassFilterSet(state, classNames);
+    if (value === SCHEDULE_CLASS_FILTER_ALL) {
+      state.selectedScheduleClassFilters = new Set(classNames);
+    } else if (selected.has(value)) {
+      selected.delete(value);
+      state.selectedScheduleClassFilters = selected.size > 0 ? selected : new Set([value]);
+    } else {
+      selected.add(value);
+      state.selectedScheduleClassFilters = selected;
+    }
+    refresh();
   });
   document.addEventListener("service-filter:change", refresh);
   document.addEventListener("teacher-filter:change", refresh);

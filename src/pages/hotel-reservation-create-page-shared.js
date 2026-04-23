@@ -870,26 +870,6 @@ export function setupHotelingReservationCreatePage({
           cell.disabled = true;
         }
 
-        const hasCheckin = summary.checkinKeys.has(dateKey);
-        const hasCheckout = summary.checkoutKeys.has(dateKey);
-        const appendMark = (kind, iconName, label) => {
-          const icon = document.createElement("img");
-          icon.className = `hoteling-calendar__mark hoteling-calendar__mark--${kind}`;
-          if (hasCheckin && hasCheckout) {
-            icon.classList.add("hoteling-calendar__mark--stacked");
-          }
-          icon.src = `${HOTELING_ASSET_PREFIX}${iconName}`;
-          icon.alt = label;
-          cell.appendChild(icon);
-        };
-
-        if (hasCheckout) {
-          appendMark("checkout", "iconCheckout.svg", "퇴실");
-        }
-        if (hasCheckin) {
-          appendMark("checkin", "iconCheckin.svg", "입실");
-        }
-
         grid.appendChild(cell);
       });
 

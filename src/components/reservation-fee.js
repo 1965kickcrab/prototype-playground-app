@@ -138,21 +138,6 @@ function buildWeekdayCountMap(dateKeys, timeZone) {
   return map;
 }
 
-function getHotelingWeekdayCount(weekdays, weekdayCounts, fallbackCount) {
-  if (!Array.isArray(weekdays) || weekdays.length === 0) {
-    const count = Math.max(Number(fallbackCount) || 0, 0);
-    return { count, matched: count > 0 };
-  }
-  if (!(weekdayCounts instanceof Map)) {
-    return { count: Math.max(Number(fallbackCount) || 0, 0), matched: false };
-  }
-  const count = weekdays.reduce(
-    (total, label) => total + (weekdayCounts.get(label) || 0),
-    0
-  );
-  return { count, matched: count > 0 };
-}
-
 function formatDaycareDurationLabel(durationMinutes) {
   const safeMinutes = Number(durationMinutes);
   if (!Number.isFinite(safeMinutes) || safeMinutes <= 0) {
@@ -334,7 +319,7 @@ export function renderHotelingFeeBreakdown({
       if (priceValue === null) {
         return;
       }
-      const weekdayResult = getHotelingWeekdayCount(
+      const weekdayResult = getWeekdayMatchCount(
         item?.weekdays,
         weekdayCounts,
         nightsCount

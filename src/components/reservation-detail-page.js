@@ -233,6 +233,18 @@ export function renderSchoolReservationDetailPage(root, options = {}) {
               `,
             })}
             ${getScheduleFieldMarkup({
+              label: "출석 상태",
+              displayAttr: "data-school-detail-status",
+              editMarkup: `
+                <div class="reservation-detail-page__chip-row" data-school-detail-status-options>
+                  <button class="filter-chip" type="button" data-school-detail-status-option="PLANNED">예약</button>
+                  <button class="filter-chip" type="button" data-school-detail-status-option="CHECKIN">등원</button>
+                  <button class="filter-chip" type="button" data-school-detail-status-option="CHECKOUT">하원</button>
+                  <button class="filter-chip" type="button" data-school-detail-status-option="ABSENT">결석</button>
+                </div>
+              `,
+            })}
+            ${getScheduleFieldMarkup({
               label: "이용 시간",
               displayAttr: "data-school-detail-time",
               rowAttr: 'data-school-detail-time-row hidden',

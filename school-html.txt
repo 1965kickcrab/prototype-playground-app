@@ -1,0 +1,69 @@
+
+    <section class="center-settings-form__section">
+      <label class="form-field form-field--full">
+        <span class="form-field__label">반 이름</span>
+        <input class="form-field__control" type="text" placeholder="예: 다이얼반" data-class-name>
+      </label>
+      <label class="form-field form-field--full">
+        <span class="form-field__label">담당</span>
+        <input class="form-field__control" type="text" placeholder="예: 김다이얼" data-class-teacher>
+      </label>
+      <div class="form-field form-field--full">
+        <span class="form-field__label">운영 요일</span>
+        <div class="class-form__weekday-stack">
+          <div class="form-field__chips"><button class="filter-chip" type="button" data-class-day="mon">월</button><button class="filter-chip" type="button" data-class-day="tue">화</button><button class="filter-chip" type="button" data-class-day="wed">수</button><button class="filter-chip" type="button" data-class-day="thu">목</button><button class="filter-chip" type="button" data-class-day="fri">금</button><button class="filter-chip" type="button" data-class-day="sat">토</button><button class="filter-chip" type="button" data-class-day="sun">일</button></div>
+          <label class="checkbox-inline">
+            <input type="checkbox" data-class-public-holiday>
+            <span>공휴일 휴무</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-field form-field--full form-field--time-row">
+        <label class="form-field">
+          <span class="form-field__label">시작 시간</span>
+          <input class="form-field__control" type="time" value="09:00" data-class-start>
+        </label>
+        <label class="form-field">
+          <span class="form-field__label">종료 시간</span>
+          <input class="form-field__control" type="time" value="18:00" data-class-end>
+        </label>
+      </div>
+      <label class="form-field form-field--full">
+        <span class="form-field__label">반 설명</span>
+        <textarea class="form-field__control" rows="4" placeholder="반 특징을 입력해주세요." data-class-description></textarea>
+      </label>
+    </section>
+
+    <section class="center-settings-form__section">
+      <label class="form-field form-field--full">
+        <span class="form-field__label">정원</span>
+        <input class="form-field__control" type="number" min="1" placeholder="0" data-class-capacity>
+      </label>
+      <div class="form-field form-field--full" data-class-members-section>
+        <div class="class-member-stack settings-selection-stack">
+          <div class="form-field__label form-field__label--row">
+            <span>소속 회원</span>
+            <span class="class-member-actions settings-selection-actions">
+              <span class="class-member-count settings-selection-count" data-class-member-count>0마리</span>
+              <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-member-select-all>전체 선택</button>
+            </span>
+          </div>
+          <div class="class-member-list settings-selection-list settings-selection-list--members" data-class-members></div>
+        </div>
+      </div>
+      <div class="form-field form-field--full" data-class-tickets-section>
+        <div class="class-ticket-stack settings-selection-stack">
+          <div class="form-field__label form-field__label--row">
+            <span>예약 가능한 이용권</span>
+            <span class="class-ticket-actions settings-selection-actions">
+              <span class="class-ticket-count settings-selection-count" data-class-ticket-count>0개</span>
+              <button class="button-secondary button-secondary--small select-all-button" type="button" data-class-ticket-select-all>전체 선택</button>
+            </span>
+          </div>
+          <div class="class-ticket-list settings-selection-list settings-selection-list--tickets" data-class-tickets></div>
+        </div>
+      </div>
+    </section>
+
+    
+  

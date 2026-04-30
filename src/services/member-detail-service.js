@@ -1,5 +1,14 @@
 import { getMemberPhone, getMemberReservableCount } from "./member-page-service.js";
 import { sanitizeTagList } from "../utils/tags.js";
+import {
+  getConsentStatusMeta,
+  getMemberHealthStatusMeta,
+  MEMBER_VACCINATION_FIELDS,
+  normalizeConsentAttachments,
+  normalizeMemberHealthDate,
+  normalizeMemberHealthStatus,
+  normalizeVaccinations,
+} from "../utils/member-health.js";
 
 const RESERVABLE_COUNT_TYPES = ["school", "daycare", "hoteling", "oneway", "roundtrip"];
 
@@ -31,6 +40,29 @@ export function buildMemberDetailViewModel(member) {
   const siblingDogs = Array.isArray(member?.siblings)
     ? member.siblings
     : [];
+  const consentStatus = normalizeMemberHealthStatus(member?.consentStatus);
+  const consentConfirmedDate = normalizeMemberHealthDate(member?.consentConfirmedDate);
+  const consentAttachments = normalizeConsentAttachments(member?.consentAttachments);
+  const vaccinations = normalizeVaccinations(member?.vaccinations);
+  const consentMeta = getConsentStatusMeta(consentStatus);
+  const vaccinationRows = MEMBER_VACCINATION_FIELDS.map((field) => {
+    const record = vaccinations[field.key];
+    const statusMeta = getMemberHealthStatusMeta(record?.status);
+    return {
+      key: field.key,
+      label: field.label,
+      status: normalizeMemberHealthStatus(record?.status),
+      statusLabel: statusMeta.text,
+      tone: statusMeta.tone,
+      confirmedDate: valueOrDash(record?.confirmedDate),
+    };
+  });
+  const completedVaccinationCount = vaccinationRows.filter((item) => item.status === "completed").length;
+  const overallVaccinationStatus = completedVaccinationCount === 0
+    ? { text: "미완료", tone: "member-detail__ticket-status--danger" }
+    : completedVaccinationCount === vaccinationRows.length
+      ? { text: "완료", tone: "member-detail__ticket-status--success" }
+      : { text: "일부 완료", tone: "member-detail__ticket-status--primary" };
 
   return {
     id: valueOrDash(member?.id),
@@ -48,6 +80,15 @@ export function buildMemberDetailViewModel(member) {
     weight: valueOrDash(member?.weight),
     gender: valueOrDash(member?.gender),
     neuteredStatus: valueOrDash(member?.neuteredStatus),
+    consent: {
+      status: consentStatus,
+      statusLabel: consentMeta.text,
+      tone: consentMeta.tone,
+      confirmedDate: valueOrDash(consentConfirmedDate),
+      attachments: consentAttachments,
+    },
+    overallVaccinationStatus,
+    vaccinations: vaccinationRows,
     ownerTags: sanitizeTagList(member?.ownerTags),
     petTags: sanitizeTagList(member?.petTags),
     reservableCountByType: buildReservableCountByType(

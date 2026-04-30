@@ -45,15 +45,15 @@ export function setupHotelingCalendar(options = {}) {
       selectedDate: state.selectedDate,
       todayDate: now,
       formatCurrentLabel: formatCurrentLabel || undefined,
-      renderCellContent: ({ cell, cellData, dateKey }) => {
+      renderCellContent: ({ statusSlot, cellData, dateKey }) => {
         const stats = getDateStats ? getDateStats(dateKey) : null;
         const totalCount = Number(stats?.total) || 0;
         const isDayoff = !cellData.muted && isDayoffDate(dateKey, dayoffSettings, timeZone);
         if (!cellData.muted && totalCount > 0) {
-          cell.appendChild(createCalendarStatusDot("reservation"));
+          statusSlot.appendChild(createCalendarStatusDot("reservation"));
         }
         if (isDayoff) {
-          cell.appendChild(createCalendarDayoffTag(totalCount));
+          statusSlot.appendChild(createCalendarDayoffTag(totalCount));
         } else if (totalCount > 0) {
           const counts = document.createElement("div");
           counts.className = "hoteling-calendar__counts";
@@ -93,7 +93,7 @@ export function setupHotelingCalendar(options = {}) {
             counts.appendChild(rows);
           }
 
-          cell.appendChild(counts);
+          statusSlot.appendChild(counts);
         }
       },
     });

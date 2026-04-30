@@ -43,6 +43,10 @@ import {
   bindListCountFilterBar,
   renderListCountFilterBar,
 } from "./list-count-filter-bar.js";
+import {
+  resolveAttendanceStatusTimeValues,
+  shouldClearAttendanceTimes,
+} from "../services/attendance-status-service.js";
 
 const STATUS_CLASSES = [
   "list-table__status--primary",
@@ -59,10 +63,10 @@ const PICKDROP_TYPES = {
 };
 
 const STATUS_MENU_ORDER = ["PLANNED", "CHECKIN", "CHECKOUT", "ABSENT", "CANCELED"];
-const STATUSES_WITHOUT_TIMES = new Set(["PLANNED", "ABSENT"]);
 
 const SERVICE_RESERVATION_TYPES = new Set(["school", "daycare", "pickdrop"]);
 const SCHEDULE_CLASS_FILTER_ALL = "all";
+const SCHEDULE_STATUS_FILTER_ALL = "ALL";
 
 const filterSchoolReservations = (reservations) =>
   (Array.isArray(reservations) ? reservations : []).filter(
@@ -189,16 +193,6 @@ function formatSubtitleDate(date) {
     return "";
   }
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
-}
-
-function getCurrentTimeString(timeZone) {
-  const formatter = new Intl.DateTimeFormat("ko-KR", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  return formatter.format(new Date());
 }
 
 const TARGET_TO_BASE_STATUS = {
@@ -450,7 +444,7 @@ function getActiveTags(state) {
 }
 
 function updateListCounts(list, visibleEntries, storage) {
-  const countSpan = list.querySelector(".list-card__title .text-primary");
+  const countSpan = list.querySelector("[data-school-total-count]");
   if (countSpan) {
     const count = (Array.isArray(visibleEntries) ? visibleEntries : []).filter(
       (entry) => !isReservationEntryCanceled(entry, storage)
@@ -491,6 +485,9 @@ function getVisibleReservationEntries(entries, state, storage, members, options 
     ? Boolean(options.includeCanceled)
     : false;
   const ignoreServiceFilter = Boolean(options?.ignoreServiceFilter);
+  const activeStatus = String(state?.selectedScheduleStatusFilter || SCHEDULE_STATUS_FILTER_ALL)
+    .trim()
+    .toUpperCase();
 
   return (Array.isArray(entries) ? entries : []).filter((entry) => {
     const dateKey = formatDateKey(entry?.date);
@@ -518,7 +515,27 @@ function getVisibleReservationEntries(entries, state, storage, members, options 
     if (!includeCanceled && isReservationEntryCanceled(entry, storage)) {
       return false;
     }
+    if (activeStatus !== SCHEDULE_STATUS_FILTER_ALL) {
+      const statusKey = String(entry?.baseStatusKey || "").trim().toUpperCase();
+      if (statusKey !== activeStatus) {
+        return false;
+      }
+    }
     return true;
+  });
+}
+
+function syncScheduleStatusFilters(container, selectedStatus) {
+  if (!(container instanceof HTMLElement)) {
+    return;
+  }
+  container.querySelectorAll("[data-school-status-filter]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const isSelected = String(button.dataset.schoolStatusFilter || "").trim().toUpperCase()
+      === String(selectedStatus || SCHEDULE_STATUS_FILTER_ALL).trim().toUpperCase();
+    button.classList.toggle("is-selected", isSelected);
   });
 }
 
@@ -1163,35 +1180,8 @@ function applySelectedStatus(row, selectedKey) {
   return nextState;
 }
 
-function shouldClearTimesForStatus(statusKey) {
-  return STATUSES_WITHOUT_TIMES.has(String(statusKey || "").trim().toUpperCase());
-}
-
-function resolveStatusTimeValues(statusKey, timeZone, current = {}) {
-  if (shouldClearTimesForStatus(statusKey) || statusKey === "CANCELED") {
-    return {
-      checkinTime: "",
-      checkoutTime: "",
-    };
-  }
-
-  const nextTimes = {
-    checkinTime: current.checkinTime || "",
-    checkoutTime: current.checkoutTime || "",
-  };
-
-  if (statusKey === "CHECKIN" && !nextTimes.checkinTime) {
-    nextTimes.checkinTime = getCurrentTimeString(timeZone);
-  }
-  if (statusKey === "CHECKOUT" && !nextTimes.checkoutTime) {
-    nextTimes.checkoutTime = getCurrentTimeString(timeZone);
-  }
-
-  return nextTimes;
-}
-
 function applyRowStatusTimeDatasets(row, statusKey, timeZone) {
-  const nextTimes = resolveStatusTimeValues(statusKey, timeZone, {
+  const nextTimes = resolveAttendanceStatusTimeValues(statusKey, timeZone, {
     checkinTime: row?.dataset?.checkinTime || "",
     checkoutTime: row?.dataset?.checkoutTime || "",
   });
@@ -1241,7 +1231,7 @@ function syncReservationRow(row, state, storage) {
   }
 
   const baseStatusKey = row.dataset.baseStatus || "PLANNED";
-  const shouldClearTimes = shouldClearTimesForStatus(baseStatusKey);
+  const shouldClearTimes = shouldClearAttendanceTimes(baseStatusKey);
   const checkinTime = shouldClearTimes ? "" : (row.dataset.checkinTime || "");
   const checkoutTime = shouldClearTimes ? "" : (row.dataset.checkoutTime || "");
 
@@ -1401,6 +1391,11 @@ export function setupList(state, storage) {
   const getRows = () => list.querySelectorAll("[data-reservation-row]");
   const selectAll = list.querySelector("[data-reservation-select-all]");
   const scheduleClassFilterBar = document.querySelector("[data-school-class-count-filters]");
+  const scheduleStatusFilters = document.querySelector("[data-school-status-filters]");
+
+  if (!state.selectedScheduleStatusFilter) {
+    state.selectedScheduleStatusFilter = SCHEDULE_STATUS_FILTER_ALL;
+  }
 
   const updateSelectAllState = () => {
     if (!(selectAll instanceof HTMLInputElement)) {
@@ -1437,6 +1432,7 @@ export function setupList(state, storage) {
     renderReservations(list, storage, state, dayoffSettings, timeZone);
     updateSubtitle(list, state, dayoffSettings, timeZone);
     updateSelectAllState();
+    syncScheduleStatusFilters(scheduleStatusFilters, state.selectedScheduleStatusFilter);
   };
 
   const handleClassFilterChange = (event) => {
@@ -1513,6 +1509,19 @@ export function setupList(state, storage) {
     document.dispatchEvent(new CustomEvent("tag-filter:change"));
     refresh();
   };
+  const handleScheduleStatusFilterClick = (event) => {
+    const button = event.target instanceof HTMLElement
+      ? event.target.closest("[data-school-status-filter]")
+      : null;
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const nextValue = String(
+      button.dataset.schoolStatusFilter || SCHEDULE_STATUS_FILTER_ALL
+    ).trim().toUpperCase() || SCHEDULE_STATUS_FILTER_ALL;
+    state.selectedScheduleStatusFilter = nextValue;
+    refresh();
+  };
   classFilters.forEach((filter) => {
     filter.addEventListener("change", handleClassFilterChange);
   });
@@ -1520,6 +1529,7 @@ export function setupList(state, storage) {
   teacherFilters.forEach((filter) => {
     filter.addEventListener("change", handleTeacherFilterChange);
   });
+  scheduleStatusFilters?.addEventListener("click", handleScheduleStatusFilterClick);
 
   paymentFilters.forEach((filter) => {
     filter.addEventListener("change", handlePaymentFilterChange);

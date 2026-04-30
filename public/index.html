@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
@@ -163,30 +163,41 @@
           <div class="calendar__grid" data-calendar-grid></div>
         </div>
         <section class="list-card list-card--home-mobile" data-reservation-list data-reservation-layout="mobile-feed">
-            <div class="list-card__header">
-              <div class="list-card__meta">
-                <div class="list-card-date">4월 6일 <span class="text-accent">(휴무)</span></div>
-                <div class="list-card__title-row">
-                  <div class="list-card__title">예약 <span class="text-primary">0</span></div>
-                  <button class="button-neutral" data-pickdrop-open hidden>픽드랍 목록</button>
+          <div class="list-card__header">
+            <div class="list-card__meta">
+              <div class="list-card__title-row">
+                <div class="list-card__title-group">
+                  <div class="list-card-date">4월 6일 <span class="text-accent">(휴무)</span></div>
+                  <div class="list-card__status-filters" data-school-status-filters>
+                    <button class="filter-chip is-selected" type="button" data-school-status-filter="ALL">전체</button>
+                    <button class="filter-chip" type="button" data-school-status-filter="PLANNED">예약</button>
+                    <button class="filter-chip" type="button" data-school-status-filter="CHECKIN">등원</button>
+                    <button class="filter-chip" type="button" data-school-status-filter="CHECKOUT">하원</button>
+                    <button class="filter-chip" type="button" data-school-status-filter="ABSENT">결석</button>
+                    <button class="icon-button icon-button--secondary" type="button" data-attendance-open aria-label="출석부 열기">
+                      <img src="../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+                    </button>
+                  </div>
                 </div>
-                <div class="list-card__count-filters list-card__count-filters--scroll" data-school-class-count-filters></div>
               </div>
+              <button class="button-neutral" data-pickdrop-open hidden>픽드랍 목록</button>
+              <div class="list-card__count-filters list-card__count-filters--scroll" data-school-class-count-filters></div>
             </div>
-              <div class="list-table list-table--reservation" role="table" aria-label="예약 목록">
-                <div class="list-table__header" role="row">
-                  <span role="columnheader" class="list-table__check-cell"><input type="checkbox" aria-label="전체 선택" data-reservation-select-all></span>
-                  <span role="columnheader">클래스</span>
-                  <span role="columnheader">픽드랍</span>
-                  <span role="columnheader">상태</span>
-                  <span role="columnheader">반려견</span>
-                  <span role="columnheader">이용 시간</span>
-                  <span role="columnheader">메모</span>
-                  <span role="columnheader" class="list-table__more-header"></span>
-                </div>
-              <div class="list-table__body" data-reservation-rows></div>
+          </div>
+          <div class="list-table list-table--reservation" role="table" aria-label="예약 목록">
+            <div class="list-table__header" role="row">
+              <span role="columnheader" class="list-table__check-cell"><input type="checkbox" aria-label="전체 선택" data-reservation-select-all></span>
+              <span role="columnheader">클래스</span>
+              <span role="columnheader">픽드랍</span>
+              <span role="columnheader">상태</span>
+              <span role="columnheader">반려견</span>
+              <span role="columnheader">이용 시간</span>
+              <span role="columnheader">메모</span>
+              <span role="columnheader" class="list-table__more-header"></span>
             </div>
-          </section>
+            <div class="list-table__body" data-reservation-rows></div>
+          </div>
+        </section>
       </section>
       </div>
       <div class="modal" data-pickdrop-modal aria-hidden="true">
@@ -477,5 +488,3 @@
   <script type="module" src="../src/pages/main.js?v=20260225-1"></script>
 </body>
 </html>
-
-

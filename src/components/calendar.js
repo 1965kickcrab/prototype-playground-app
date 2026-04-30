@@ -110,22 +110,22 @@ export function setupCalendar(state, storage) {
       currentDate: state.currentDate,
       selectedDate: state.selectedDate,
       todayDate: today,
-      renderCellContent: ({ cell, cellData, dateKey }) => {
+      renderCellContent: ({ statusSlot, cellData, dateKey }) => {
         const count = reservationCounts.get(dateKey) || 0;
         if (!cellData.muted) {
           const isDayoff = isDayoffDate(dateKey, dayoffSettings, timeZone);
           if (count > 0) {
-            cell.appendChild(createCalendarStatusDot("reservation"));
+            statusSlot.appendChild(createCalendarStatusDot("reservation"));
           } else if (isDayoff) {
-            cell.appendChild(createCalendarStatusDot("dayoff"));
+            statusSlot.appendChild(createCalendarStatusDot("dayoff"));
           }
           if (isDayoff) {
-            cell.appendChild(createCalendarDayoffTag(count));
+            statusSlot.appendChild(createCalendarDayoffTag(count));
           } else if (count > 0) {
             const tag = document.createElement("span");
             tag.className = "calendar__reservation-count";
             tag.textContent = `예약 ${count}건`;
-            cell.appendChild(tag);
+            statusSlot.appendChild(tag);
           }
         }
       },

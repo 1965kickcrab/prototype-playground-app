@@ -72,6 +72,19 @@ export function createCalendarDateLabel(day) {
   return dateLabel;
 }
 
+export function createCalendarCellDateSlot(day) {
+  const slot = document.createElement("div");
+  slot.className = "calendar__date-slot";
+  slot.appendChild(createCalendarDateLabel(day));
+  return slot;
+}
+
+export function createCalendarCellStatusSlot() {
+  const slot = document.createElement("div");
+  slot.className = "calendar__status";
+  return slot;
+}
+
 export function createCalendarStatusDot(type = "reservation") {
   const dot = document.createElement("span");
   dot.className = `calendar__status-dot calendar__status-dot--${type}`;
@@ -133,10 +146,15 @@ export function renderSharedCalendarMonth({
       cell.classList.add("calendar__cell--selected");
     }
 
-    cell.appendChild(createCalendarDateLabel(cellData.day));
+    const dateSlot = createCalendarCellDateSlot(cellData.day);
+    const statusSlot = createCalendarCellStatusSlot();
+    cell.appendChild(dateSlot);
+    cell.appendChild(statusSlot);
     if (typeof renderCellContent === "function") {
       renderCellContent({
         cell,
+        dateSlot,
+        statusSlot,
         cellData,
         dateKey,
         isToday: dateKey === todayKey && !cellData.muted,

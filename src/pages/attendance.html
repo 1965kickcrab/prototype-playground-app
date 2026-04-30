@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>다이얼독 비즈 - 출석부</title>
+  <link rel="stylesheet" href="../../styles/base.css">
+  <link rel="stylesheet" href="../../styles/layout.css">
+  <link rel="stylesheet" href="../../styles/components.css">
+</head>
+<body>
+  <div class="app">
+    <main class="main">
+      <div class="attendance-page">
+        <header class="reservation-detail-page__nav attendance-page__nav">
+          <button
+            class="icon-button icon-button--secondary reservation-detail-page__back"
+            type="button"
+            data-attendance-back
+            aria-label="뒤로가기"
+          >
+            <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
+          </button>
+          <h1>출석부</h1>
+          <span class="attendance-page__nav-spacer" aria-hidden="true"></span>
+        </header>
+
+        <div class="attendance-page__body">
+          <section class="attendance-page__date-panel">
+            <div class="attendance-page__toolbar">
+              <div class="attendance-page__date-header">
+                <button class="month-button" type="button" data-attendance-prev aria-label="이전 날짜">
+                  <img class="month-button__icon" src="../../assets/iconChevronLeft.svg" alt="" aria-hidden="true">
+                </button>
+                <button class="attendance-page__date-trigger" type="button" data-attendance-date-trigger aria-label="출석 날짜 선택">
+                  <strong data-attendance-date-label>-</strong>
+                </button>
+                <button class="month-button" type="button" data-attendance-next aria-label="다음 날짜">
+                  <img class="month-button__icon" src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+                </button>
+              </div>
+            </div>
+            <input type="date" data-attendance-date-input aria-label="출석 날짜 선택" hidden>
+          </section>
+          <section class="attendance-page__filters" data-attendance-status-filters>
+            <button class="filter-chip is-selected" type="button" data-attendance-filter="ALL">전체</button>
+            <button class="filter-chip" type="button" data-attendance-filter="PLANNED">예약</button>
+            <button class="filter-chip" type="button" data-attendance-filter="CHECKIN">등원</button>
+            <button class="filter-chip" type="button" data-attendance-filter="CHECKOUT">하원</button>
+            <button class="filter-chip" type="button" data-attendance-filter="ABSENT">결석</button>
+          </section>
+
+          <section class="attendance-page__list" data-attendance-list></section>
+          <section class="attendance-page__empty" data-attendance-empty hidden>
+            <h2>출석 대상이 없습니다.</h2>
+            <p>선택한 날짜에 처리할 유치원/데이케어 예약이 없습니다.</p>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="./attendance-page.js"></script>
+</body>
+</html>

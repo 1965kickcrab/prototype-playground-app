@@ -52,6 +52,13 @@ These are the high-risk surfaces where agents must verify the real usage path be
 - Shared detail helpers: `src/pages/reservation-detail-page-shared.js`
 - Authority decision: the school list routes detail into the dedicated page; the old home detail modal path was removed
 
+### School Attendance Sheet
+- Entrypoint: `src/pages/attendance.html`
+- Page controller: `src/pages/attendance-page.js`
+- Shared status logic: `src/services/attendance-status-service.js`
+- Source entry: `public/index.html` routes the selected school date into this page with `dateKey`
+- Authority decision: the attendance page is the dedicated mobile day view for school/daycare attendance status updates; it reuses the reservation storage path instead of creating a separate attendance store
+
 ### Hoteling Reservation Entry
 - Entrypoint: `src/pages/hotels.html`
 - Page controller: `src/pages/hotels.js`

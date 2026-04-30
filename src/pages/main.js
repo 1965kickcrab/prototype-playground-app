@@ -71,7 +71,26 @@ document.addEventListener("DOMContentLoaded", () => {
       state.selectedDate = new Date(parsedDate);
     }
   }
+  const formatDateKey = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return "";
+    }
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
   const filterPanel = document.querySelector("[data-filter-panel]");
+  const attendanceButton = document.querySelector("[data-attendance-open]");
+
+  attendanceButton?.addEventListener("click", () => {
+    const targetUrl = new URL("../src/pages/attendance.html", window.location.href);
+    const dateKey = formatDateKey(state.selectedDate || state.currentDate || new Date());
+    if (dateKey) {
+      targetUrl.searchParams.set("dateKey", dateKey);
+    }
+    window.location.href = targetUrl.toString();
+  });
 
   setupFilterPanel(filterPanel, classes, state);
   setupCalendar(state, storage);

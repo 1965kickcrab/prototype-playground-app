@@ -7,13 +7,31 @@ import { renderMemberTagChips } from "./member-tags.js";
 function createReservableText(count) {
   const text = document.createElement("span");
   text.className = "member-list__reservable";
+
+  const label = document.createElement("span");
+  label.className = "member-list__reservable-label";
+
+  const value = document.createElement("strong");
+  value.className = "member-list__reservable-value";
+  const isLowAvailability = count <= 2;
+
   if (count < 0) {
     text.classList.add("is-over");
-    text.textContent = formatReservableCountText(count);
+    label.textContent = "초과 예약";
+    value.textContent = `${Math.abs(count)}회`;
+    text.appendChild(label);
+    text.appendChild(value);
     return text;
   }
+
   text.classList.add("is-available");
-  text.textContent = `예약 가능 ${formatReservableCountText(count)}`;
+  if (isLowAvailability) {
+    text.classList.add("is-over");
+  }
+  label.textContent = "예약 가능";
+  value.textContent = formatReservableCountText(count);
+  text.appendChild(label);
+  text.appendChild(value);
   return text;
 }
 
@@ -58,7 +76,6 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
   breed.className = "member-list__breed";
   breed.textContent = member?.breed || "-";
   headline.appendChild(breed);
-  headline.appendChild(createReservableText(count));
 
   const labels = document.createElement("span");
   labels.className = "member-list__labels";
@@ -78,6 +95,7 @@ function createRow(member, activeReservationCountsByMemberType = null, selectedM
   textWrap.appendChild(headline);
   textWrap.appendChild(labels);
   row.appendChild(textWrap);
+  row.appendChild(createReservableText(count));
   row.appendChild(createChevron());
   return row;
 }

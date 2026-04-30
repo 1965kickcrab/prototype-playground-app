@@ -12,6 +12,11 @@ export const PET_EDIT_ACTIONS_MARKUP = `
   <button class="primary-button member-edit-modal__submit-disabled" type="button" data-member-detail-edit-save disabled>수정</button>
 `;
 
+export const MEMBER_HEALTH_ACTIONS_MARKUP = `
+  <button class="button-secondary" type="button" data-member-health-cancel>취소</button>
+  <button class="primary-button" type="button" data-member-health-save disabled>저장</button>
+`;
+
 export function buildGuardianFieldsMarkup({ owner = "", phone = "" } = {}) {
   return `
     <div class="member-edit-modal__alert">
@@ -188,6 +193,77 @@ export function buildPetFieldsMarkup({
               </span>
             </label>
           </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+export function buildConsentFieldsMarkup({
+  confirmedDate = "",
+  attachments = [],
+} = {}) {
+  const attachmentList = Array.isArray(attachments) ? attachments : [];
+  return `
+    <div class="member-health-sheet">
+      <section class="member-health-sheet__section">
+        <div class="member-health-sheet__field">
+          <label class="pet-edit-modal__field-label" for="member-detail-consent-date">제출 날짜</label>
+          <input class="form-field__control member-health-sheet__date" id="member-detail-consent-date" type="date" value="${confirmedDate}">
+        </div>
+        <div class="member-health-sheet__field">
+          <label class="pet-edit-modal__field-label" for="member-detail-consent-file">파일 첨부</label>
+          <label class="member-health-sheet__upload" for="member-detail-consent-file">
+            <input id="member-detail-consent-file" type="file" data-member-consent-file hidden multiple>
+            <span class="member-health-sheet__upload-copy">
+              <strong>파일을 선택해 주세요.</strong>
+              <span>첨부 파일이 있으면 상태가 자동으로 제출로 변경됩니다.</span>
+            </span>
+            <span class="button-secondary member-health-sheet__upload-button">파일 추가</span>
+          </label>
+          <div class="member-health-sheet__attachments" data-member-consent-attachments>
+            ${attachmentList.length ? attachmentList.map((attachment) => `
+              <div class="member-health-sheet__attachment" data-member-consent-attachment="${attachment.id}">
+                <span>${attachment.name}</span>
+                <button type="button" data-member-consent-attachment-remove="${attachment.id}" aria-label="첨부 파일 삭제">삭제</button>
+              </div>
+            `).join("") : `<p class="member-health-sheet__empty">첨부된 파일이 없습니다.</p>`}
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+export function buildVaccinationFieldsMarkup({ vaccinations = [] } = {}) {
+  return `
+    <div class="member-health-sheet member-health-sheet--vaccination">
+      <section class="pet-edit-modal__section">
+        <div class="pet-edit-modal__vaccination-list">
+          ${vaccinations.map((vaccination) => `
+            <div class="pet-edit-modal__vaccination-item">
+              <div class="pet-edit-modal__vaccination-title">${vaccination.label}</div>
+              <button
+                class="pet-edit-modal__vaccination-toggle ${vaccination.status === "completed" ? "is-active" : ""}"
+                type="button"
+                data-member-vaccination-toggle="${vaccination.key}"
+                data-member-vaccination-status="${vaccination.status}"
+                aria-pressed="${vaccination.status === "completed" ? "true" : "false"}"
+                aria-label="${vaccination.label} ${vaccination.status === "completed" ? "완료" : "미완료"}"
+              >
+                <span class="pet-edit-modal__vaccination-toggle-track" aria-hidden="true">
+                  <span class="pet-edit-modal__vaccination-toggle-thumb"></span>
+                </span>
+                <span class="pet-edit-modal__visually-hidden">${vaccination.status === "completed" ? "완료" : "미완료"}</span>
+              </button>
+              <input
+                class="form-field__control pet-edit-modal__health-date"
+                type="date"
+                value="${vaccination.confirmedDate}"
+                data-member-vaccination-date="${vaccination.key}"
+              >
+            </div>
+          `).join("")}
         </div>
       </section>
     </div>

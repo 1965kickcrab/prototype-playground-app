@@ -19,6 +19,8 @@ import { initTagInput } from "../components/tag-input.js";
 import {
   buildGuardianFieldsMarkup,
   buildPetFieldsMarkup,
+  buildConsentFieldsMarkup,
+  buildVaccinationFieldsMarkup,
   GUARDIAN_EDIT_ACTIONS_MARKUP,
   PET_EDIT_ACTIONS_MARKUP,
 } from "../components/member-detail-edit-templates.js";
@@ -42,6 +44,13 @@ import {
   buildTicketCardValidityLabel,
   buildTicketHistoryRows,
 } from "../services/member-ticket-usage-detail-service.js";
+import {
+  MEMBER_VACCINATION_FIELDS,
+  normalizeConsentAttachments,
+  normalizeMemberHealthDate,
+  normalizeMemberHealthStatus,
+  normalizeVaccinations,
+} from "../utils/member-health.js";
 
 const MEMBER_MEMO_EMPTY_TEXT = "작성한 메모가 없습니다.";
 const MEMBER_DETAIL_TICKET_BATCH_SIZE = 4;
@@ -128,6 +137,14 @@ function buildBirthDateValue(year, month, day) {
     return `${y}-${mm}`;
   }
   return y;
+}
+
+function getTodayDateInputValue() {
+  const today = new Date();
+  const year = String(today.getFullYear());
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getAgeTextFromBirthDate(value) {
@@ -251,6 +268,73 @@ function buildPetPatchFromState(petFormState, tags) {
     gender: current.gender || "",
     neuteredStatus: current.neuteredStatus || "",
   };
+}
+
+function createConsentAttachmentMetadata(file, fallbackId) {
+  if (!(file instanceof File)) {
+    return null;
+  }
+  const name = String(file.name || "").trim();
+  if (!name) {
+    return null;
+  }
+  return {
+    id: `${name}-${file.lastModified || Date.now()}-${fallbackId}`,
+    name,
+    size: Number(file.size) || 0,
+    type: String(file.type || "").trim(),
+  };
+}
+
+function getConsentFormState(container, attachments = []) {
+  if (!container) {
+    return {
+      consentStatus: "pending",
+      consentConfirmedDate: "",
+      consentAttachments: [],
+    };
+  }
+  const dateInput = container.querySelector("#member-detail-consent-date");
+  const normalizedAttachments = normalizeConsentAttachments(attachments);
+  return {
+    consentStatus: normalizedAttachments.length > 0 ? "completed" : "pending",
+    consentConfirmedDate: dateInput instanceof HTMLInputElement
+      ? normalizeMemberHealthDate(dateInput.value)
+      : "",
+    consentAttachments: normalizedAttachments,
+  };
+}
+
+function hasConsentStateChanged(member, formState) {
+  const current = formState || {};
+  return (
+    normalizeMemberHealthStatus(current.consentStatus) !== normalizeMemberHealthStatus(member?.consentStatus)
+    || normalizeMemberHealthDate(current.consentConfirmedDate) !== normalizeMemberHealthDate(member?.consentConfirmedDate)
+    || JSON.stringify(normalizeConsentAttachments(current.consentAttachments)) !== JSON.stringify(normalizeConsentAttachments(member?.consentAttachments))
+  );
+}
+
+function getVaccinationFormState(container) {
+  const vaccinations = MEMBER_VACCINATION_FIELDS.reduce((accumulator, field) => {
+    const toggleButton = container?.querySelector(`[data-member-vaccination-toggle="${field.key}"]`);
+    const dateInput = container?.querySelector(`[data-member-vaccination-date="${field.key}"]`);
+    const confirmedDate = dateInput instanceof HTMLInputElement
+      ? normalizeMemberHealthDate(dateInput.value)
+      : "";
+    const status = toggleButton instanceof HTMLButtonElement
+      ? normalizeMemberHealthStatus(toggleButton.dataset.memberVaccinationStatus)
+      : "pending";
+    accumulator[field.key] = {
+      status,
+      confirmedDate,
+    };
+    return accumulator;
+  }, {});
+  return { vaccinations };
+}
+
+function hasVaccinationStateChanged(member, formState) {
+  return JSON.stringify(normalizeVaccinations(formState?.vaccinations)) !== JSON.stringify(normalizeVaccinations(member?.vaccinations));
 }
 
 function initMemberDetailEditModal({ modal, onSaved } = {}) {
@@ -486,6 +570,241 @@ function initMemberDetailEditModal({ modal, onSaved } = {}) {
   };
 }
 
+function initMemberConsentModal({ modal, onSaved } = {}) {
+  if (!modal) {
+    return null;
+  }
+  const overlay = modal.querySelector("[data-member-consent-overlay]");
+  const closeButton = modal.querySelector("[data-member-consent-close]");
+  const fieldsEl = modal.querySelector("[data-member-consent-fields]");
+
+  const state = {
+    memberId: "",
+    member: null,
+    attachments: [],
+  };
+
+  const closeModal = () => {
+    modal.classList.remove("is-open", "member-health-modal");
+    modal.setAttribute("aria-hidden", "true");
+    state.attachments = [];
+    state.member = null;
+    state.memberId = "";
+  };
+
+  const renderAttachments = () => {
+    const wrap = fieldsEl?.querySelector("[data-member-consent-attachments]");
+    if (!(wrap instanceof HTMLElement)) {
+      return;
+    }
+    const attachments = normalizeConsentAttachments(state.attachments);
+    wrap.innerHTML = attachments.length
+      ? attachments.map((attachment) => `
+        <div class="member-health-sheet__attachment" data-member-consent-attachment="${escapeHtml(attachment.id)}">
+          <span>${escapeHtml(attachment.name)}</span>
+          <button type="button" data-member-consent-attachment-remove="${escapeHtml(attachment.id)}" aria-label="첨부 파일 삭제">삭제</button>
+        </div>
+      `).join("")
+      : `<p class="member-health-sheet__empty">첨부된 파일이 없습니다.</p>`;
+  };
+
+  const syncStatusHint = () => {
+    const currentState = getConsentFormState(fieldsEl, state.attachments);
+    const hasAttachments = currentState.consentAttachments.length > 0;
+    modal.classList.toggle("is-consent-completed", hasAttachments);
+  };
+
+  const render = () => {
+    const attachmentList = normalizeConsentAttachments(state.member?.consentAttachments);
+    state.attachments = attachmentList.slice();
+    fieldsEl.innerHTML = buildConsentFieldsMarkup({
+      confirmedDate: escapeHtml(normalizeMemberHealthDate(state.member?.consentConfirmedDate)),
+      attachments: attachmentList,
+    });
+    renderAttachments();
+    syncStatusHint();
+  };
+
+  const openModal = (member) => {
+    state.memberId = String(member?.id || "");
+    state.member = member;
+    render();
+    modal.classList.add("is-open", "member-health-modal");
+    modal.setAttribute("aria-hidden", "false");
+  };
+
+  overlay?.addEventListener("click", closeModal);
+  closeButton?.addEventListener("click", closeModal);
+  const persistConsentState = () => {
+    const patch = getConsentFormState(fieldsEl, state.attachments);
+    const updated = updateIssueMember(state.memberId, patch);
+    if (updated && typeof onSaved === "function") {
+      onSaved(updated);
+    }
+  };
+  fieldsEl?.addEventListener("change", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (target.matches("[data-member-consent-file]")) {
+      const nextAttachments = Array.from(target.files || [])
+        .map((file, index) => createConsentAttachmentMetadata(file, index))
+        .filter(Boolean);
+      state.attachments = normalizeConsentAttachments([
+        ...state.attachments,
+        ...nextAttachments,
+      ]);
+      target.value = "";
+      renderAttachments();
+      syncStatusHint();
+      persistConsentState();
+      return;
+    }
+    persistConsentState();
+  });
+  fieldsEl?.addEventListener("click", (event) => {
+    const button = event.target instanceof HTMLElement
+      ? event.target.closest("[data-member-consent-attachment-remove]")
+      : null;
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+    const attachmentId = button.dataset.memberConsentAttachmentRemove || "";
+    state.attachments = state.attachments.filter((item) => item.id !== attachmentId);
+    renderAttachments();
+    syncStatusHint();
+    persistConsentState();
+  });
+  fieldsEl?.addEventListener("input", () => {
+    syncStatusHint();
+    persistConsentState();
+  });
+
+  return {
+    openModalWithMember(member) {
+      if (!member) {
+        return;
+      }
+      openModal(member);
+    },
+  };
+}
+
+function initMemberVaccinationModal({ modal, onSaved } = {}) {
+  if (!modal) {
+    return null;
+  }
+  const overlay = modal.querySelector("[data-member-vaccination-overlay]");
+  const closeButton = modal.querySelector("[data-member-vaccination-close]");
+  const fieldsEl = modal.querySelector("[data-member-vaccination-fields]");
+  const state = {
+    memberId: "",
+    member: null,
+  };
+
+  const closeModal = () => {
+    modal.classList.remove("is-open", "member-health-modal");
+    modal.setAttribute("aria-hidden", "true");
+    state.member = null;
+    state.memberId = "";
+  };
+
+  const setVaccinationToggleState = (key = "", status = "pending") => {
+    if (!key) {
+      return;
+    }
+    const toggleButton = fieldsEl?.querySelector(`[data-member-vaccination-toggle="${key}"]`);
+    if (!(toggleButton instanceof HTMLButtonElement)) {
+      return;
+    }
+    const normalizedStatus = normalizeMemberHealthStatus(status);
+    const isCompleted = normalizedStatus === "completed";
+    const vaccinationMeta = MEMBER_VACCINATION_FIELDS.find((field) => field.key === key);
+    toggleButton.dataset.memberVaccinationStatus = normalizedStatus;
+    toggleButton.setAttribute("aria-pressed", isCompleted ? "true" : "false");
+    toggleButton.setAttribute("aria-label", `${vaccinationMeta?.label || "접종"} ${isCompleted ? "완료" : "미완료"}`);
+    toggleButton.classList.toggle("is-active", isCompleted);
+    const hiddenText = toggleButton.querySelector(".pet-edit-modal__visually-hidden");
+    if (hiddenText instanceof HTMLElement) {
+      hiddenText.textContent = isCompleted ? "완료" : "미완료";
+    }
+  };
+
+  const render = () => {
+    const vaccinations = MEMBER_VACCINATION_FIELDS.map((field) => {
+      const record = normalizeVaccinations(state.member?.vaccinations)[field.key];
+      return {
+        key: field.key,
+        label: field.label,
+        status: record?.status || "pending",
+        confirmedDate: escapeHtml(record?.confirmedDate || ""),
+      };
+    });
+    fieldsEl.innerHTML = buildVaccinationFieldsMarkup({ vaccinations });
+  };
+
+  const persistVaccinationState = () => {
+    const patch = getVaccinationFormState(fieldsEl);
+    const updated = updateIssueMember(state.memberId, patch);
+    if (updated && typeof onSaved === "function") {
+      onSaved(updated);
+    }
+  };
+
+  const openModal = (member) => {
+    state.memberId = String(member?.id || "");
+    state.member = member;
+    render();
+    modal.classList.add("is-open", "member-health-modal");
+    modal.setAttribute("aria-hidden", "false");
+  };
+
+  overlay?.addEventListener("click", closeModal);
+  closeButton?.addEventListener("click", closeModal);
+  fieldsEl?.addEventListener("input", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) {
+      return;
+    }
+    if (target.matches("[data-member-vaccination-date]")) {
+      const key = target.dataset.memberVaccinationDate || "";
+      setVaccinationToggleState(key, target.value ? "completed" : "pending");
+      persistVaccinationState();
+      return;
+    }
+  });
+  fieldsEl?.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement
+      ? event.target.closest("[data-member-vaccination-toggle]")
+      : null;
+    if (!(target instanceof HTMLButtonElement)) {
+      return;
+    }
+    const key = target.dataset.memberVaccinationToggle || "";
+    const nextStatus = normalizeMemberHealthStatus(target.dataset.memberVaccinationStatus) === "completed"
+      ? "pending"
+      : "completed";
+    const dateInput = fieldsEl?.querySelector(`[data-member-vaccination-date="${key}"]`);
+    if (dateInput instanceof HTMLInputElement) {
+      dateInput.value = nextStatus === "completed"
+        ? getTodayDateInputValue()
+        : "";
+    }
+    setVaccinationToggleState(key, nextStatus);
+    persistVaccinationState();
+  });
+
+  return {
+    openModalWithMember(member) {
+      if (!member) {
+        return;
+      }
+      openModal(member);
+    },
+  };
+}
+
 function renderSiblings(container, siblings) {
   if (!container) {
     return;
@@ -541,6 +860,9 @@ function getMemberDetailElements() {
     gender: getRequiredElement("[data-member-gender]"),
     ownerTags: getRequiredElement("[data-member-owner-tags]"),
     petTags: getRequiredElement("[data-member-pet-tags]"),
+    consentStatus: getRequiredElement("[data-member-consent-status]"),
+    consentDate: getRequiredElement("[data-member-consent-date]"),
+    vaccinationStatus: getRequiredElement("[data-member-vaccination-status]"),
     ticketTable: getRequiredElement("[data-member-ticket-table]"),
     ticketRows: getRequiredElement("[data-member-ticket-rows]"),
     ticketEmpty: getRequiredElement("[data-member-ticket-empty]"),
@@ -598,6 +920,14 @@ function renderMemberDetail(viewModel) {
   setTextContent(elements.coatColor, viewModel.coatColor);
   setTextContent(elements.weight, formatMemberWeight(viewModel.weight));
   setTextContent(elements.gender, formatMemberGender(viewModel.gender, viewModel.neuteredStatus));
+    if (elements.consentStatus) {
+      elements.consentStatus.className = `member-detail__ticket-status ${viewModel.consent?.tone || ""}`.trim();
+      elements.consentStatus.textContent = viewModel.consent?.statusLabel || "미제출";
+    }
+  if (elements.vaccinationStatus) {
+    elements.vaccinationStatus.className = `member-detail__ticket-status ${viewModel.overallVaccinationStatus?.tone || ""}`.trim();
+    elements.vaccinationStatus.textContent = viewModel.overallVaccinationStatus?.text || "미완료";
+  }
   renderMemberTagChips(elements.ownerTags, viewModel.ownerTags, { hiddenWhenEmpty: true });
   renderMemberTagChips(elements.petTags, viewModel.petTags, { hiddenWhenEmpty: true });
 }
@@ -832,8 +1162,12 @@ function bindActions(memberId) {
   const issueButton = getRequiredElement("[data-member-detail-issue]");
   const memoEditButton = getRequiredElement("[data-member-detail-memo-edit]");
   const editButtons = document.querySelectorAll("[data-member-detail-edit]");
+  const consentEditButton = getRequiredElement("[data-member-consent-edit-open]");
+  const vaccinationEditButton = getRequiredElement("[data-member-vaccination-edit-open]");
   const issueModal = document.querySelector("[data-member-ticket-issue-modal]");
   const editModal = document.querySelector("[data-member-detail-edit-modal]");
+  const consentModal = document.querySelector("[data-member-consent-modal]");
+  const vaccinationModal = document.querySelector("[data-member-vaccination-modal]");
   const createLatestViewModel = () => {
     const latestMember = findMemberById(loadIssueMembers(), memberId);
     const reservationStorage = initReservationStorage();
@@ -883,6 +1217,14 @@ function bindActions(memberId) {
     modal: editModal,
     onSaved: rerenderMember,
   });
+  const consentModalController = initMemberConsentModal({
+    modal: consentModal,
+    onSaved: rerenderMember,
+  });
+  const vaccinationModalController = initMemberVaccinationModal({
+    modal: vaccinationModal,
+    onSaved: rerenderMember,
+  });
   backButton?.addEventListener("click", () => {
     window.location.href = "./members.html";
   });
@@ -908,6 +1250,22 @@ function bindActions(memberId) {
       withLatestMember((latestMember) => {
         editModalController.openModalWithMember(latestMember, section);
       });
+    });
+  });
+  consentEditButton?.addEventListener("click", () => {
+    if (!consentModalController) {
+      return;
+    }
+    withLatestMember((latestMember) => {
+      consentModalController.openModalWithMember(latestMember);
+    });
+  });
+  vaccinationEditButton?.addEventListener("click", () => {
+    if (!vaccinationModalController) {
+      return;
+    }
+    withLatestMember((latestMember) => {
+      vaccinationModalController.openModalWithMember(latestMember);
     });
   });
   const { latestMember } = createLatestViewModel();

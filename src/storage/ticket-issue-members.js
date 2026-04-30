@@ -13,6 +13,13 @@ import { autoApplyIssuedTicketsToReservations } from "../services/ticket-auto-as
 import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 import { hasTagValue, sanitizeTagList } from "../utils/tags.js";
 import {
+  createDefaultVaccinations,
+  normalizeConsentAttachments,
+  normalizeMemberHealthDate,
+  normalizeMemberHealthStatus,
+  normalizeVaccinations,
+} from "../utils/member-health.js";
+import {
   getTicketReservableValue,
   getTicketTotalValue,
   getTicketUsedValue,
@@ -56,6 +63,10 @@ function createDefaultMemberSchema({
     weight: "",
     gender: "",
     neuteredStatus: "",
+    consentStatus: "pending",
+    consentConfirmedDate: "",
+    consentAttachments: [],
+    vaccinations: createDefaultVaccinations(),
     profileImageUrl: "",
     siblings: [],
     ownerTags: [],
@@ -156,6 +167,10 @@ function normalizeMember(item) {
       ?? source.neuteringStatus
       ?? source.isNeutered
       ?? "",
+    consentStatus: normalizeMemberHealthStatus(source.consentStatus),
+    consentConfirmedDate: normalizeMemberHealthDate(source.consentConfirmedDate),
+    consentAttachments: normalizeConsentAttachments(source.consentAttachments),
+    vaccinations: normalizeVaccinations(source.vaccinations),
     profileImageUrl: source.profileImageUrl ?? source.profileImage ?? "",
     siblings: Array.isArray(source.siblings) ? source.siblings : [],
     ownerTags: sanitizeTagList(source.ownerTags),

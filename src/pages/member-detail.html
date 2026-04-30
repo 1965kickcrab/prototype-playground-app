@@ -97,6 +97,18 @@
                 <button class="member-detail-page__memo-action" type="button" data-member-detail-memo-edit>메모 수정</button>
               </div>
             </div>
+
+            <button class="member-detail-page__panel member-detail-page__summary-panel reservation-detail-page__memo-trigger" type="button" data-member-consent-edit-open aria-label="동의서 수정 열기">
+              <span class="reservation-detail-page__memo-label">동의서</span>
+              <span class="member-detail-page__summary-value member-detail__ticket-status" data-member-consent-status>미제출</span>
+              <img class="member-detail-page__summary-chevron" src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </button>
+
+            <button class="member-detail-page__panel member-detail-page__summary-panel reservation-detail-page__memo-trigger" type="button" data-member-vaccination-edit-open aria-label="접종 여부 수정 열기">
+              <span class="reservation-detail-page__memo-label">접종 여부</span>
+              <span class="member-detail-page__summary-value member-detail__ticket-status" data-member-vaccination-status>미완료</span>
+              <img class="member-detail-page__summary-chevron" src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
+            </button>
           </section>
 
           <section class="reservation-detail-page__section member-detail-page__tickets-section">
@@ -155,6 +167,34 @@
       <div class="member-edit-modal__actions">
         <button class="button-secondary" type="button" data-member-detail-edit-cancel>취소</button>
         <button class="primary-button" type="button" data-member-detail-edit-save>저장</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal" data-member-consent-modal aria-hidden="true">
+    <div class="modal__overlay" data-member-consent-overlay></div>
+    <div class="modal__dialog member-edit-modal" role="dialog" aria-modal="true" aria-labelledby="member-consent-title">
+      <div class="modal__header">
+        <h2 id="member-consent-title">동의서 수정</h2>
+        <button class="icon-button modal__close" type="button" data-member-consent-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body member-edit-modal__body">
+        <div class="member-edit-modal__fields" data-member-consent-fields></div>
+      </div>
+    </div>
+  </div>
+  <div class="modal" data-member-vaccination-modal aria-hidden="true">
+    <div class="modal__overlay" data-member-vaccination-overlay></div>
+    <div class="modal__dialog member-edit-modal" role="dialog" aria-modal="true" aria-labelledby="member-vaccination-title">
+      <div class="modal__header">
+        <h2 id="member-vaccination-title">접종 여부 수정</h2>
+        <button class="icon-button modal__close" type="button" data-member-vaccination-close aria-label="닫기">
+          <img src="../../assets/iconClose.svg" alt="" aria-hidden="true">
+        </button>
+      </div>
+      <div class="modal__body member-edit-modal__body">
+        <div class="member-edit-modal__fields" data-member-vaccination-fields></div>
       </div>
     </div>
   </div>

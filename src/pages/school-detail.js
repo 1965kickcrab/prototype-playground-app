@@ -4,6 +4,11 @@ import { initReservationStorage } from "../storage/reservation-storage.js";
 import { initClassStorage } from "../storage/class-storage.js";
 import { initPricingStorage } from "../storage/pricing-storage.js";
 import {
+  getAttendanceStatusTone,
+  resolveAttendanceStatusTimeValues,
+  updateReservationAttendanceStatus,
+} from "../services/attendance-status-service.js";
+import {
   normalizeReservationPayment,
   parsePaymentAmount,
   shouldClearTicketPaymentOnCancellation,
@@ -20,6 +25,8 @@ import {
   renderReservationBillingRows,
   renderReservationMemberInfo,
 } from "./reservation-detail-page-shared.js";
+import { notifyReservationUpdated } from "../utils/reservation-events.js";
+import { recalculateTicketCounts } from "../services/ticket-count-service.js";
 
 const SCHOOL_SERVICE_TYPES = new Set(["school", "daycare", "pickdrop"]);
 
@@ -50,6 +57,11 @@ function getPickdropLabel(entry) {
     return "드랍";
   }
   return "-";
+}
+
+function getAttendanceStatusLabel(storage, statusKey) {
+  const key = String(statusKey || "PLANNED").trim().toUpperCase();
+  return storage?.STATUS?.[key] || key;
 }
 
 function setSheetOpen(sheet, backdrop, open) {
@@ -108,6 +120,8 @@ function bootstrapSchoolDetailPage() {
     serviceSheetBackdrop: root.querySelector("[data-school-detail-service-sheet-backdrop]"),
     serviceSheetClose: root.querySelector("[data-school-detail-service-sheet-close]"),
     serviceOptions: root.querySelector("[data-school-detail-service-options]"),
+    status: root.querySelector("[data-school-detail-status]"),
+    statusOptions: root.querySelector("[data-school-detail-status-options]"),
     timeRow: root.querySelector("[data-school-detail-time-row]"),
     time: root.querySelector("[data-school-detail-time]"),
     startTimeInput: root.querySelector("[data-school-detail-start-time]"),
@@ -139,6 +153,7 @@ function bootstrapSchoolDetailPage() {
     memoExpanded: false,
     isEditing: false,
     selectedService: "",
+    selectedStatusKey: "PLANNED",
     initialSnapshot: "",
   };
 
@@ -180,6 +195,13 @@ function bootstrapSchoolDetailPage() {
       || entries[0]
       || null
     );
+  };
+
+  const updateStatusOptionSelection = () => {
+    refs.statusOptions?.querySelectorAll("[data-school-detail-status-option]").forEach((button) => {
+      const isSelected = button.dataset.schoolDetailStatusOption === viewState.selectedStatusKey;
+      button.classList.toggle("is-selected", isSelected);
+    });
   };
 
   const setActiveTab = (tabKey) => {
@@ -252,6 +274,7 @@ function bootstrapSchoolDetailPage() {
       (item) => String(item?.name || "") === selectedService
     ) || null;
     viewState.selectedService = selectedService;
+    viewState.selectedStatusKey = String(entry?.baseStatusKey || "PLANNED").trim().toUpperCase();
     refs.reservationDateInput.value = String(entry?.date || "");
     refs.serviceButton.textContent = selectedService || "클래스를 선택하세요";
     renderServiceOptions(selectedService);
@@ -267,6 +290,12 @@ function bootstrapSchoolDetailPage() {
       || reservation?.checkoutTime
       || ""
     );
+    if (refs.startTimeInput instanceof HTMLInputElement) {
+      refs.startTimeInput.dataset.attendanceExplicit = entry?.checkinTime ? "true" : "false";
+    }
+    if (refs.endTimeInput instanceof HTMLInputElement) {
+      refs.endTimeInput.dataset.attendanceExplicit = entry?.checkoutTime ? "true" : "false";
+    }
     if (refs.memoInput instanceof HTMLTextAreaElement) {
       refs.memoInput.value = String(reservation?.memo || "");
     }
@@ -289,9 +318,11 @@ function bootstrapSchoolDetailPage() {
         : String(Number(reservation?.payment?.amount) || "");
       formatReservationCurrencyInput(refs.paymentAmount);
     }
+    updateStatusOptionSelection();
     viewState.initialSnapshot = JSON.stringify({
       date: refs.reservationDateInput.value,
       service: selectedService,
+      status: viewState.selectedStatusKey,
       startTime: refs.startTimeInput.value,
       endTime: refs.endTimeInput.value,
       memo: refs.memoInput?.value || "",
@@ -310,6 +341,7 @@ function bootstrapSchoolDetailPage() {
     const nextSnapshot = JSON.stringify({
       date: refs.reservationDateInput?.value || "",
       service: viewState.selectedService,
+      status: viewState.selectedStatusKey,
       startTime: refs.startTimeInput?.value || "",
       endTime: refs.endTimeInput?.value || "",
       memo: refs.memoInput?.value || "",
@@ -344,11 +376,16 @@ function bootstrapSchoolDetailPage() {
     const timeText = startTime && endTime
       ? `${formatTimeLabel(startTime)} ~ ${formatTimeLabel(endTime)}`
       : "-";
+    const statusKey = String(entry?.baseStatusKey || "PLANNED").trim().toUpperCase();
 
     refs.title.textContent = getReservationPageTitle(serviceType, viewState.isEditing);
     renderReservationMemberInfo(refs, reservation, member);
     refs.reservationDate.textContent = formatDateKeyLabel(entry.date);
     refs.service.textContent = selectedService || "-";
+    if (refs.status) {
+      refs.status.textContent = getAttendanceStatusLabel(storage, statusKey);
+      refs.status.className = `member-detail__ticket-status member-detail__ticket-status--${getAttendanceStatusTone(statusKey)}`.trim();
+    }
     refs.timeRow.hidden = false;
     refs.time.textContent = timeText;
     refs.pickdropRow.hidden = false;
@@ -395,6 +432,7 @@ function bootstrapSchoolDetailPage() {
     const nextType = reservation.type === "pickdrop"
       ? reservation.type
       : (classInfo?.type === "daycare" ? "daycare" : "school");
+    const nextStatusKey = String(viewState.selectedStatusKey || "PLANNED").trim().toUpperCase();
     const nextStartTime = String(refs.startTimeInput?.value || "").trim();
     const nextEndTime = String(refs.endTimeInput?.value || "").trim();
     const pickdropFlags = getSelectedPickdropFlags();
@@ -406,8 +444,16 @@ function bootstrapSchoolDetailPage() {
       : parsePaymentAmount(refs.paymentAmount?.value || 0);
 
     const nextReservations = storage.updateReservation(reservation.id, (currentReservation) => {
-      const currentDates = Array.isArray(currentReservation?.dates) ? currentReservation.dates : [];
       const targetDateKey = pageState.dateKey || entry.date;
+      const attendanceUpdatedReservation = updateReservationAttendanceStatus(
+        currentReservation,
+        targetDateKey,
+        nextStatusKey,
+        timeZone
+      );
+      const currentDates = Array.isArray(attendanceUpdatedReservation?.dates)
+        ? attendanceUpdatedReservation.dates
+        : [];
       const nextDates = currentDates.map((dateEntry, index) => {
         const isTarget = String(dateEntry?.date || "") === targetDateKey || (!targetDateKey && index === 0);
         if (!isTarget) {
@@ -418,6 +464,7 @@ function bootstrapSchoolDetailPage() {
           date: nextDate || dateEntry.date,
           class: nextService,
           service: nextService,
+          baseStatusKey: nextStatusKey,
           checkinTime: nextStartTime,
           checkoutTime: nextEndTime,
           pickup: pickdropFlags.pickup,
@@ -425,7 +472,7 @@ function bootstrapSchoolDetailPage() {
         };
       });
       const nextReservationDraft = {
-        ...currentReservation,
+        ...attendanceUpdatedReservation,
         type: nextType,
         memo: nextMemo,
         service: nextService,
@@ -474,6 +521,12 @@ function bootstrapSchoolDetailPage() {
       nextUrl.toString()
     );
     viewState.isEditing = false;
+    recalculateTicketCounts();
+    notifyReservationUpdated({
+      reservationId: reservation.id,
+      dateKey: pageState.dateKey,
+      source: "school-detail",
+    });
     renderPage();
   };
 
@@ -498,6 +551,12 @@ function bootstrapSchoolDetailPage() {
       return shouldClearTicketPaymentOnCancellation(nextReservation)
         ? { ...nextReservation, payment: null }
         : nextReservation;
+    });
+    recalculateTicketCounts();
+    notifyReservationUpdated({
+      reservationId: reservation.id,
+      dateKey: pageState.dateKey,
+      source: "school-detail-cancel",
     });
     window.alert("예약이 취소되었습니다.");
     viewState.isEditing = false;
@@ -547,6 +606,33 @@ function bootstrapSchoolDetailPage() {
     setSheetOpen(refs.serviceSheet, refs.serviceSheetBackdrop, false);
     syncSaveState();
   });
+  refs.statusOptions?.addEventListener("click", (event) => {
+    const button = event.target instanceof HTMLElement
+      ? event.target.closest("[data-school-detail-status-option]")
+      : null;
+    if (!(button instanceof HTMLButtonElement) || !viewState.isEditing) {
+      return;
+    }
+    viewState.selectedStatusKey = String(button.dataset.schoolDetailStatusOption || "PLANNED").trim().toUpperCase();
+    const nextTimes = resolveAttendanceStatusTimeValues(viewState.selectedStatusKey, timeZone, {
+      checkinTime: refs.startTimeInput?.dataset?.attendanceExplicit === "true"
+        ? (refs.startTimeInput?.value || "")
+        : "",
+      checkoutTime: refs.endTimeInput?.dataset?.attendanceExplicit === "true"
+        ? (refs.endTimeInput?.value || "")
+        : "",
+    });
+    if (refs.startTimeInput instanceof HTMLInputElement) {
+      refs.startTimeInput.value = nextTimes.checkinTime;
+      refs.startTimeInput.dataset.attendanceExplicit = nextTimes.checkinTime ? "true" : "false";
+    }
+    if (refs.endTimeInput instanceof HTMLInputElement) {
+      refs.endTimeInput.value = nextTimes.checkoutTime;
+      refs.endTimeInput.dataset.attendanceExplicit = nextTimes.checkoutTime ? "true" : "false";
+    }
+    updateStatusOptionSelection();
+    syncSaveState();
+  });
   refs.pickdropOptions?.addEventListener("click", (event) => {
     const button = event.target instanceof HTMLElement
       ? event.target.closest("[data-school-detail-pickdrop]")
@@ -566,6 +652,12 @@ function bootstrapSchoolDetailPage() {
     refs.paymentAmount,
   ].forEach((field) => {
     field?.addEventListener("input", () => {
+      if (field === refs.startTimeInput && field instanceof HTMLInputElement) {
+        field.dataset.attendanceExplicit = field.value ? "true" : "false";
+      }
+      if (field === refs.endTimeInput && field instanceof HTMLInputElement) {
+        field.dataset.attendanceExplicit = field.value ? "true" : "false";
+      }
       if (field === refs.paymentAmount && field instanceof HTMLInputElement) {
         formatReservationCurrencyInput(field);
       }

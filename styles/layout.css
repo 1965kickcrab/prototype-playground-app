@@ -4086,8 +4086,8 @@ input[type="checkbox"] {
   transform: translateX(-50%);
   width: min(100%, var(--app-max-width));
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 0px));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid #ececec;
   background: #ffffff;
   z-index: 90;
@@ -4096,11 +4096,22 @@ input[type="checkbox"] {
 .mobile-tabbar__link {
   display: grid;
   justify-items: center;
+  min-width: 0;
   gap: 2px;
   padding: 4px 0;
   color: var(--color-disabled);
   font-size: 10px;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.mobile-tabbar__link span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
 }
 
 .mobile-tabbar__link img {
@@ -4518,6 +4529,29 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(140px, 0.86fr);
   gap: 8px;
+}
+
+.reservation-detail-page__attendance-status {
+  color: var(--color-text);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.reservation-detail-page__attendance-status--primary {
+  color: var(--color-primary);
+}
+
+.reservation-detail-page__attendance-status--warning {
+  color: var(--color-warning);
+}
+
+.reservation-detail-page__attendance-status--success {
+  color: var(--color-success);
+}
+
+.reservation-detail-page__attendance-status--danger {
+  color: var(--color-holiday);
 }
 
 .reservation-detail-page__nav-action {
@@ -5266,49 +5300,49 @@ input[type="checkbox"] {
 
 .attendance-page {
   min-height: 100dvh;
-  background: var(--color-bg);
+  padding-bottom: calc(98px + env(safe-area-inset-bottom, 0px));
+  background: #ffffff;
 }
 
-.attendance-page__nav-spacer {
-  width: 40px;
-  flex: 0 0 40px;
-}
-
-.attendance-page__body {
+.attendance-page__topbar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  height: 60px;
+  padding: 0 16px 0 20px;
+  background: #fafafb;
+}
+
+.attendance-page__topbar h1 {
+  margin: 0;
+  color: #333333;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.attendance-page__hero {
+  display: grid;
   gap: 16px;
-  padding: 16px;
-}
-
-.attendance-page__date-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  padding: 0 16px 16px;
+  border: 1px solid #f6f6f6;
+  border-top: 0;
+  border-radius: 0 0 20px 20px;
+  background: #fafafb;
 }
 
 .attendance-page__toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-}
-
-.attendance-page__date-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 0 0 auto;
+  justify-content: center;
+  width: 100%;
+  min-height: 24px;
 }
 
 .attendance-page__date-trigger {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
+  gap: 8px;
+  min-height: 24px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -5316,20 +5350,117 @@ input[type="checkbox"] {
 }
 
 .attendance-page__date-trigger strong {
-  font-size: 16px;
+  color: #333333;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.attendance-page__date-caret {
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid #333333;
+  border-bottom: 2px solid #333333;
+  transform: rotate(45deg) translateY(-2px);
 }
 
 .attendance-page__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  gap: 13px;
+}
+
+.attendance-filter-card {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 77px;
+  padding: 0;
+  border: 1px solid #f1f1f2;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #333333;
+}
+
+.attendance-filter-card.is-selected {
+  border-color: #1e78f0;
+  background: #f6f9ff;
+}
+
+.attendance-filter-card span {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.attendance-filter-card strong {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.attendance-filter-card--primary span {
+  color: #1e78f0;
+}
+
+.attendance-filter-card--success span {
+  color: #00aa81;
+}
+
+.attendance-filter-card--danger span {
+  color: #ed6060;
+}
+
+.attendance-page__class-filters {
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 0;
   scrollbar-width: none;
 }
 
-.attendance-page__filters::-webkit-scrollbar {
+.attendance-page__class-filters::-webkit-scrollbar {
   display: none;
+}
+
+.attendance-page__class-filters .filter-chip {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border: 1px solid #f1f1f2;
+  border-radius: 8px;
+  background: #ffffff;
+  white-space: nowrap;
+}
+
+.attendance-page__hero-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.attendance-page__hero-actions .primary-button {
+  min-height: 40px;
+  border: 1px solid #00aa81;
+  border-radius: 8px;
+  background: #00aa81;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.attendance-page__hero-actions .attendance-page__checkout-all {
+  background: #f0fbf8;
+  color: #00aa81;
+}
+
+.attendance-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px 16px 0;
 }
 
 .list-card__status-filters {
@@ -5345,7 +5476,7 @@ input[type="checkbox"] {
 .attendance-page__list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 .attendance-page__empty {
@@ -5367,26 +5498,37 @@ input[type="checkbox"] {
 }
 
 .attendance-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  position: relative;
+  min-height: 66px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid #f1f1f2;
+  background: #ffffff;
 }
 
 .attendance-card__summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
   text-align: left;
 }
 
-.attendance-card__summary img {
+.attendance-card__name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.attendance-card__name-row img {
   width: 16px;
   height: 16px;
 }
@@ -5394,68 +5536,58 @@ input[type="checkbox"] {
 .attendance-card__copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
 .attendance-card__copy strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #333333;
+  font-size: 18px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attendance-card__copy>span:not(.attendance-card__name-row) {
+  overflow: hidden;
+  color: #919191;
   font-size: 16px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.attendance-card__copy span {
-  color: var(--color-muted);
-  font-size: 13px;
-}
-
-.attendance-card__meta,
-.attendance-card__times {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.attendance-card__times span {
-  color: var(--color-muted);
-  font-size: 13px;
-}
-
-.attendance-card__times strong {
-  font-size: 14px;
-}
-
-.attendance-card__status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 60px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.attendance-card__status--primary {
-  background: rgba(30, 120, 240, 0.12);
-  color: var(--color-primary);
-}
-
-.attendance-card__status--warning {
-  background: rgba(237, 96, 96, 0.12);
-  color: var(--color-warning);
-}
-
-.attendance-card__status--success {
-  background: rgba(0, 170, 129, 0.12);
-  color: var(--color-success);
-}
-
-.attendance-card__status--danger {
-  background: rgba(237, 96, 96, 0.12);
-  color: var(--color-holiday);
+.attendance-card__meta {
+  display: none;
 }
 
 .attendance-card__actions {
   display: flex;
-  flex-wrap: wrap;
   gap: 8px;
+}
+
+.attendance-card__status-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #cceee6;
+  color: #00aa81;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.attendance-card__status-action--checkout {
+  background: #cceee6;
+  color: #00aa81;
+}
+
+.attendance-card__status-action.is-time {
+  background: transparent;
 }

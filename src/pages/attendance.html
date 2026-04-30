@@ -12,50 +12,60 @@
   <div class="app">
     <main class="main">
       <div class="attendance-page">
-        <header class="reservation-detail-page__nav attendance-page__nav">
-          <button
-            class="icon-button icon-button--secondary reservation-detail-page__back"
-            type="button"
-            data-attendance-back
-            aria-label="뒤로가기"
-          >
-            <img src="../../assets/iconBack.svg" alt="" aria-hidden="true">
-          </button>
+        <header class="attendance-page__topbar">
           <h1>출석부</h1>
-          <span class="attendance-page__nav-spacer" aria-hidden="true"></span>
         </header>
 
-        <div class="attendance-page__body">
-          <section class="attendance-page__date-panel">
-            <div class="attendance-page__toolbar">
-              <div class="attendance-page__date-header">
-                <button class="month-button" type="button" data-attendance-prev aria-label="이전 날짜">
-                  <img class="month-button__icon" src="../../assets/iconChevronLeft.svg" alt="" aria-hidden="true">
-                </button>
-                <button class="attendance-page__date-trigger" type="button" data-attendance-date-trigger aria-label="출석 날짜 선택">
-                  <strong data-attendance-date-label>-</strong>
-                </button>
-                <button class="month-button" type="button" data-attendance-next aria-label="다음 날짜">
-                  <img class="month-button__icon" src="../../assets/iconChevronRight.svg" alt="" aria-hidden="true">
-                </button>
-              </div>
-            </div>
-            <input type="date" data-attendance-date-input aria-label="출석 날짜 선택" hidden>
-          </section>
+        <section class="attendance-page__hero">
+          <div class="attendance-page__toolbar">
+            <button class="attendance-page__date-trigger" type="button" data-attendance-date-trigger aria-label="출석 날짜 선택">
+              <strong data-attendance-date-label>-</strong>
+              <span class="attendance-page__date-caret" aria-hidden="true"></span>
+            </button>
+          </div>
+          <input type="date" data-attendance-date-input aria-label="출석 날짜 선택" hidden>
+          <section class="attendance-page__class-filters" data-attendance-class-filters></section>
           <section class="attendance-page__filters" data-attendance-status-filters>
-            <button class="filter-chip is-selected" type="button" data-attendance-filter="ALL">전체</button>
-            <button class="filter-chip" type="button" data-attendance-filter="PLANNED">예약</button>
-            <button class="filter-chip" type="button" data-attendance-filter="CHECKIN">등원</button>
-            <button class="filter-chip" type="button" data-attendance-filter="CHECKOUT">하원</button>
-            <button class="filter-chip" type="button" data-attendance-filter="ABSENT">결석</button>
+            <button class="attendance-filter-card is-selected" type="button" data-attendance-filter="ALL"><span>전체</span><strong data-attendance-filter-count>0</strong></button>
+            <button class="attendance-filter-card attendance-filter-card--primary" type="button" data-attendance-filter="PLANNED"><span>대기</span><strong data-attendance-filter-count>0</strong></button>
+            <button class="attendance-filter-card attendance-filter-card--success" type="button" data-attendance-filter="ATTENDED"><span>출석</span><strong data-attendance-filter-count>0</strong></button>
+            <button class="attendance-filter-card attendance-filter-card--danger" type="button" data-attendance-filter="ABSENT"><span>결석</span><strong data-attendance-filter-count>0</strong></button>
           </section>
+          <div class="attendance-page__hero-actions">
+            <button class="primary-button" type="button" data-attendance-all-status="CHECKIN">전체 등원</button>
+            <button class="primary-button attendance-page__checkout-all" type="button" data-attendance-all-status="CHECKOUT">전체 하원</button>
+          </div>
+        </section>
 
+        <div class="attendance-page__body">
           <section class="attendance-page__list" data-attendance-list></section>
           <section class="attendance-page__empty" data-attendance-empty hidden>
             <h2>출석 대상이 없습니다.</h2>
             <p>선택한 날짜에 처리할 유치원/데이케어 예약이 없습니다.</p>
           </section>
         </div>
+        <nav class="mobile-tabbar" aria-label="하단 메뉴">
+          <a class="mobile-tabbar__link" href="../../public/index.html">
+            <img src="../../assets/bottomNavi_schedule.svg" alt="" aria-hidden="true">
+            <span>예약</span>
+          </a>
+          <a class="mobile-tabbar__link mobile-tabbar__link--active" href="./attendance.html" aria-current="page">
+            <img src="../../assets/bottomNavi_rollbook_on.svg" alt="" aria-hidden="true">
+            <span>출석부</span>
+          </a>
+          <a class="mobile-tabbar__link" href="#">
+            <img src="../../assets/bottomNavi_report.svg" alt="" aria-hidden="true">
+            <span>알림장</span>
+          </a>
+          <a class="mobile-tabbar__link" href="./members.html">
+            <img src="../../assets/bottomNavi_member.svg" alt="" aria-hidden="true">
+            <span>회원</span>
+          </a>
+          <a class="mobile-tabbar__link" href="./more.html">
+            <img src="../../assets/bottomNavi_more.svg" alt="" aria-hidden="true">
+            <span>마이페이지</span>
+          </a>
+        </nav>
       </div>
     </main>
   </div>

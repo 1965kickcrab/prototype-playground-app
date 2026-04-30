@@ -384,7 +384,7 @@ function bootstrapSchoolDetailPage() {
     refs.service.textContent = selectedService || "-";
     if (refs.status) {
       refs.status.textContent = getAttendanceStatusLabel(storage, statusKey);
-      refs.status.className = `member-detail__ticket-status member-detail__ticket-status--${getAttendanceStatusTone(statusKey)}`.trim();
+      refs.status.className = `reservation-detail-page__attendance-status reservation-detail-page__attendance-status--${getAttendanceStatusTone(statusKey)}`.trim();
     }
     refs.timeRow.hidden = false;
     refs.time.textContent = timeText;

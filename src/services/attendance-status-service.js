@@ -51,10 +51,7 @@ export function getAttendanceStatusTone(statusKey) {
   if (key === "PLANNED") {
     return "primary";
   }
-  if (key === "CHECKIN") {
-    return "warning";
-  }
-  if (key === "CHECKOUT") {
+  if (key === "CHECKIN" || key === "CHECKOUT") {
     return "success";
   }
   if (key === "ABSENT" || key === "CANCELED") {

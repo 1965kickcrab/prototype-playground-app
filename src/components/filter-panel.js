@@ -1,5 +1,3 @@
-﻿import { normalizeTeacher } from "../utils/teacher-selection.js";
-
 const UNKNOWN_TEACHER = "미지정";
 const PAYMENT_FILTER_OPTIONS = [
   { value: "paid", label: "완료" },
@@ -17,6 +15,51 @@ function updateMenuOptionState(option) {
     return;
   }
   option.classList.toggle("is-selected", input.checked);
+}
+
+function createMenuOption({
+  value,
+  labelText,
+  checked,
+  dataAttribute,
+  titleTag = "span",
+}) {
+  const label = document.createElement("label");
+  label.className = "menu-option";
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.value = value;
+  input.checked = checked;
+  input.setAttribute(dataAttribute, "");
+
+  const title = document.createElement(titleTag);
+  title.className = "menu-option__title";
+  title.textContent = labelText;
+
+  if (titleTag === "div") {
+    const text = document.createElement("div");
+    text.appendChild(title);
+    label.appendChild(input);
+    label.appendChild(text);
+  } else {
+    label.appendChild(input);
+    label.appendChild(title);
+  }
+
+  updateMenuOptionState(label);
+  return label;
+}
+
+function resetCheckboxGroup(panel, selector, stateTarget, checked) {
+  panel.querySelectorAll(selector).forEach((input) => {
+    if (!(input instanceof HTMLInputElement)) {
+      return;
+    }
+    input.checked = checked;
+    stateTarget[input.value] = checked;
+    updateMenuOptionState(input.closest(".menu-option"));
+  });
 }
 
 function updateFilterButtonLabel(button, selected, total, allLabel, labelMap = null) {
@@ -66,26 +109,13 @@ function renderClassMenu(container, classes, state) {
   container.innerHTML = "";
 
   fallback.forEach((name) => {
-    const label = document.createElement("label");
-    label.className = "menu-option";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = name;
-    input.checked = state.selectedServices[name] !== false;
-    input.setAttribute("data-class-filter", "");
-
-    const text = document.createElement("div");
-    const title = document.createElement("div");
-    title.className = "menu-option__title";
-    title.textContent = name;
-    text.appendChild(title);
-
-    label.appendChild(input);
-    label.appendChild(text);
-    updateMenuOptionState(label);
-
-    container.appendChild(label);
+    container.appendChild(createMenuOption({
+      value: name,
+      labelText: name,
+      checked: state.selectedServices[name] !== false,
+      dataAttribute: "data-class-filter",
+      titleTag: "div",
+    }));
   });
 }
 
@@ -112,24 +142,12 @@ function renderTeacherMenu(container, classes, state) {
   container.innerHTML = "";
 
   options.forEach((name) => {
-    const label = document.createElement("label");
-    label.className = "menu-option";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = name;
-    input.checked = state.selectedTeachers[name] !== false;
-    input.setAttribute("data-teacher-filter", "");
-
-    const title = document.createElement("span");
-    title.className = "menu-option__title";
-    title.textContent = name;
-
-    label.appendChild(input);
-    label.appendChild(title);
-    updateMenuOptionState(label);
-
-    container.appendChild(label);
+    container.appendChild(createMenuOption({
+      value: name,
+      labelText: name,
+      checked: state.selectedTeachers[name] !== false,
+      dataAttribute: "data-teacher-filter",
+    }));
   });
 }
 
@@ -149,24 +167,12 @@ function renderPaymentMenu(container, state) {
   container.innerHTML = "";
 
   PAYMENT_FILTER_OPTIONS.forEach(({ value, label: labelText }) => {
-    const label = document.createElement("label");
-    label.className = "menu-option";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = value;
-    input.checked = state.selectedPaymentStatuses[value] !== false;
-    input.setAttribute("data-payment-filter", "");
-
-    const title = document.createElement("span");
-    title.className = "menu-option__title";
-    title.textContent = labelText;
-
-    label.appendChild(input);
-    label.appendChild(title);
-    updateMenuOptionState(label);
-
-    container.appendChild(label);
+    container.appendChild(createMenuOption({
+      value,
+      labelText,
+      checked: state.selectedPaymentStatuses[value] !== false,
+      dataAttribute: "data-payment-filter",
+    }));
   });
 }
 
@@ -184,29 +190,21 @@ function renderTagMenu(container, state) {
   if (!options.length) {
     const empty = document.createElement("div");
     empty.className = "menu-option menu-option--empty";
-    empty.innerHTML = '<span class="menu-option__title">등록된 태그가 없습니다.</span>';
+    const title = document.createElement("span");
+    title.className = "menu-option__title";
+    title.textContent = "등록된 태그가 없습니다.";
+    empty.appendChild(title);
     container.appendChild(empty);
     return;
   }
 
   options.forEach((name) => {
-    const label = document.createElement("label");
-    label.className = "menu-option";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.value = name;
-    input.checked = state.selectedTags[name] === true;
-    input.setAttribute("data-tag-filter", "");
-
-    const title = document.createElement("span");
-    title.className = "menu-option__title";
-    title.textContent = name;
-
-    label.appendChild(input);
-    label.appendChild(title);
-    updateMenuOptionState(label);
-    container.appendChild(label);
+    container.appendChild(createMenuOption({
+      value: name,
+      labelText: name,
+      checked: state.selectedTags[name] === true,
+      dataAttribute: "data-tag-filter",
+    }));
   });
 }
 
@@ -354,34 +352,15 @@ export function setupFilterPanel(panel, classes, state) {
       ? event.target.closest("[data-filter-reset]")
       : null;
     if (reset) {
-      panel.querySelectorAll("[data-class-filter]").forEach((input) => {
-        if (input instanceof HTMLInputElement) {
-          input.checked = true;
-          state.selectedServices[input.value] = true;
-          updateMenuOptionState(input.closest(".menu-option"));
-        }
-      });
-      panel.querySelectorAll("[data-teacher-filter]").forEach((input) => {
-        if (input instanceof HTMLInputElement) {
-          input.checked = true;
-          state.selectedTeachers[input.value] = true;
-          updateMenuOptionState(input.closest(".menu-option"));
-        }
-      });
-      panel.querySelectorAll("[data-payment-filter]").forEach((input) => {
-        if (input instanceof HTMLInputElement) {
-          input.checked = true;
-          state.selectedPaymentStatuses[input.value] = true;
-          updateMenuOptionState(input.closest(".menu-option"));
-        }
-      });
-      panel.querySelectorAll("[data-tag-filter]").forEach((input) => {
-        if (input instanceof HTMLInputElement) {
-          input.checked = false;
-          state.selectedTags[input.value] = false;
-          updateMenuOptionState(input.closest(".menu-option"));
-        }
-      });
+      resetCheckboxGroup(panel, "[data-class-filter]", state.selectedServices, true);
+      resetCheckboxGroup(panel, "[data-teacher-filter]", state.selectedTeachers, true);
+      resetCheckboxGroup(
+        panel,
+        "[data-payment-filter]",
+        state.selectedPaymentStatuses,
+        true
+      );
+      resetCheckboxGroup(panel, "[data-tag-filter]", state.selectedTags, false);
       updateFilterSummary(panel);
       document.dispatchEvent(new CustomEvent("service-filter:change"));
       document.dispatchEvent(new CustomEvent("teacher-filter:change"));

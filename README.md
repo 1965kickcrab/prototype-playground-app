@@ -1,4 +1,4 @@
-# prototype-playground
+# Pet Care System Prototype - Biz App
 
 LocalStorage-backed static prototype for daycare reservation, ticket, and settings flows.
 
